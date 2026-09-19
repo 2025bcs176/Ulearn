@@ -8,7 +8,7 @@
 [![Flutter](https://img.shields.io/badge/Frontend-Flutter-02569B?logo=flutter)](https://flutter.dev)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?logo=fastapi)](https://fastapi.tiangolo.com)
 [![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-336791?logo=postgresql)](https://www.postgresql.org)
-[![License](https://img.shields.io/badge/License-TBD-lightgrey)](#)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 ---
 
@@ -40,6 +40,10 @@ Ulearn is built as a modular, high-performance system designed for eventual inte
 | **Frontend** | Flutter          | Cross-platform mobile app optimized for low-bandwidth use                  |
 | **Backend**  | FastAPI (Python) | Low-latency RESTful API for routing, matching logic & session management   |
 | **Database** | PostgreSQL       | Relational storage for users, course units, competencies, and session logs |
+
+For a full technical deep-dive (data model, matching engine, validation protocol, and design decisions), see:
+
+**[Architecture Documentation](./docs/architecture.md)**
 
 ---
 
@@ -92,19 +96,6 @@ flutter run
 
 ---
 
-## Database Schema Highlights
-
-The platform uses a strict relational structure to support the multi-tier tutor validation and quality-assurance protocol.
-
-| Table            | Core Attributes                                               | Purpose                                                                               |
-| ---------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| **Users**        | `user_id`, `role_type`                                        | Tracks role (`tutee`, `provisional_tutor`, `verified_tutor`) to control access levels |
-| **Course_Units** | `unit_id`, `unit_code`                                        | Maps the exact university curriculum                                                  |
-| **Competencies** | `user_id`, `unit_id`, `grade_achieved`, `verification_status` | Validation gate requiring a minimum of B+ or A                                        |
-| **Session_Logs** | `session_id`, `rating`, `feedback_text`                       | Feeds the matching algorithm; low ratings automatically reduce matching priority      |
-
----
-
 ## Regulatory Compliance
 
 Ulearn is engineered for institutional deployment and adheres to:
@@ -133,12 +124,27 @@ The project is structured for a focused deployment cycle:
 
 ---
 
+## Documentation
+
+| Document                                   | Description                                                              |
+| ------------------------------------------ | ------------------------------------------------------------------------ |
+| **[Architecture](./docs/architecture.md)** | System design, data model, matching engine & validation protocol         |
+| **[Contributing](./docs/CONTRIBUTING.md)** | Code of Conduct, development workflow, coding standards & review process |
+
+---
+
 ## Contributing
 
 We welcome contributions of all kinds — code, documentation, testing, and ideas.
 
-Please read **[CONTRIBUTING.md](./docs/Contribution.md)** before submitting any pull request.  
+Please read **[CONTRIBUTING.md](./docs/CONTRIBUTING.md)** before submitting any pull request.  
 It contains our full Code of Conduct, development workflow, coding standards, and review process.
+
+---
+
+## License
+
+This project is licensed under the **MIT License** — see the [LICENSE](./LICENSE) file for details.
 
 ---
 
