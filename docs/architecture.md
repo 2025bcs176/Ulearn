@@ -303,7 +303,8 @@ IncentiveService logs hours → certificate eligibility
 
 ## 12. Related Documents
 
-- [CONTRIBUTING.md](./Contribution.md) — Contribution guidelines and Code of Conduct
+- [Contribution Guide](./Contribution.md) — Contribution guidelines and Code of Conduct
+- [Project Structure](./project-structure.md) — Repository layout and dependency direction
 - [README.md](../README.md) — Project overview and local setup
 - Pilot roadmap and research proposal (project root / docs)
 

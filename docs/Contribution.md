@@ -231,6 +231,7 @@ flutter run
    - Flutter frontend (mobile-first, low-bandwidth optimized)
    - FastAPI backend (RESTful matching & routing logic)
    - PostgreSQL (users, course units, competencies, session logs)
+   - Review the [Project Structure](./project-structure.md) for repository layout and dependency direction.
 
 4. **Discuss Major Changes**  
    For significant features or architectural changes, open an issue first and get feedback before implementing. This prevents wasted effort.
@@ -588,6 +589,7 @@ Ulearn follows Semantic Versioning (`MAJOR.MINOR.PATCH`):
 - **Discussions**: Project GitHub Discussions (if enabled)
 - **Documentation**:
   - [Architecture](./architecture.md) — System design, data model, matching engine & validation
+  - [Project Structure](./project-structure.md) — Repository layout and dependency direction
   - [README](../README.md) — Project overview and local setup
 - **Direct contact**: gilbert.asiimwe.dev@gmail.com or [@asiimwe-dev](https://github.com/asiimwe-dev)
 

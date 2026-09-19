@@ -137,7 +137,7 @@ The project is structured for a focused deployment cycle:
 
 We welcome contributions of all kinds — code, documentation, testing, and ideas.
 
-Please read **[CONTRIBUTING.md](./docs/Contribution.md)** before submitting any pull request.  
+Please read **[Contribution Guide](./docs/Contribution.md)** before submitting any pull request.  
 It contains our full Code of Conduct, development workflow, coding standards, and review process.
 
 ---

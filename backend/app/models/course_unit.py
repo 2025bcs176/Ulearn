@@ -1,0 +1,1 @@
+"""Course unit ORM model."""

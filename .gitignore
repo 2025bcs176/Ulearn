@@ -1,6 +1,8 @@
 # =========================
 # Ulearn - Root .gitignore
 # =========================
+# Ignore github actions for now
+.github/
 
 # ---------- OS generated ----------
 .DS_Store
