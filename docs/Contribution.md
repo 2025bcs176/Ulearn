@@ -226,7 +226,8 @@ flutter run
    Read the project README and research/proposal documents. Align your work with Ulearn's goals of reducing retake rates through verified peer tutoring.
 
 3. **Understand the Architecture**  
-   Familiarize yourself with the modular design:
+   Read **[Architecture](./architecture.md)**  
+   Familiarize yourself with the modular design, matching engine, multi-tier validation protocol, and data model before contributing:
    - Flutter frontend (mobile-first, low-bandwidth optimized)
    - FastAPI backend (RESTful matching & routing logic)
    - PostgreSQL (users, course units, competencies, session logs)
@@ -585,7 +586,9 @@ Ulearn follows Semantic Versioning (`MAJOR.MINOR.PATCH`):
 
 - **Issues**: Project GitHub Issues
 - **Discussions**: Project GitHub Discussions (if enabled)
-- **Documentation**: Project `docs/` and README
+- **Documentation**:
+  - [Architecture](./architecture.md) — System design, data model, matching engine & validation
+  - [README](../README.md) — Project overview and local setup
 - **Direct contact**: gilbert.asiimwe.dev@gmail.com or [@asiimwe-dev](https://github.com/asiimwe-dev)
 
 Before opening a new issue, search existing issues and discussions.
