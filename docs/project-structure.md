@@ -45,23 +45,32 @@ Ulearn/
 │   ├── requirements-dev.txt
 │   └── Dockerfile               # optional container image
 ├── frontend/
-│   ├── lib/
-│   │   ├── core/                # theme, constants, networking, shared UI
-│   │   ├── features/            # auth, profile, matching, sessions,
-│   │   │                         # tutor_validation, incentives
-│   │   └── shared/               # cross-feature models, providers, repositories
-│   ├── test/
-│   │   ├── unit/
-│   │   ├── widget/
-│   │   └── integration/
+│   ├── .gitignore
+│   ├── .metadata
+│   ├── README.md
+│   ├── analysis_options.yaml
+│   ├── pubspec.yaml
+│   ├── pubspec.lock
+│   ├── android/                 # Android runner
+│   ├── ios/                     # iOS runner
+│   ├── linux/                   # Linux runner
+│   ├── macos/                   # macOS runner
+│   ├── web/                     # Web runner
+│   ├── windows/                 # Windows runner
 │   ├── assets/
 │   │   ├── images/
 │   │   └── icons/
+│   └── test/
+│       ├── unit/
+│       ├── widget/
+│       ├── integration/
+│       └── widget_test.dart
 ```
 
 `docs/Contribution.md` is the canonical contribution guide.
 
-Flutter files are found in the frontend directory.
+The Flutter scaffold (platform runners, package metadata, assets, and tests) is
+kept in `frontend/`.
 
 Backend tool-generated files are also intentionally deferred. Run
 `alembic init alembic` from `backend/` to create `alembic.ini`, `alembic/env.py`,
