@@ -103,6 +103,8 @@ build/
 **/ios/Flutter/.last_build_id
 .flutter-plugins
 .flutter-plugins-dependencies
+!frontend/lib
+!frontend/lib/**
 
 # Symbolication and obfuscation
 app.*.symbols
