@@ -59,14 +59,9 @@ Ulearn/
 │   │   └── icons/
 ```
 
-`docs/Contribution.md` remains the canonical contribution guide. The requested
-root-level `CONTRIBUTING.md` name is intentionally not introduced or used.
+`docs/Contribution.md` is the canonical contribution guide.
 
-The Flutter-generated application files (`pubspec.yaml`, `analysis_options.yaml`,
-`lib/main.dart`, platform folders, and the default test) are intentionally not
-checked in yet. Run `flutter create frontend` to generate them before starting
-client implementation; the project-specific directories above will remain in
-place.
+Flutter files are found in the frontend directory.
 
 Backend tool-generated files are also intentionally deferred. Run
 `alembic init alembic` from `backend/` to create `alembic.ini`, `alembic/env.py`,
