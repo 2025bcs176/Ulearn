@@ -306,6 +306,7 @@ IncentiveService logs hours → certificate eligibility
 - [Contribution Guide](./Contribution.md) — Contribution guidelines and Code of Conduct
 - [Project Structure](./project-structure.md) — Repository layout and dependency direction
 - [README.md](../README.md) — Project overview and local setup
+- [MVP Brief](./MVP_Brief.md) - MVP Brief, covers what is in scope for the MVP and what is not and also future improvements.
 - Pilot roadmap and research proposal (project root / docs)
 
 ---
