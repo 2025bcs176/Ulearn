@@ -591,6 +591,7 @@ Ulearn follows Semantic Versioning (`MAJOR.MINOR.PATCH`):
   - [Architecture](./architecture.md) — System design, data model, matching engine & validation
   - [Project Structure](./project-structure.md) — Repository layout and dependency direction
   - [README](../README.md) — Project overview and local setup
+  - [MVP Brief](./MVP_Brief.md) - Covers what is in scope and what is to be integrated beyond the MVP.
 - **Direct contact**: gilbert.asiimwe.dev@gmail.com or [@asiimwe-dev](https://github.com/asiimwe-dev)
 
 Before opening a new issue, search existing issues and discussions.
