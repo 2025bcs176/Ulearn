@@ -166,8 +166,16 @@ core/         → Config, security, database session, exceptions
 
 - `MatchingService` — Core algorithm that pairs tutee requests with eligible tutors
 - `ValidationService` — Implements the three-tier tutor quality gate
+- `TutorService` — The discovery rail and one tutor's public profile
 - `SessionService` — Lifecycle of a tutoring session + logging
 - `IncentiveService` — Aggregates hours and prepares certificate data
+
+`app/services/` is a package of public functions, and a route calls one of them.
+No router reaches for a `_`-prefixed name: reaching into another module's internals
+works until the thing it points at is renamed, and the matching router was doing it
+for two of them. The ownership check and the response shape of a help request are
+one decision, which is why they are one public function rather than two internals
+a route could mix and match.
 
 ### 4.3 Database (PostgreSQL)
 
@@ -227,12 +235,23 @@ service, and the test file lists them so each one is a deliberate edit:
 | `SessionResponse.is_rated` | `Session.is_rated(db)` is an async query hook           |
 | `CompetencyResponse.meets_threshold` | A method taking the threshold, not a field |
 | `CompetencyResponse.grade_points`    | Computed in the service                 |
+| `TutorRailEntry.user_id` / `TutorProfileSummary` in a rail row | No model carries a tutor's user id as its *public* id, so an unaliased field handed a `TutorProfile` would quietly become its primary key. Both are built by keyword by the service from `User.public_id`. |
 
 **Decimals cross the wire as JSON strings.** Pydantic's default, kept
 deliberately: a JSON number is a double in Dart, and a double cannot represent
 every `numeric(6,2)` value, so `rating_total` is `"18.00"` and not `18.0`. The
 client parses it for display; every threshold comparison happens server-side
 against the `Decimal`.
+
+**A mean is rounded at the edge, and only at the edge.**
+`app.schemas.base.MeanRating` rounds `average_rating` half-up to the two decimal
+places the schemas declare. A mean need not fit in two places — eight ratings
+totalling 33 average 4.125 — and Pydantic v2 validates rather than rounds, so the
+exact value raised a validation error and the endpoint answered 500 for any tutor
+whose ratings did not divide evenly. `TutorProfile.average_rating` stays exact on
+purpose: promotion is an equality test on it, and rounding there would promote a
+tutor averaging 3.999 and demote one averaging 4.004. Rounding is a wire
+decision, never a product one.
 
 **Trimming is per field, not per model.** `app.schemas.base.Trimmed` is applied
 to names, topics, and feedback, and deliberately *not* to passwords, whose
@@ -463,20 +482,117 @@ This logic lives in `ValidationService` and is consulted by `MatchingService` be
 
 ### High-Level Flow
 
-1. Tutee submits a **topic request** (course unit + specific concept).
-2. System queries `Competencies` for tutors who:
-   - Have verified (or provisional) status for that unit
-   - Meet the current rating threshold
-   - Are available / not overloaded
-3. Ranking may consider:
-   - Verification tier (verified > provisional)
-   - Average rating
-   - Number of completed sessions in the unit
-   - Recency of activity
-4. Top candidate(s) are presented to the tutee (or auto-matched, depending on configuration).
-5. Once accepted, a `Session` is created and the scheduling flow begins.
+1. A tutee submits a **topic request** (course unit + specific concept), or asks
+   for tutors for a course unit directly.
+2. One query runs over `competencies` joined to `user_roles`, keeping tutors who:
+   - hold a **verified** competency for that course unit, at or above the
+     university's `competency_min_points`
+   - are at the caller's own university
+   - are not `suspended`
+   - have a `tutor_profiles` row to rank on
+3. Ranking is by score: the competency's grade points, plus a tenth of the
+   tutor's mean rating, plus `+2` for `verified` and `-1` for `reduced` standing.
+4. Ties break on grade, then the tutor's displayed name, then the course unit's
+   **code**. The code rather than the unit's public id, because a UUID is random:
+   ordering by it is deterministic and meaningless, and it would stop a tutor in
+   two units of one subject from ever holding the alphabetically first one.
+5. The top candidates are presented to the tutee, who chooses. Nothing is
+   auto-matched, and there is no availability model: nothing stops a tutor holding
+   two sessions at once, which is why `already_booked` was removed from the
+   exclusion codes rather than implemented.
 
-The matching service is deliberately kept pure (no UI concerns) so it can later be exposed to institutional dashboards or LMS plugins.
+The matching service is deliberately kept pure (no UI concerns) so it can later be
+exposed to institutional dashboards or LMS plugins.
+
+### 7.1 One query, two entry points
+
+A help request and a course unit are the same question asked from two screens, so
+there is one search and two routes over it: `/matching/suggestions` for a
+course unit, and `/matching/help-requests/{id}/matches` for a request. A second
+copy of the eligibility rules is a second copy to drift, and the two answers would
+diverge exactly where a student is deciding.
+
+The request in the path is the subject of the query, not a check in front of an
+unrelated one. It used to load the request and then match whatever the body
+carried, so a client asking "who can take *this* request" was answered about a
+different course. A body naming a different unit is now a 422 rather than a
+silent preference for one of the two: quietly choosing would leave a client
+displaying results for a unit it did not ask about.
+
+`MatchResponse.request_id` is `null` for the unit-only query and the request's own
+public id for the request-backed one. The field names a help request the client
+could go and open, so an id minted by a query that no request backs would be a
+link to a 404.
+
+### 7.2 A rule out is a code, not a silence
+
+`MatchExclusion.reason` is a stable code drawn from `MATCH_EXCLUSION_REASONS`, and
+the set is generated from that one constant, so the list a client is told it may
+branch on cannot drift from what the engine emits. Drift is not cosmetic: an
+advertised reason nothing produces leaves a client with a branch that never fires
+and a tutor with a real, fixable problem told the platform has no reason.
+
+Codes: `unverified`, `same_university_only`, `suspended`, `below_threshold`,
+`not_the_tutor`. The order of the checks is the order above, and it is not
+arbitrary: `unverified` is reported before any number is compared, so a tutor
+with an unverified A is not told their problem was the grade. Pending
+competencies are therefore read rather than filtered out — dropping the row
+silently made the commonest reason for a tutor's absence unanswerable.
+
+The caller is never a candidate for their own request, and is filtered in the
+query rather than reported as an exclusion: they were never considered, so
+"ruled out" would be a statement about them rather than about the rule.
+
+### 7.3 One row per tutor, and one round trip
+
+A widened search returns one candidate per tutor rather than one per competency,
+keeping their strongest qualifying unit. A tutor competent in three units is one
+suggestion, and listing them three times pushes three weaker tutors off a page the
+student is choosing from.
+
+The tutor role is resolved by joining `user_roles` in the same query. It was one
+query per competency, so a widened search across a large subject cost a round trip
+per row before producing the answer a single join gives. The result set cannot
+reveal that — both versions return the same tutors — so
+`tests/test_matching.py` asserts on the statement count with one tutor and then
+with four, and requires it to be unchanged.
+
+### 7.4 Tutor discovery is not matching
+
+`GET /v1/tutors/top` and `GET /v1/tutors/{user_id}` answer "who is strong here",
+which is a different question from "who may take this request". They share exactly
+one rule — a verified grade at or above `competency_min_points` — and deliberately
+nothing else:
+
+- The rail **does not widen**. A discovery list that quietly substitutes a tutor
+  from a different course is answering a question the student did not ask.
+- The rail **ranks by endorsement count**, then mean rating, then completed
+  sessions, then the displayed name. The name tiebreak is what makes the order
+  stable rather than a function of the query plan.
+- The rail is scoped to the caller's university and excludes the caller; the
+  detail screen is scoped to neither, so a link a classmate shares still opens.
+- A `suspended` tutor is excluded from the rail **in the query**, not filtered out
+  afterwards, so a later filter added above it cannot leak one. The detail screen
+  is the deliberate exception and shows the standing: a student who booked them
+  has to be able to find out.
+- Neither endpoint creates a `tutor_profiles` row. The row is created when the
+  tutor role is granted; a browse that minted one would hand every signed-in
+  student a `probationary` standing on every cold start.
+- The competency bar applies on **both** paths, filtered and unfiltered. Every
+  unit at one university is graded on that university's single scale, so applying
+  it only when a unit was named would mean the same tutor passes in one query and
+  fails in the other depending on which screen asked.
+
+A well-formed `course_unit_id` that is unknown, or belongs to another university,
+returns `[]` rather than an error. Same reasoning as
+`GET /v1/academics/course-units`: the client filtered on a value it believed
+existed, and a refusal would put a student's discovery screen into an error state
+over a stale picker value.
+
+The rail's endorsed-unit list is capped at `RAIL_ENDORSED_UNITS` and the full
+total travels beside it. A tutor endorsed in fourteen units is not summarised by
+any five of them, and the number shown has to be the whole truth for the sample
+next to it to mean anything.
 
 ---
 

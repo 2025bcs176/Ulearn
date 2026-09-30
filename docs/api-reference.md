@@ -267,6 +267,216 @@ This is the endpoint onboarding's **third** step uses, to record the units a
 student takes. It is not matching: a declared unit is a preference, and nothing
 is matched against it until the matching slice lands.
 
+## Tutors
+
+Two read-only, student-facing views of a tutor. Both require a signed-in user, and
+**neither creates a `tutor_profiles` row.** The row belongs to a user holding the
+tutor role and is created when the role is granted, so a browse that minted one
+would hand every signed-in student a `probationary` standing and zero counters
+merely by opening the screen.
+
+### `GET /v1/tutors/top`
+
+The discovery rail: tutors at the caller's own university who clear the
+competency bar, most endorsed first.
+
+| Query            | Type | Notes                                                                     |
+| ---------------- | ---- | ------------------------------------------------------------------------- |
+| `course_unit_id` | UUID | Optional. A course unit **public** id. Narrows the rail to that unit.      |
+| `limit`          | int  | Optional. Default `10`, between `1` and `20`. Out of range is a 422.       |
+
+```json
+[
+  {
+    "user_id": "8e2c…",
+    "full_name": "Rail Tutor",
+    "standing": "verified",
+    "average_rating": "4.10",
+    "completed_sessions": 9,
+    "endorsed_course_unit_ids": ["1f4a…"],
+    "endorsement_count": 3
+  }
+]
+```
+
+Order is endorsement count (desc), then average rating (desc, unrated last), then
+completed sessions (desc), then the displayed name (asc). The name tiebreak is
+what makes the list stable: without it the same screen can reorder itself between
+two paints of the same data.
+
+`average_rating` is `null` for a tutor with no ratings — absence of evidence, not
+a bad score — and is rounded to two decimal places for display, half-up. Eight
+ratings totalling 33 average 4.125 and are sent as `"4.13"`.
+
+`endorsed_course_unit_ids` is capped at 5 units, most endorsed first;
+`endorsement_count` is the true total across every unit, so a tutor endorsed in
+fourteen units is not summarised by any five of them. The detail screen caps its
+list the same way, so a client can lay out both from one assumption.
+
+A tutor is left out when they are `suspended`, belong to another university, hold
+no profile to rank on, or have no verified grade at or above the university's
+`competency_min_points`. The caller is never on their own rail. Provisional and
+reduced tutors **are** listed: only `suspended` is disqualifying.
+
+| Status | `detail`                                                     | `errors`                          |
+| ------ | ------------------------------------------------------------ | --------------------------------- |
+| 401    | Sign-in required.                                            |                                   |
+| 422    | Some of the details you entered are not valid.               | `university_id` — the rail is the caller's own university's, so there is nothing to fall back to. |
+
+A `course_unit_id` that is well-formed but unknown, or that belongs to another
+university, returns `[]` rather than a 404 or a 422: the client filtered on a
+value it believed existed, and the honest answer to "tutors for this unit" is
+none. Same rule as `GET /v1/academics/course-units`.
+
+### `GET /v1/tutors/{user_id}`
+
+One tutor's public profile, for a screen the student opened from the rail.
+
+```json
+{
+  "profile": {
+    "user_id": "8e2c…",
+    "full_name": "Detail Tutor",
+    "standing": "verified",
+    "average_rating": "4.13",
+    "completed_sessions": 7
+  },
+  "endorsed_course_unit_ids": ["1f4a…"],
+  "endorsement_count": 2
+}
+```
+
+`profile` is `TutorProfileSummary`, the same trimmed shape matching sends, so the
+suspension reason and the raw rating total cannot reach a student by appearing
+here. A `suspended` tutor *is* readable, with the standing visible: a student who
+booked them has to be able to find out.
+
+Not scoped to the caller's university and not excluding the caller. The
+university boundary is on discovery; every field here is one the rail already
+carries, so answering it for a tutor found elsewhere leaks nothing new.
+
+| Status | `detail`                          | `errors` |
+| ------ | ---------------------------------- | -------- |
+| 401    | Sign-in required.                 |          |
+| 404    | That tutor could not be found.    |          |
+| 422    | Malformed id.                     |          |
+
+A 404 covers both "no such user" and "that user is not a tutor". They are the
+same answer on purpose: a route that distinguished them would confirm which
+accounts hold the tutor role.
+
+## Matching
+
+What the platform is willing to propose, and why not the others. A bare list of
+names is not something a student can argue with, and a tutor who is passed over
+with no reason has no way to learn what to fix.
+
+Both matching routes are `POST`, take the same body, and answer the same shape.
+The only difference is whose course unit the question is about, and the service
+runs one query for both so the eligibility rules cannot drift apart.
+
+| Route                                                | `request_id` in the answer |
+| ---------------------------------------------------- | -------------------------- |
+| `POST /v1/matching/suggestions`                       | `null`                     |
+| `POST /v1/matching/help-requests/{request_id}/matches` | the request's public id    |
+
+```json
+{
+  "course_unit_id": "1f4a…",
+  "topic": "quick sort",
+  "widen_to_subject": false,
+  "limit": 20
+}
+```
+
+`widen_to_subject` is opt-in and reported back as `widened`. Widening by default
+would return tutors who cannot help with the course the student asked about,
+which is worse than returning none and saying so.
+
+```json
+{
+  "request_id": null,
+  "course_unit_id": "1f4a…",
+  "widened": false,
+  "candidates": [
+    {
+      "tutor": { "user_id": "8e2c…", "full_name": "Tutor Example", "standing": "verified", "average_rating": "3.60", "completed_sessions": 6 },
+      "course_unit_id": "1f4a…",
+      "competency_grade_points": "4.00",
+      "meets_threshold": true,
+      "score": 6.36
+    }
+  ],
+  "exclusions": [
+    { "tutor_id": "9b3d…", "reason": "below_threshold" },
+    { "tutor_id": "4c8e…", "reason": "unverified" }
+  ],
+  "no_eligible_tutors": false,
+  "generated_at": "2026-03-04T09:12:00+00:00"
+}
+```
+
+`request_id` is `null` for the unit-only query because nothing backs it. An id
+minted there would name no row, and a client that stored it would follow it to a
+404 and conclude the platform lost the request it had just made.
+
+A candidate is a tutor with a **verified** grade at or above
+`competency_min_points` for that unit, at the caller's own university, with a
+profile, and not `suspended`. Provisional standing is a ranking input rather than
+a disqualification — otherwise no tutor could ever earn the Verified standing
+that reading requires.
+
+`reason` is a stable code, and the set is generated from one constant
+(`MATCH_EXCLUSION_REASONS`) so a documented reason cannot drift from one the
+engine emits:
+
+| Code                 | Why the tutor is not proposed                                       |
+| -------------------- | ------------------------------------------------------------------- |
+| `unverified`         | The grade is a claim nobody has checked yet. Checked before the number, so a tutor with an unverified A is not told their problem was the grade. |
+| `same_university_only` | Discovery is bounded to the caller's own institution.             |
+| `suspended`          | Revoked for student-facing matching.                                 |
+| `below_threshold`    | A verified grade under `competency_min_points`. The bar is inclusive. |
+| `not_the_tutor`      | Verified grade and the role, but no profile to rank on.              |
+
+`score` is relative: the client shows order, not a number a student could compare
+across requests. Ties are broken by grade, then name, then the course unit's
+code, so the order does not depend on the query plan.
+
+`no_eligible_tutors` is sent explicitly rather than left as an empty list, so the
+app can say why nothing appeared instead of showing a blank screen.
+
+### `POST /v1/matching/help-requests`
+
+`{"course_unit_id": …, "topic": "…", "description": "…"}`. 201 with the request.
+
+### `GET /v1/matching/help-requests/me`
+
+Every open help request the caller created, newest first.
+
+### `GET /v1/matching/help-requests/{request_id}`
+
+One help request the caller owns. Someone else's is a 404 rather than a 403, so
+the response does not confirm that it exists.
+
+### `POST /v1/matching/suggestions`
+
+The canonical path for the unit-only query. It used to be registered at
+`/matching` as well; two URLs for one handler means two things to keep working,
+since which one a client reaches depends on the base URL it was configured with.
+
+### `POST /v1/matching/help-requests/{request_id}/matches`
+
+Answers for the course unit **that request** was created for. A body naming a
+different unit is a 422 with `course_unit_id` named, rather than being quietly
+ignored: this route used to match whatever unit the body carried, so a client
+asking "who can take this request" was answered about another course entirely.
+
+| Status | `detail`                                                      | `errors`                          |
+| ------ | -------------------------------------------------------------- | --------------------------------- |
+| 401    | Sign-in required.                                              |                                   |
+| 404    | That help request could not be found.                          |                                   |
+| 422    | Some of the details you entered are not valid.                 | `course_unit_id` — must match your university, and for the request-backed route must be the unit that request was created for. `university_id` — set a university first. |
+
 ## Sessions
 
 All five routes require a signed-in user and are scoped to the caller's own
