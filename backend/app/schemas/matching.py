@@ -15,12 +15,32 @@ from pydantic import Field
 from app.schemas.base import OrmSchema, RequestSchema
 from app.schemas.tutor import TutorProfileSummary
 
-MIN_WIDENING_FACTOR = 1
-MAX_WIDENING_FACTOR = 5
-
 #: How many candidates one request may return. Beyond this a student is not
 #: choosing, they are scrolling, and the ranked list has stopped doing its job.
 MAX_MATCH_CANDIDATES = 20
+
+#: Every code the service can put in `MatchExclusion.reason`.
+#:
+#: Declared here, once, and the field's description is generated from it, so the
+#: list a client is told it may branch on cannot drift from the codes the engine
+#: actually emits. That drift is not cosmetic: `MatchExclusion` exists to answer
+#: "why is my tutor not showing up", and a documented reason that no code path
+#: produces leaves a client with a branch that never fires and a tutor with no
+#: explanation they can act on.
+#:
+#: `already_booked` used to be advertised here and was removed rather than
+#: implemented. It would assert a rule the platform does not have -- there is no
+#: availability model and nothing stops a tutor holding two sessions at the same
+#: time -- and inventing one is a product decision, not a matching detail.
+MATCH_EXCLUSION_REASONS = frozenset(
+    {
+        "below_threshold",
+        "not_the_tutor",
+        "same_university_only",
+        "suspended",
+        "unverified",
+    }
+)
 
 
 class MatchRequest(RequestSchema):
@@ -54,8 +74,10 @@ class MatchExclusion(OrmSchema):
     tutor_id: uuid.UUID
     reason: str = Field(
         description=(
-            "One of: below_threshold, unverified, suspended, same_university_only, "
-            "already_booked, not_the_tutor."
+            "One of: "
+            + ", ".join(sorted(MATCH_EXCLUSION_REASONS))
+            + ". The list is generated from `MATCH_EXCLUSION_REASONS`, so it "
+            "cannot name a code the engine cannot emit."
         )
     )
 
@@ -83,8 +105,14 @@ class MatchResponse(OrmSchema):
     reads as a loading failure.
     """
 
-    request_id: uuid.UUID = Field(
-        description="The help request these candidates answer.",
+    request_id: uuid.UUID | None = Field(
+        default=None,
+        description=(
+            "The help request these candidates answer, when the query was made "
+            "for one. Null for the unit-only query: nothing backs it, and an "
+            "id that names no row is a link the client will follow to a 404. "
+            "The client may only open the one it sent."
+        ),
     )
     course_unit_id: uuid.UUID
     widened: bool = Field(

@@ -27,6 +27,7 @@ from app.schemas.competency import (
     CompetencyReviewRequest,
 )
 from app.schemas.matching import (
+    MATCH_EXCLUSION_REASONS,
     MatchCandidate,
     MatchExclusion,
     MatchRequest,
@@ -47,9 +48,14 @@ from app.schemas.session import (
     SessionTransitionRequest,
 )
 from app.schemas.tutor import (
+    DEFAULT_RAIL_TUTORS,
+    MAX_RAIL_TUTORS,
+    RAIL_ENDORSED_UNITS,
     CertificateEligibilityResponse,
+    TutorDetailResponse,
     TutorProfileResponse,
     TutorProfileSummary,
+    TutorRailEntry,
 )
 from app.schemas.user import (
     AuthResponse,
@@ -63,9 +69,13 @@ from app.schemas.user import (
 
 __all__ = [
     "DEFAULT_PAGE_SIZE",
+    "DEFAULT_RAIL_TUTORS",
+    "MATCH_EXCLUSION_REASONS",
     "MAX_PAGE_SIZE",
+    "MAX_RAIL_TUTORS",
     "MAX_RATING",
     "MIN_RATING",
+    "RAIL_ENDORSED_UNITS",
     "AuthResponse",
     "CertificateEligibilityResponse",
     "CompetencyCreate",
@@ -96,8 +106,10 @@ __all__ = [
     "SessionTransitionRequest",
     "SubjectResponse",
     "TokenResponse",
+    "TutorDetailResponse",
     "TutorProfileResponse",
     "TutorProfileSummary",
+    "TutorRailEntry",
     "TutorRatingSummary",
     "UniversityResponse",
     "UserResponse",

@@ -20,9 +20,10 @@ Request schemas are the opposite: they may only carry public ids, and validation
 here is the first line of defence against a client inventing an internal one.
 """
 
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, StringConstraints
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StringConstraints
 
 #: A string whose surrounding whitespace is noise and is removed. Applied per
 #: field rather than through `ConfigDict`, because the config would reach
@@ -34,7 +35,44 @@ from pydantic import BaseModel, ConfigDict, StringConstraints
 #: for never happening.
 Trimmed = Annotated[str, StringConstraints(strip_whitespace=True)]
 
-__all__ = ["OrmSchema", "RequestSchema", "Trimmed"]
+
+def _round_to_cents(value: object) -> object:
+    """Round an already-numeric mean to the two places the wire declares.
+
+    Only a `Decimal` is touched. Anything else is passed through so Pydantic
+    keeps reporting a bad value the way it always has, rather than this
+    function deciding that a string or a float was "close enough".
+    """
+    if not isinstance(value, Decimal):
+        return value
+    return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+#: A mean of integer scores, as it leaves the service.
+#:
+#: Every schema carrying an `average_rating` declares `decimal_places=2`, and a
+#: mean need not fit in two places: eight ratings totalling 33 average 4.125.
+#: Pydantic v2 *validates* rather than rounds, so the exact mean raised a
+#: validation error and the endpoint answered 500 -- a tutor whose ratings did
+#: not divide evenly could not read their own standing, on the rail, on the
+#: detail screen, or through `GET /v1/ratings/me`.
+#:
+#: Spelled `MeanRating | None` at the field rather than `Optional[MeanRating]`
+#: inside the alias: Pydantic applies a known constraint to *every* member of an
+#: `Optional[...]` it is handed, so the null that means "unrated" -- the case the
+#: `None` exists for -- was rejected by the very constraint carrying it.
+#:
+#: Rounded here, at the edge, and nowhere else. `TutorProfile.average_rating`
+#: stays exact because the promotion rule is an equality test on it: rounding
+#: there would promote a tutor averaging 3.999 and demote one averaging 4.004,
+#: which is a product decision no schema should be making.
+MeanRating = Annotated[
+    Decimal,
+    BeforeValidator(_round_to_cents),
+    Field(max_digits=10, decimal_places=2),
+]
+
+__all__ = ["MeanRating", "OrmSchema", "RequestSchema", "Trimmed"]
 
 
 class RequestSchema(BaseModel):

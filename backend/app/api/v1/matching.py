@@ -45,17 +45,23 @@ async def list_help_requests(
     response_model=MatchResponse,
     summary="Find tutors for a course unit",
 )
-@router.post(
-    "",
-    response_model=MatchResponse,
-    summary="Find tutors for a course unit",
-)
 async def match_tutors(
     payload: MatchRequest,
     caller: CurrentUser,
     db: DatabaseSession,
 ) -> MatchResponse:
-    """Find tutors for the supplied course unit."""
+    """Find tutors for the supplied course unit.
+
+    One path for this handler. It used to be registered twice, at
+    `/matching/suggestions` and at `/matching`, and two URLs for one handler
+    means two things to keep working: a client's base URL decides which one it
+    calls, so a change to either would break half the installed apps, and the
+    route table stops being a description of the API. `/suggestions` is the
+    canonical path because it says what the response is.
+
+    `request_id` comes back null. Nothing backs a unit-only query, and the field
+    names a help request the client could go and open.
+    """
     return await matching_service.match_tutors(db, caller.user, payload)
 
 
@@ -70,7 +76,13 @@ async def match_request_tutors(
     caller: CurrentUser,
     db: DatabaseSession,
 ) -> MatchResponse:
-    """Find tutors matching an existing help request."""
+    """Find tutors matching an existing help request.
+
+    Answers for the course unit *that request* was created for. A body naming a
+    different unit is a 422 rather than something quietly ignored: this handler
+    used to match whatever unit the body carried, so a client asking "who can
+    take this request" was answered about another course entirely.
+    """
     return await matching_service.match_request_tutors(
         db,
         caller.user,
@@ -89,6 +101,10 @@ async def get_help_request(
     caller: CurrentUser,
     db: DatabaseSession,
 ) -> HelpRequestResponse:
-    """Fetch one help request the student owns."""
-    request = await matching_service._load_help_request(db, caller.user, request_id)
-    return matching_service._help_request_response(request)
+    """Fetch one help request the student owns.
+
+    One public service call: the ownership check and the response shape are one
+    decision, and a route assembling the body out of the service's internals
+    could skip the check by reaching for the other half.
+    """
+    return await matching_service.get_help_request(db, caller.user, request_id)
