@@ -151,10 +151,32 @@ cd PeerPass
 git remote add upstream https://github.com/asiimwe-dev/PeerPass.git
 ```
 
-### Step 2: Create Feature Branch
+### Step 2: Enable the commit guard
 
 ```bash
-# Always create a new branch from the latest main (or develop)
+# One command, once per clone.
+git config core.hooksPath .githooks
+```
+
+`core.hooksPath` lives in `.git/config` and does not travel with a clone, so
+this step is easy to miss and nothing fails loudly when you do. It installs
+`.githooks/commit-msg`, which rejects a commit that lists an AI agent as a
+co-author.
+
+GitHub counts a `Co-authored-by` trailer as a contribution, so an agent on a
+commit appears in the repository's contributors graph. An agent review once did
+exactly that here, and removing it meant rewriting published history. The guard
+is scoped to agent identities, not to co-authors generally: crediting a human
+collaborator is legitimate, and `--no-verify` exists if you have a reason.
+
+`.mailmap` in the repository root is the second layer and needs no setup — it
+rewrites the identity inside the commit, so a trailer arriving through a merge
+is attributed to whoever did the work.
+
+### Step 3: Create Feature Branch
+
+```bash
+# Always create a new branch from the latest main
 git fetch upstream
 git checkout -b feature/your-feature-name upstream/main
 
@@ -166,7 +188,7 @@ git checkout -b feature/your-feature-name upstream/main
 # test/description      — Test additions or improvements
 ```
 
-### Step 3: Set Up Development Environment
+### Step 4: Set Up Development Environment
 
 #### Backend (FastAPI + PostgreSQL)
 
@@ -269,17 +291,26 @@ flutter run                           # on emulator/device
 
 ```bash
 git add .
-git commit -m "feat: Add competency verification endpoint
+git commit -m "feat: add competency verification endpoint
 
-- Validates minimum B+ grade for tutor eligibility
-- Integrates with Course_Units and Competencies tables
-- Adds unit tests for boundary grades"
+Validates the minimum B+ grade for tutor eligibility, integrates with the
+course unit and competency tables, and covers the boundary grades."
 git push origin feature/your-feature-name
 ```
 
+Use conventional commits: `feat:`, `fix:`, `docs:`, `style:`, `refactor:`,
+`perf:`, `test:`, `chore:`. One concern per commit, and explain **why** in the
+body when it is not obvious.
+
+**Do not add a `Co-Authored-By` or `Signed-off-by` trailer naming an AI agent.**
+GitHub counts those as contributions, and an agent review once put one in this
+repository's contributors graph. Crediting a human collaborator is fine. The
+`commit-msg` hook from Step 2 rejects the agent case; use `--no-verify` only if
+you have a reason to, and say so in the pull request.
+
 ### Step 4: Create Pull Request
 
-- Open a PR from your branch to the upstream `main` (or `develop`) branch
+- Open a PR from your branch to the upstream `main` branch
 - Fill out the PR template completely
 - Link related issues
 - Request reviewers
@@ -574,9 +605,16 @@ PeerPass follows Semantic Versioning (`MAJOR.MINOR.PATCH`):
 ### Branching Strategy
 
 - `main` — Production-ready code
-- `develop` — Integration branch (if used)
 - `feature/*` — Individual features
+- `fix/*` — Defect fixes
+- `docs/*` — Documentation only
+- `refactor/*` — Structure change, no new behavior
+- `test/*` — Tests only
+- `chore/*` — Tooling and config
 - `hotfix/*` — Emergency fixes targeting `main`
+
+There is no `develop` branch; `main` is the default branch and the target of
+every pull request.
 
 ---
 
