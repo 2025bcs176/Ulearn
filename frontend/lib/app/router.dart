@@ -11,10 +11,14 @@ import 'package:peerpass/features/auth/presentation/screens/onboarding_screen.da
 import 'package:peerpass/features/auth/presentation/screens/sign_in_screen.dart';
 import 'package:peerpass/features/auth/presentation/screens/sign_up_screen.dart';
 import 'package:peerpass/features/home/presentation/screens/home_screen.dart';
+import 'package:peerpass/features/matching/presentation/screens/course_unit_picker_screen.dart';
+import 'package:peerpass/features/matching/presentation/screens/match_results_screen.dart';
 import 'package:peerpass/features/sessions/presentation/screens/rate_session_screen.dart';
 import 'package:peerpass/features/sessions/presentation/screens/session_detail_screen.dart';
 import 'package:peerpass/features/sessions/presentation/screens/sessions_list_screen.dart';
 import 'package:peerpass/features/sessions/presentation/widgets/active_session_card.dart';
+import 'package:peerpass/features/tutors/presentation/screens/tutor_detail_screen.dart';
+import 'package:peerpass/features/tutors/presentation/widgets/tutor_rail.dart';
 
 /// Every location the shell can be at.
 abstract final class AppRoutes {
@@ -25,6 +29,22 @@ abstract final class AppRoutes {
   static const String tutorVerification = '/tutor-verification';
   static const String home = '/home';
   static const String sessions = '/sessions';
+  static const String tutors = '/tutors';
+  static const String matching = '/matching';
+
+  /// One tutor's profile, opened from the rail.
+  ///
+  /// A path rather than a query, so the link to a tutor is something a student
+  /// can put in a message to a classmate and have it open the same profile.
+  static String tutorDetailPath(String userId) => '$tutors/$userId';
+
+  /// The tutors the API will propose for one course unit.
+  ///
+  /// The unit is in the path for the same reason the session id is: the screen
+  /// that answers "who can help with this course" is not reachable without the
+  /// course, and a route that could not name it would be a link to nothing.
+  static String matchResultsPath(String courseUnitId) =>
+      '$matching/$courseUnitId';
 
   /// The list, a session, and that session's rating form.
   ///
@@ -42,26 +62,41 @@ abstract final class AppRoutes {
 /// `/sessions` with a trailing slash matches the detail route with an empty
 /// parameter. That is a link a person can type and a client can be handed, and
 /// indexing an absent id would take the app down over a URL.
-String? _sessionIdOf(GoRouterState state) {
-  final sessionId = state.pathParameters['sessionId'];
-  if (sessionId == null || sessionId.isEmpty) return null;
-  return sessionId;
+String? _sessionIdOf(GoRouterState state) => _idOf(state, 'sessionId');
+
+/// A path parameter that is missing or empty.
+///
+/// One helper for every route with an id in its path. Three separate copies of
+/// the same null-and-empty check is how one of them ends up accepting the empty
+/// string that the other two reject.
+String? _idOf(GoRouterState state, String parameter) {
+  final id = state.pathParameters[parameter];
+  if (id == null || id.isEmpty) return null;
+  return id;
 }
 
-/// What a link with no session in it gets.
-class _MissingSessionRoute extends StatelessWidget {
-  const _MissingSessionRoute();
+/// What a link with no id in it gets.
+///
+/// A sentence rather than a redirect: the link is malformed, and silently
+/// sending a student somewhere else would leave them on a screen that has
+/// nothing to do with what they asked for and no way to tell that anything went
+/// wrong.
+class _MissingIdRoute extends StatelessWidget {
+  const _MissingIdRoute({required this.title, required this.message});
+
+  final String title;
+  final String message;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Session')),
+      appBar: AppBar(title: Text(title)),
       body: SafeArea(
         child: Center(
           child: Padding(
             padding: const EdgeInsets.all(AppDimens.lg),
             child: Text(
-              'That link does not name a session.',
+              message,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
@@ -103,8 +138,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.home,
-        builder: (context, state) =>
-            const HomeScreen(activeSessionCard: ActiveSessionCard()),
+        builder: (context, state) => const HomeScreen(
+          activeSessionCard: ActiveSessionCard(),
+          // Passed in rather than built here for the reason [HomeScreen]
+          // documents: home must not import a feature it owns nothing of. The
+          // rail is a section of the dashboard, not a route, so it has no path
+          // to be reached by and so the shell is the only thing that can supply
+          // it.
+          tutorRail: TutorRail(),
+        ),
       ),
       GoRoute(
         path: AppRoutes.sessions,
@@ -114,7 +156,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '${AppRoutes.sessions}/:sessionId',
         builder: (context, state) {
           final sessionId = _sessionIdOf(state);
-          if (sessionId == null) return const _MissingSessionRoute();
+          if (sessionId == null) {
+            return const _MissingIdRoute(
+              title: 'Session',
+              message: 'That link does not name a session.',
+            );
+          }
           return SessionDetailScreen(sessionId: sessionId);
         },
       ),
@@ -122,8 +169,43 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '${AppRoutes.sessions}/:sessionId/rate',
         builder: (context, state) {
           final sessionId = _sessionIdOf(state);
-          if (sessionId == null) return const _MissingSessionRoute();
+          if (sessionId == null) {
+            return const _MissingIdRoute(
+              title: 'Session',
+              message: 'That link does not name a session.',
+            );
+          }
           return RateSessionScreen(sessionId: sessionId);
+        },
+      ),
+      GoRoute(
+        path: '${AppRoutes.tutors}/:userId',
+        builder: (context, state) {
+          final userId = _idOf(state, 'userId');
+          if (userId == null) {
+            return const _MissingIdRoute(
+              title: 'Tutor',
+              message: 'That link does not name a tutor.',
+            );
+          }
+          return TutorDetailScreen(userId: userId);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.matching,
+        builder: (context, state) => const CourseUnitPickerScreen(),
+      ),
+      GoRoute(
+        path: '${AppRoutes.matching}/:courseUnitId',
+        builder: (context, state) {
+          final courseUnitId = _idOf(state, 'courseUnitId');
+          if (courseUnitId == null) {
+            return const _MissingIdRoute(
+              title: 'Find a tutor',
+              message: 'That link does not name a course unit.',
+            );
+          }
+          return MatchResultsScreen(courseUnitId: courseUnitId);
         },
       ),
     ],
@@ -198,7 +280,15 @@ String? _redirectForSignedIn(UserProfile? profile, String location) {
   // follows a link to a session, or who is on the rating form for one, is exactly
   // as allowed to be there as one who walked there from home, and the guard that
   // bounced them to the dashboard mid-flow was a redirect with no reason to exist.
-  if (_isSessionRoute(location)) {
+  //
+  // Tutor profiles and matching are allowed for the same reason and for a second
+  // one: they are reached *from* home and from the rail, so a guard that only
+  // exempted home and sessions would let a student tap a tutor's card and be
+  // returned to the dashboard, which reads as the app refusing to open the thing
+  // they just pressed.
+  if (_isSessionRoute(location) ||
+      _isTutorRoute(location) ||
+      _isMatchingRoute(location)) {
     return null;
   }
 
@@ -212,6 +302,15 @@ String? _redirectForSignedIn(UserProfile? profile, String location) {
 bool _isSessionRoute(String location) =>
     location == AppRoutes.sessions ||
     location.startsWith('${AppRoutes.sessions}/');
+
+/// Whether a location is a tutor profile.
+bool _isTutorRoute(String location) =>
+    location.startsWith('${AppRoutes.tutors}/');
+
+/// Whether a location is inside the matching subtree.
+bool _isMatchingRoute(String location) =>
+    location == AppRoutes.matching ||
+    location.startsWith('${AppRoutes.matching}/');
 
 String _landingFor(UserProfile? profile) =>
     (profile?.needsOnboarding ?? true) ? AppRoutes.onboarding : AppRoutes.home;

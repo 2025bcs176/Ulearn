@@ -8,9 +8,15 @@ import 'package:peerpass/features/auth/data/datasources/remote_academics_datasou
 import 'package:peerpass/features/auth/data/datasources/remote_auth_datasource.dart';
 import 'package:peerpass/features/auth/data/repositories/auth_repository.dart';
 import 'package:peerpass/features/auth/data/repositories/remote_auth_repository.dart';
+import 'package:peerpass/features/matching/data/datasources/remote_matching_datasource.dart';
+import 'package:peerpass/features/matching/data/repositories/matching_repository.dart';
+import 'package:peerpass/features/matching/data/repositories/remote_matching_repository.dart';
 import 'package:peerpass/features/sessions/data/datasources/remote_sessions_datasource.dart';
 import 'package:peerpass/features/sessions/data/repositories/remote_sessions_repository.dart';
 import 'package:peerpass/features/sessions/data/repositories/sessions_repository.dart';
+import 'package:peerpass/features/tutors/data/datasources/remote_tutors_datasource.dart';
+import 'package:peerpass/features/tutors/data/repositories/remote_tutors_repository.dart';
+import 'package:peerpass/features/tutors/data/repositories/tutors_repository.dart';
 
 void main() {
   final config = AppConfig.fromEnvironment();
@@ -46,18 +52,31 @@ void main() {
     RemoteSessionsDatasource(dio),
   );
 
+  // One `Dio` for every datasource, so the token, the refresh and the retry
+  // behave the same on a matching request as on a session request. Building a
+  // second client per feature would give each of them its own token store and
+  // its own idea of whether the user is signed in.
+  final tutorsRepository = RemoteTutorsRepository(RemoteTutorsDatasource(dio));
+  final matchingRepository = RemoteMatchingRepository(
+    RemoteMatchingDatasource(dio),
+  );
+
   runApp(
     ProviderScope(
       // The composition root. Choosing implementations here, rather than
       // defaulting them in the providers, is what makes a test swap the whole
       // data layer for a fake in one line.
       //
-      // `sessionsRepositoryProvider` throws unless it is overridden, so leaving
-      // it out does not degrade to a fake that quietly reports no sessions: the
-      // failure is immediate and names the missing override.
+      // `sessionsRepositoryProvider`, `tutorsRepositoryProvider` and
+      // `matchingRepositoryProvider` all throw unless they are overridden, so
+      // leaving one out does not degrade to a fake that quietly reports no
+      // sessions, no tutors and nobody eligible: the failure is immediate and
+      // names the missing override.
       overrides: [
         authRepositoryProvider.overrideWithValue(repository),
         sessionsRepositoryProvider.overrideWithValue(sessionsRepository),
+        tutorsRepositoryProvider.overrideWithValue(tutorsRepository),
+        matchingRepositoryProvider.overrideWithValue(matchingRepository),
       ],
       child: const PeerPassApp(),
     ),

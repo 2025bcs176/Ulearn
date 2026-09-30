@@ -108,6 +108,23 @@ final class UnknownFailure extends Failure {
   const UnknownFailure([super.message = 'Something unexpected happened.']);
 }
 
+/// The failure a screen may render for [error].
+///
+/// The one crossing point between "something was thrown" and "something is
+/// shown". A repository is contracted to throw a [Failure], but a provider can
+/// still fail with something that is not one -- a repository override that was
+/// never registered is the case that happens in practice, and every test that
+/// does not care about the feature hits it. The [Failure] hierarchy is what the
+/// UI is written against, so anything else becomes an [UnknownFailure] here
+/// rather than being rendered. Without it a missing override would put
+/// `UnimplementedError: sessionsRepositoryProvider must be overridden in
+/// ProviderScope.` on a student's home screen.
+///
+/// In `core/` rather than beside the first feature that needed it, because three
+/// features reach for it and the alternative was a copy per feature.
+Failure failureFor(Object error) =>
+    error is Failure ? error : const UnknownFailure();
+
 bool _mapEquals(Map<String, String> a, Map<String, String> b) {
   if (identical(a, b)) return true;
   if (a.length != b.length) return false;

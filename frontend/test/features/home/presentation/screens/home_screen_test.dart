@@ -83,28 +83,25 @@ void main() {
     expect(find.text('Signed in as ${_enrolled.email}'), findsOneWidget);
   });
 
-  testWidgets('the two pending tiles are marked Soon and lead nowhere', (
+  testWidgets('the booking tile is the only promise left on the dashboard', (
     tester,
   ) async {
-    // There is no tutor list and no booking screen in this release, so a tile
-    // that navigated would take a student somewhere that does not exist. The
-    // claim is checked by pressing both: the screen stays mounted, the greeting
-    // stays, and the session is untouched. These tests run without a router, so
-    // a tile that reached for `context.go` would have nothing to go with and the
-    // press would throw rather than pass quietly.
+    // There is no booking screen in this release, so a tile that navigated would
+    // take a student somewhere that does not exist. The claim is checked by
+    // pressing it: the screen stays mounted, the greeting stays, and the session
+    // is untouched. This test runs without a router, so a tile that reached for
+    // `context.go` would have nothing to go with and the press would throw rather
+    // than pass quietly.
     final harness = _harness(_enrolled);
     await _pumpHome(tester, harness);
 
-    expect(find.text('Find a tutor'), findsOneWidget);
     expect(find.text('Book a session'), findsOneWidget);
     expect(
       find.text('Soon'),
-      findsNWidgets(2),
-      reason: 'both tiles promise something the app cannot do yet',
+      findsOneWidget,
+      reason: 'booking is the one thing on this screen that is not built',
     );
 
-    await tester.tap(find.text('Find a tutor'));
-    await _settle(tester);
     await tester.tap(find.text('Book a session'));
     await _settle(tester);
 
@@ -150,11 +147,11 @@ void main() {
     await _pumpHome(tester, harness);
 
     expect(find.text('My sessions'), findsOneWidget);
-    // Two pending tiles carry the chip; this one must not add a third, or it is
-    // making the same "not built yet" claim as the tiles beside it.
+    // One pending tile carries the chip; this entry must not add a second, or it
+    // is making the same "not built yet" claim as the tile below it.
     expect(
       find.text('Soon'),
-      findsNWidgets(2),
+      findsNWidgets(1),
       reason: 'the sessions entry is live and must not claim otherwise',
     );
   });
@@ -191,5 +188,70 @@ void main() {
 
     expect(find.text('Sessions list here'), findsOneWidget);
     expect(find.byType(HomeScreen), findsNothing);
+  });
+
+  testWidgets('tapping the tutor entry opens the course unit picker', (
+    tester,
+  ) async {
+    // Asserted through a real router, because the claim under test is a
+    // navigation and a test without one would pass against a handler that pushes
+    // nothing at all. Matching is built, so this entry is no longer a promise --
+    // a working feature marked Soon is a working feature nobody can find.
+    final harness = _harness(_enrolled);
+    final router = GoRouter(
+      initialLocation: '/',
+      routes: [
+        GoRoute(path: '/', builder: (_, _) => const HomeScreen()),
+        GoRoute(
+          path: AppRoutes.matching,
+          builder: (_, _) => const Scaffold(body: Text('Course units here')),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: harness.container,
+        child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+      ),
+    );
+    await _settle(tester);
+
+    await tester.tap(find.text('Find a tutor'));
+    await _settle(tester);
+
+    expect(find.text('Course units here'), findsOneWidget);
+    expect(find.byType(HomeScreen), findsNothing);
+  });
+
+  testWidgets('the rail the shell supplies is shown, and its absence is silent', (
+    tester,
+  ) async {
+    // The rail belongs to the tutors feature and reaches home as a widget, so
+    // home's only job is to place it. Supplied, it appears; not supplied, there is
+    // no gap and no placeholder, which is the state home's own tests are in.
+    final harness = _harness(_enrolled);
+    await _pumpHome(tester, harness);
+
+    expect(find.text('Tutors at your university'), findsNothing);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: harness.container,
+        child: MaterialApp(
+          theme: AppTheme.light,
+          home: const HomeScreen(
+            // A bare marker, not a Scaffold: the rail is placed inside a
+            // scrolling column, and a Scaffold there would ask for the height it
+            // cannot have. The real rail sizes its own cards.
+            tutorRail: Text('Tutors at your university'),
+          ),
+        ),
+      ),
+    );
+    await _settle(tester);
+
+    expect(find.text('Tutors at your university'), findsOneWidget);
   });
 }
