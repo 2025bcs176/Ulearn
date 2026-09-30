@@ -11,39 +11,42 @@ import 'package:peerpass/features/home/presentation/providers/sign_out_controlle
 
 /// The signed-in landing screen.
 ///
-/// Reads the student's own name and where they study, offers a way into their
-/// own sessions, and says plainly that finding a tutor is not switched on yet.
-/// It does not offer a tutor list or a course picker, because the matching
-/// endpoint behind those does not exist in this release. An empty state that
-/// pretends to be a hub is worse than an honest one: a student who taps a tile
-/// that leads nowhere concludes the app is broken, rather than that it is early.
+/// Reads the student's own name, offers a way into their own sessions, into
+/// finding a tutor for a course unit, and a rail of the tutors already teaching at
+/// their university. Booking is still a promise, and the pending tile is the only
+/// thing on this screen that is: the distinction the pending tiles exist to make
+/// is between what works and what is written on the roadmap, and a list of
+/// sessions with no way to reach it from the landing screen would be a feature
+/// nobody can find.
 ///
-/// "My sessions" is a live entry rather than a promise, and that is the
-/// distinction the pending tiles exist to make: sessions really are built, so a
-/// list of them with no way to reach it from the landing screen would be a
-/// feature nobody can find. The link is expressed as a route push, not as an
-/// import of the sessions feature's screen -- see [activeSessionCard] for why
-/// the boundary is drawn here.
+/// The two entries that lead somewhere are route pushes, not imports of the
+/// features' screens. A home screen that named them would have to import features
+/// it owns nothing of, which the dependency rules forbid -- see [tutorRail] for the
+/// longer form of that argument.
 ///
-/// The active-session card arrives as a widget rather than being built here, and
-/// that is an architectural decision rather than a preference. The card belongs to
-/// the sessions feature, and a home screen that named it would have to import a
-/// feature it owns nothing of -- which the dependency rules forbid and which, more
-/// to the point, would make home a second place that has to change when the
-/// sessions feature does. So the shell passes the card in and home decides only
-/// where it goes. Null means there is no card, which is the state the home screen's
-/// own tests are in.
+/// The active-session card and the tutor rail arrive as widgets rather than being
+/// built here, and that is an architectural decision rather than a preference. The
+/// card belongs to the sessions feature and the rail to the tutors feature, so
+/// naming either would make home a second place that has to change when those
+/// features do. The shell passes them in and home decides only where they go. Null
+/// means there is no card, which is the state the home screen's own tests are in --
+/// and for the rail, null means "nothing to browse here", which is honest rather
+/// than broken.
 class HomeScreen extends ConsumerWidget {
-  const HomeScreen({this.activeSessionCard, super.key});
+  const HomeScreen({this.activeSessionCard, this.tutorRail, super.key});
 
-  /// The card to show above the pending tiles, if the shell has one.
+  /// The card to show above the entries, if the shell has one.
   final Widget? activeSessionCard;
+
+  /// The rail of tutors to show, if the shell has one.
+  final Widget? tutorRail;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final profile = ref.watch(sessionControllerProvider).profile;
     final card = activeSessionCard;
+    final rail = tutorRail;
 
     return Scaffold(
       appBar: AppBar(
@@ -90,10 +93,27 @@ class HomeScreen extends ConsumerWidget {
                       card,
                     ],
                     const SizedBox(height: AppDimens.xl),
-                    _SessionsEntry(
+                    _FeatureEntry(
+                      icon: Icons.school_outlined,
+                      title: 'Find a tutor',
+                      body:
+                          'Pick a course unit and see the tutors who can help '
+                          'you with it.',
+                      onTap: () => context.push(AppRoutes.matching),
+                    ),
+                    const SizedBox(height: AppDimens.md),
+                    _FeatureEntry(
+                      icon: Icons.event_note_outlined,
+                      title: 'My sessions',
+                      body:
+                          'Past sessions, your PIN for the next one, and the '
+                          'rating you owe.',
                       onTap: () => context.push(AppRoutes.sessions),
                     ),
-                    const SizedBox(height: AppDimens.xl),
+                    if (rail != null) ...[
+                      const SizedBox(height: AppDimens.xl),
+                      rail,
+                    ],
                     if (!(profile?.hasRole(UserRole.tutor) ?? false))
                       FilledButton.icon(
                         onPressed: () =>
@@ -101,14 +121,6 @@ class HomeScreen extends ConsumerWidget {
                         icon: const Icon(Icons.verified_user_outlined),
                         label: const Text('Become a tutor'),
                       ),
-                    const SizedBox(height: AppDimens.md),
-                    const _PendingCard(
-                      icon: Icons.school_outlined,
-                      title: 'Find a tutor',
-                      body:
-                          'Tutor profiles and matching arrive in the next '
-                          'release. Your account is set up and ready for it.',
-                    ),
                     const SizedBox(height: AppDimens.md),
                     const _PendingCard(
                       icon: Icons.calendar_month_outlined,
@@ -200,13 +212,21 @@ class _PendingCard extends StatelessWidget {
 
 /// A tile that leads to a real screen, so unlike the pending tiles it is tappable.
 ///
-/// It sits above them and carries no "Soon" chip. The pending tiles exist to
-/// keep home honest about what is not built; an entry point for a screen that
-/// *is* built is the opposite claim, and a list of sessions with no way to reach
-/// it from anywhere else is a feature nobody can find.
-class _SessionsEntry extends StatelessWidget {
-  const _SessionsEntry({required this.onTap});
+/// It carries no "Soon" chip. The pending tiles exist to keep home honest about
+/// what is not built; an entry point for a screen that *is* built is the opposite
+/// claim, and a list of sessions or a course catalogue with no way to reach either
+/// of them is a feature nobody can find.
+class _FeatureEntry extends StatelessWidget {
+  const _FeatureEntry({
+    required this.icon,
+    required this.title,
+    required this.body,
+    required this.onTap,
+  });
 
+  final IconData icon;
+  final String title;
+  final String body;
   final VoidCallback onTap;
 
   @override
@@ -221,20 +241,16 @@ class _SessionsEntry extends StatelessWidget {
           padding: const EdgeInsets.all(AppDimens.lg),
           child: Row(
             children: [
-              Icon(
-                Icons.event_note_outlined,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+              Icon(icon, color: theme.colorScheme.onSurfaceVariant),
               const SizedBox(width: AppDimens.lg),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('My sessions', style: theme.textTheme.titleMedium),
+                    Text(title, style: theme.textTheme.titleMedium),
                     const SizedBox(height: AppDimens.xs),
                     Text(
-                      'Past sessions, your PIN for the next one, and the '
-                      'rating you owe.',
+                      body,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),

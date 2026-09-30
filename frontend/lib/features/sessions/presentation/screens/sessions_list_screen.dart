@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:peerpass/app/router.dart';
+import 'package:peerpass/core/error/failures.dart';
 import 'package:peerpass/core/widgets/content_width_limiter.dart';
 import 'package:peerpass/core/widgets/empty_view.dart';
 import 'package:peerpass/core/widgets/failure_view.dart';

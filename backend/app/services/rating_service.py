@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from decimal import Decimal
 
 from sqlalchemy import delete, func, select
@@ -273,6 +274,30 @@ async def _load_unit_endorsement_counts(
 ) -> list[UnitEndorsementCount]:
     """Endorsement counts per course unit for one tutor.
 
+    Thin wrapper over the shared aggregation rather than the implementation of
+    it, so a second caller cannot end up with a subtly different definition of
+    "endorsed".
+    """
+    return (await load_unit_endorsement_counts(db, [user_id])).get(user_id, [])
+
+
+async def load_unit_endorsement_counts(
+    db: AsyncSession, user_ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, list[UnitEndorsementCount]]:
+    """Endorsement counts per course unit, for several tutors at once.
+
+    Keyed by the caller's *internal* user id, because that is what the callers
+    already hold -- a row fetched by a query, not one the client sent -- and the
+    values carry public course unit ids, because that is what the client can act
+    on. Two different id spaces in one return value is a wart worth naming: the
+    key is an internal join key and is never serialised, while everything
+    inside a list is wire data.
+
+    Several tutors in one query is the point. The tutor rail reads this for
+    every row it shows at once, and a per-tutor call would make that a query
+    proportional to the length of the rail -- the same N+1 that
+    `_load_unit_endorsement_counts` was written to avoid for one tutor.
+
     Joined to `course_units` for the public id rather than reporting the
     endorsement's own `course_unit_id`, so the aggregate cannot hand a client an
     internal key. Counting in the database rather than loading the rows is what
@@ -282,19 +307,36 @@ async def _load_unit_endorsement_counts(
     Units with no endorsements do not appear at all: there is no row to group,
     and a zero would read as "endorsed here and rated badly" rather than as
     "no evidence". Ordering is count descending, then course code, so the
-    response is stable across calls and a test on it cannot flake.
+    response is stable across calls and a test on it cannot flake. The sort is
+    over the whole result rather than per tutor, which is the same order: a
+    query sorted by (count, code) is still sorted by (count, code) when read
+    back one `ratee_id` at a time.
     """
+    if not user_ids:
+        return {}
+
     result = await db.execute(
-        select(CourseUnit.public_id, func.count(UnitEndorsement.id))
+        select(
+            CourseUnit.public_id,
+            UnitEndorsement.ratee_id,
+            func.count(UnitEndorsement.id),
+        )
         .join(UnitEndorsement, UnitEndorsement.course_unit_id == CourseUnit.id)
-        .where(UnitEndorsement.ratee_id == user_id)
-        .group_by(CourseUnit.id, CourseUnit.public_id, CourseUnit.code)
+        .where(UnitEndorsement.ratee_id.in_(list(user_ids)))
+        .group_by(
+            CourseUnit.id,
+            CourseUnit.public_id,
+            CourseUnit.code,
+            UnitEndorsement.ratee_id,
+        )
         .order_by(func.count(UnitEndorsement.id).desc(), CourseUnit.code)
     )
-    return [
-        UnitEndorsementCount(course_unit_id=public_id, endorsement_count=count)
-        for public_id, count in result.all()
-    ]
+    counts: dict[uuid.UUID, list[UnitEndorsementCount]] = {}
+    for public_id, ratee_id, count in result.all():
+        counts.setdefault(ratee_id, []).append(
+            UnitEndorsementCount(course_unit_id=public_id, endorsement_count=count)
+        )
+    return counts
 
 
 async def _load_session_for_user(

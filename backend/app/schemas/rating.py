@@ -14,7 +14,7 @@ from typing import Self
 from pydantic import Field, model_validator
 
 from app.models.rating import MAX_RATING, MIN_RATING
-from app.schemas.base import OrmSchema, RequestSchema, Trimmed
+from app.schemas.base import MeanRating, OrmSchema, RequestSchema, Trimmed
 
 MAX_FEEDBACK_LENGTH = 2000
 
@@ -142,10 +142,8 @@ class TutorRatingSummary(OrmSchema):
     would be exactly that.
     """
 
-    average_rating: Decimal | None = Field(
+    average_rating: MeanRating | None = Field(
         default=None,
-        max_digits=10,
-        decimal_places=2,
         description="Null with no ratings yet; zero would read as badly rated.",
     )
     rating_total: Decimal = Field(max_digits=10, decimal_places=2, ge=0)
