@@ -11,6 +11,7 @@ import 'package:peerpass/features/auth/presentation/screens/onboarding_screen.da
 import 'package:peerpass/features/auth/presentation/screens/sign_in_screen.dart';
 import 'package:peerpass/features/auth/presentation/screens/sign_up_screen.dart';
 import 'package:peerpass/features/home/presentation/screens/home_screen.dart';
+import 'package:peerpass/features/incentives/presentation/screens/certificate_screen.dart';
 import 'package:peerpass/features/matching/presentation/screens/course_unit_picker_screen.dart';
 import 'package:peerpass/features/matching/presentation/screens/match_results_screen.dart';
 import 'package:peerpass/features/sessions/presentation/screens/rate_session_screen.dart';
@@ -31,6 +32,7 @@ abstract final class AppRoutes {
   static const String sessions = '/sessions';
   static const String tutors = '/tutors';
   static const String matching = '/matching';
+  static const String certificate = '/certificate';
 
   /// One tutor's profile, opened from the rail.
   ///
@@ -208,6 +210,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           return MatchResultsScreen(courseUnitId: courseUnitId);
         },
       ),
+      GoRoute(
+        path: AppRoutes.certificate,
+        builder: (context, state) => const CertificateScreen(),
+      ),
     ],
     // go_router re-evaluates this on every navigation and whenever the
     // listenable fires, which is what makes an auth change redirect the app
@@ -286,9 +292,19 @@ String? _redirectForSignedIn(UserProfile? profile, String location) {
   // exempted home and sessions would let a student tap a tutor's card and be
   // returned to the dashboard, which reads as the app refusing to open the thing
   // they just pressed.
+  //
+  // The certificate screen is allowed for a narrower reason, and it is not the
+  // tutor-role check it looks like. It answers about the caller's own hours and
+  // only about the caller's, so there is nothing behind it for another account to
+  // read -- but the guard cannot ask that, because by the time it runs the screen
+  // has not fetched anything. Refusing the route by role would send a tutor whose
+  // profile was created between two app launches back to the dashboard, and
+  // redirecting everyone else would leave a deep link to a screen that has an
+  // honest "you are not a tutor yet" state as the only alternative.
   if (_isSessionRoute(location) ||
       _isTutorRoute(location) ||
-      _isMatchingRoute(location)) {
+      _isMatchingRoute(location) ||
+      location == AppRoutes.certificate) {
     return null;
   }
 

@@ -110,6 +110,22 @@ class HomeScreen extends ConsumerWidget {
                           'rating you owe.',
                       onTap: () => context.push(AppRoutes.sessions),
                     ),
+                    // Tutor-only, on the same role check as "Become a tutor"
+                    // below, because the entry is about the viewer's own banked
+                    // hours. A student offered it would tap through to a screen
+                    // whose honest answer is that they have not applied yet, which
+                    // is a worse first impression than not seeing the tile.
+                    if (profile?.hasRole(UserRole.tutor) ?? false) ...[
+                      const SizedBox(height: AppDimens.md),
+                      _FeatureEntry(
+                        icon: Icons.workspace_premium_outlined,
+                        title: 'My certificate',
+                        body:
+                            'The teaching hours you have banked, and the hours '
+                            'a certificate still needs.',
+                        onTap: () => context.push(AppRoutes.certificate),
+                      ),
+                    ],
                     if (rail != null) ...[
                       const SizedBox(height: AppDimens.xl),
                       rail,
