@@ -7,18 +7,6 @@ import 'package:peerpass/features/sessions/data/models/rating_model.dart';
 import 'package:peerpass/features/sessions/data/models/session_model.dart';
 import 'package:peerpass/features/sessions/data/repositories/sessions_repository.dart';
 
-/// The failure a screen may render for [error].
-///
-/// A provider can fail with something that is not a [Failure] -- a repository
-/// override that was never registered is the one that happens in practice, and
-/// the tests hit it whenever they do not care about sessions. The [Failure]
-/// hierarchy is what the UI is written against, so anything else becomes an
-/// [UnknownFailure] at this boundary rather than being rendered. Without it a
-/// missing override would put `UnimplementedError: sessionsRepositoryProvider must
-/// be overridden in ProviderScope.` on a student's home screen.
-Failure failureFor(Object error) =>
-    error is Failure ? error : const UnknownFailure();
-
 /// Every session the signed-in user is part of.
 ///
 /// An [AsyncNotifier] rather than a plain controller because the only thing to do

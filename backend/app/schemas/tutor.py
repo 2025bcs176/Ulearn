@@ -20,9 +20,31 @@ from decimal import Decimal
 from pydantic import Field
 
 from app.models.enums import TutorStanding
-from app.schemas.base import OrmSchema
+from app.schemas.base import MeanRating, OrmSchema
 
 MAX_SUSPENSION_REASON_LENGTH = 500
+
+#: How many entries the "top tutors" rail returns when the client says nothing.
+#: Ten is a rail, not a list: enough to scroll past, few enough that a student
+#: reads the ordering rather than the page numbers.
+DEFAULT_RAIL_TUTORS = 10
+
+#: The most entries one rail may return. A bound rather than a statement about
+#: how many tutors exist: the rail is a discovery surface over the caller's own
+#: university, and a client asking for thousands of rows off a metered
+#: connection is either a bug or an attempt at a full table scan. Matching's own
+#: `MAX_MATCH_CANDIDATES` is the same kind of bound.
+MAX_RAIL_TUTORS = 20
+
+#: How many endorsed course units one rail entry names.
+#:
+#: The count travels in full -- a rail row has to be able to say "endorsed 14
+#: times" without a second request -- but the *list* is capped. A tutor who has
+#: taught thirty units is not summarised by any five of them, and a client that
+#: has to lay out thirty chips in a horizontal rail is not going to lay out any
+#: of them. Truncation is why the entries carry the total: the number shown is
+#: the whole truth and the list is a sample of it.
+RAIL_ENDORSED_UNITS = 5
 
 
 class TutorProfileResponse(OrmSchema):
@@ -38,10 +60,8 @@ class TutorProfileResponse(OrmSchema):
     )
     rating_total: Decimal = Field(max_digits=10, decimal_places=2, ge=0)
     rating_count: int = Field(ge=0)
-    average_rating: Decimal | None = Field(
+    average_rating: MeanRating | None = Field(
         default=None,
-        max_digits=10,
-        decimal_places=2,
         description=(
             "Mean score, or null with no ratings yet. Null rather than zero: a "
             "tutor with no ratings is not badly rated, and zero would fail a "
@@ -71,10 +91,84 @@ class TutorProfileSummary(OrmSchema):
     user_id: uuid.UUID
     full_name: str
     standing: TutorStanding
-    average_rating: Decimal | None = Field(
-        default=None, max_digits=10, decimal_places=2
+    average_rating: MeanRating | None = Field(default=None)
+    completed_sessions: int = Field(ge=0)
+
+
+class TutorRailEntry(OrmSchema):
+    """One tutor as the browse rail shows them.
+
+    Flat rather than a wrapped `TutorProfileSummary` because a rail row is a list
+    cell: the client renders it without opening anything, and every field on it
+    has to be readable at a glance. It repeats the summary's fields rather than
+    embedding it for the same reason -- a row the client cannot open cannot
+    afford a nesting level it would have to unwrap.
+
+    Built by keyword from a query, never validated off an ORM object. There is
+    no model carrying `user_id` as a *public* id, so the arrangement the rest of
+    this package relies on -- a `validation_alias` pointing at a
+    `*_public_id` property -- has nothing to point at here, and an unaliased
+    `user_id` handed a `TutorProfile` would quietly become its primary key.
+    Every value is filled in by the service from `User.public_id` and
+    `TutorProfile`, which is the only place a leaked key could come from.
+    """
+
+    user_id: uuid.UUID
+    full_name: str = Field(
+        max_length=160,
+        description=(
+            "Display name, falling back to the account's email address. An "
+            "account with no name is a real state, not an error."
+        ),
+    )
+    standing: TutorStanding
+    average_rating: MeanRating | None = Field(
+        default=None,
+        description="Mean score, or null with no ratings yet.",
     )
     completed_sessions: int = Field(ge=0)
+    endorsed_course_unit_ids: list[uuid.UUID] = Field(
+        default_factory=list,
+        max_length=RAIL_ENDORSED_UNITS,
+        description=(
+            "Public ids of the units this tutor has been endorsed for, most "
+            f"endorsed first and capped at {RAIL_ENDORSED_UNITS}. Empty when "
+            "there is no endorsement, which is absence of evidence rather than "
+            "a claim that they are weak in every unit."
+        ),
+    )
+    endorsement_count: int = Field(
+        ge=0,
+        description=(
+            "Total endorsements across every unit, which can exceed the number "
+            "of units listed above."
+        ),
+    )
+
+
+class TutorDetailResponse(OrmSchema):
+    """One tutor's profile as the detail screen shows it.
+
+    `profile` is the whole summary rather than a copy of its fields, so the
+    detail screen is bounded by the same policy as every other student-facing
+    view: whatever `TutorProfileSummary` refuses to carry -- the suspension
+    reason, the raw rating total -- cannot be added here without changing the
+    type every other student-facing view shares. Flattening the five fields
+    would put that policy in five places instead of one, and one of them would
+    be wrong within a month.
+    """
+
+    profile: TutorProfileSummary
+    endorsed_course_unit_ids: list[uuid.UUID] = Field(
+        default_factory=list,
+        max_length=RAIL_ENDORSED_UNITS,
+        description=(
+            "The same capped sample the rail carries, for the same reason: a "
+            "tutor endorsed in thirty units is not summarised by any five of "
+            "them, so the count beside this list is the number to trust."
+        ),
+    )
+    endorsement_count: int = Field(ge=0)
 
 
 class CertificateEligibilityResponse(OrmSchema):
