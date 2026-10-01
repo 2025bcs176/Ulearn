@@ -8,6 +8,7 @@ import 'package:peerpass/core/models/user_role.dart';
 import 'package:peerpass/core/state/session.dart';
 import 'package:peerpass/core/widgets/content_width_limiter.dart';
 import 'package:peerpass/features/home/presentation/providers/sign_out_controller.dart';
+import 'package:peerpass/features/home/presentation/widgets/delete_account_tile.dart';
 
 /// The signed-in landing screen.
 ///
@@ -137,6 +138,8 @@ class HomeScreen extends ConsumerWidget {
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
+                    const SizedBox(height: AppDimens.xl),
+                    const DeleteAccountTile(),
                   ],
                 ),
               ),
