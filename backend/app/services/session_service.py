@@ -184,8 +184,6 @@ async def transition_session(
             (_utc(session.ended_at) - _utc(session.started_at)).total_seconds() // 60
         )
         session.duration_minutes = max(1, elapsed)
-        if session.status is not SessionStatus.COMPLETED:
-            await rating_service.record_completion(db, session)
 
     if payload.status is SessionStatus.CANCELLED:
         session.cancelled_by_id = user.id
@@ -195,7 +193,18 @@ async def transition_session(
         session.cancelled_by_id = None
         session.cancellation_reason = None
 
+    # The status is assigned before `record_completion` runs, not after. That
+    # function banks minutes only for a session that is already `completed` and
+    # returns early otherwise, so calling it against the pre-transition row
+    # silently did nothing: no session ever accrued a minute, `completed_sessions`
+    # stayed at zero, and with it `_recompute_standing` held every tutor at
+    # `probationary` forever. `SESSION_TRANSITIONS` gives `completed` an empty
+    # allowed set, so arriving here with this status means the row was not
+    # already completed and the accrual happens exactly once.
     session.status = payload.status
+    if payload.status is SessionStatus.COMPLETED:
+        await rating_service.record_completion(db, session)
+
     await db.flush()
     return await _session_response(db, session)
 

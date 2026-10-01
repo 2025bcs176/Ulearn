@@ -508,7 +508,7 @@ class TestATombstoneCannotAuthenticate:
 
 class TestDeleteEndpoint:
     async def test_delete_me_returns_204_and_no_body(self, client, db_session):
-        _body, user = await _account(client, db_session, "ada@student.makerere.ac.ug")
+        _body, _user = await _account(client, db_session, "ada@student.makerere.ac.ug")
 
         response = await client.delete("/v1/users/me", headers=_bearer(_body))
 
@@ -526,7 +526,7 @@ class TestDeleteEndpoint:
         Both paths end in the same place -- not signed in, account anonymised --
         and telling them apart would leak that a `public_id` was ever live.
         """
-        _body, user = await _account(client, db_session, "ada@student.makerere.ac.ug")
+        _body, _user = await _account(client, db_session, "ada@student.makerere.ac.ug")
         headers = _bearer(_body)
         assert (await client.delete("/v1/users/me", headers=headers)).status_code == 204
 

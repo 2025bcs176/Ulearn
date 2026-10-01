@@ -477,16 +477,6 @@ async def test_a_negative_duration_contributes_nothing(db_session):
     assert eligibility.certified_minutes == 0
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "session_service.transition_session calls record_completion before it "
-        "assigns session.status, so record_completion's own "
-        "`status is not COMPLETED -> return` guard always fires and no session "
-        "banks any minutes. Fix the ordering in session_service and delete this "
-        "test."
-    ),
-)
 async def test_the_session_lifecycle_is_what_banks_the_minutes(client, db_session):
     """The path a client takes, not a call to the increment.
 
@@ -495,13 +485,6 @@ async def test_the_session_lifecycle_is_what_banks_the_minutes(client, db_sessio
     is never displayed. The tutor starts at zero, runs a session from
     `in_progress` to `completed`, and the ninety minutes it took are what the
     endpoint afterwards reports.
-
-    It reports zero today, and that is a defect rather than a rule: the duration
-    is recorded (the assertion below holds) and only the accrual is missing,
-    because the caller passes a session whose status is still `in_progress` to a
-    function that only banks a session that is `completed`. The accrual rule
-    itself is pinned by the tests above; this one is here so the gap is in the
-    suite rather than only in a review comment.
     """
     body, tutor = await _tutor(
         client, db_session, "tutor@mak.ac.ug", certified_minutes=0
