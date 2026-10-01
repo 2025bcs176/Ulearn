@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:peerpass/core/constants/app_dimens.dart';
 import 'package:peerpass/core/state/session.dart';
 import 'package:peerpass/features/auth/data/datasources/remote_academics_datasource.dart';
+import 'package:peerpass/features/auth/data/models/academic_fallback.dart';
+import 'package:peerpass/features/auth/data/repositories/auth_repository.dart';
 import 'package:peerpass/features/auth/presentation/providers/auth_providers.dart';
 
 class BecomeTutorScreen extends ConsumerStatefulWidget {
@@ -34,24 +36,39 @@ class _BecomeTutorScreenState extends ConsumerState<BecomeTutorScreen> {
     final universityId = profile?.universityId ?? '';
     final courseUnitsAsync = ref.watch(courseUnitsProvider(universityId));
     final gradesAsync = ref.watch(gradesProvider(universityId));
+    final universitiesAsync = ref.watch(universitiesProvider);
 
     final courseUnits = courseUnitsAsync.maybeWhen(
       data: (items) => items,
       orElse: () => const <CourseUnitOption>[],
     );
-    final grades = gradesAsync.maybeWhen(
+    final liveGrades = gradesAsync.maybeWhen(
       data: (items) => items,
       orElse: () => const <GradeOption>[],
     );
+    final isMust = universitiesAsync.maybeWhen(
+      data: (items) => items.any(
+        (university) =>
+            university.publicId == universityId &&
+            university.name == mustFallbackUniversityName,
+      ),
+      orElse: () => false,
+    );
+    final grades = liveGrades.isNotEmpty || !isMust
+        ? liveGrades
+        : mustFallbackGrades;
 
     if (_courseUnitId == null && courseUnits.isNotEmpty) {
       _courseUnitId = courseUnits.first.publicId;
     }
-    if (_gradeId == null && grades.isNotEmpty) {
+    if (liveGrades.isNotEmpty && isMustFallbackGrade(_gradeId)) {
+      _gradeId = liveGrades.first.publicId;
+    } else if (_gradeId == null && grades.isNotEmpty) {
       _gradeId = grades.first.publicId;
     }
 
-    final canSubmit = !_submitting &&
+    final canSubmit =
+        !_submitting &&
         profile != null &&
         profile.universityId != null &&
         _courseUnitId != null &&
@@ -87,7 +104,9 @@ class _BecomeTutorScreenState extends ConsumerState<BecomeTutorScreen> {
               else ...[
                 _buildDropdown<String>(
                   label: 'Course unit',
-                  value: _courseUnitId ?? (courseUnits.isEmpty ? null : courseUnits.first.publicId),
+                  value:
+                      _courseUnitId ??
+                      (courseUnits.isEmpty ? null : courseUnits.first.publicId),
                   items: [
                     for (final unit in courseUnits)
                       DropdownMenuItem(
@@ -102,28 +121,55 @@ class _BecomeTutorScreenState extends ConsumerState<BecomeTutorScreen> {
                 const SizedBox(height: AppDimens.md),
                 _buildDropdown<String>(
                   label: 'Grade',
-                  value: _gradeId ?? (grades.isEmpty ? null : grades.first.publicId),
+                  value:
+                      _gradeId ??
+                      (grades.isEmpty ? null : grades.first.publicId),
                   items: [
                     for (final grade in grades)
                       DropdownMenuItem(
                         value: grade.publicId,
-                        child: Text('${grade.label} (${grade.gradePoints.toStringAsFixed(1)})'),
+                        child: Text(
+                          '${grade.label} (${grade.gradePoints.toStringAsFixed(1)})',
+                        ),
                       ),
                   ],
                   onChanged: grades.isEmpty
                       ? null
                       : (value) => setState(() => _gradeId = value),
                 ),
+                if (isMust && liveGrades.isEmpty) ...[
+                  const SizedBox(height: AppDimens.sm),
+                  Text(
+                    'Showing the saved MUST grading scale while we refresh the catalogue.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  if (gradesAsync.hasError)
+                    TextButton(
+                      onPressed: () =>
+                          ref.invalidate(gradesProvider(universityId)),
+                      child: const Text('Retry grades'),
+                    ),
+                ],
                 const SizedBox(height: AppDimens.md),
                 _buildDropdown<String>(
                   label: 'Evidence source',
                   value: _source,
                   items: const [
-                    DropdownMenuItem(value: 'transcript', child: Text('Transcript')),
-                    DropdownMenuItem(value: 'portfolio', child: Text('Portfolio')),
-                    DropdownMenuItem(value: 'manual', child: Text('Manual record')),
+                    DropdownMenuItem(
+                      value: 'transcript',
+                      child: Text('Transcript'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'portfolio',
+                      child: Text('Portfolio'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'manual',
+                      child: Text('Manual record'),
+                    ),
                   ],
-                  onChanged: (value) => setState(() => _source = value ?? 'transcript'),
+                  onChanged: (value) =>
+                      setState(() => _source = value ?? 'transcript'),
                 ),
                 const SizedBox(height: AppDimens.md),
                 TextFormField(
@@ -165,27 +211,57 @@ class _BecomeTutorScreenState extends ConsumerState<BecomeTutorScreen> {
   Future<void> _submit() async {
     final profile = ref.read(sessionControllerProvider).profile;
     final universityId = profile?.universityId;
-    if (profile == null || universityId == null || _courseUnitId == null || _gradeId == null) {
+    if (profile == null ||
+        universityId == null ||
+        _courseUnitId == null ||
+        _gradeId == null) {
       return;
     }
 
     setState(() => _submitting = true);
 
     try {
-      await ref.read(authControllerProvider).submitTutorProof(
-        courseUnitId: _courseUnitId!,
-        gradeId: _gradeId!,
-        source: _source,
-        evidenceReference: _evidenceController.text.trim().isEmpty
-            ? null
-            : _evidenceController.text.trim(),
-        notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
-      );
+      var gradeId = _gradeId!;
+      if (isMustFallbackGrade(gradeId)) {
+        final liveGrades = await ref
+            .read(authRepositoryProvider)
+            .grades(universityId: universityId);
+        final fallback = mustFallbackGrades.firstWhere(
+          (grade) => grade.publicId == gradeId,
+        );
+        final resolved = liveGrades.where(
+          (grade) =>
+              grade.label == fallback.label &&
+              grade.gradePoints == fallback.gradePoints,
+        );
+        if (resolved.isEmpty) {
+          throw StateError(
+            'The MUST grading catalogue is unavailable. Please retry and try again.',
+          );
+        }
+        gradeId = resolved.first.publicId;
+      }
+
+      await ref
+          .read(authControllerProvider)
+          .submitTutorProof(
+            courseUnitId: _courseUnitId!,
+            gradeId: gradeId,
+            source: _source,
+            evidenceReference: _evidenceController.text.trim().isEmpty
+                ? null
+                : _evidenceController.text.trim(),
+            notes: _notesController.text.trim().isEmpty
+                ? null
+                : _notesController.text.trim(),
+          );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Your tutor proof was submitted and is awaiting review.'),
+          content: Text(
+            'Your tutor proof was submitted and is awaiting review.',
+          ),
         ),
       );
       if (context.mounted) {
@@ -193,9 +269,8 @@ class _BecomeTutorScreenState extends ConsumerState<BecomeTutorScreen> {
       }
     } on Object catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.toString())));
     } finally {
       if (mounted) {
         setState(() => _submitting = false);
