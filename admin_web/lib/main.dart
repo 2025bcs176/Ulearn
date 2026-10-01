@@ -17,28 +17,6 @@ class AdminSession {
   final String email;
 }
 
-Future<AdminPage<AdminCompetency>> competencies() async {
-  final response = await _get('/v1/admin/competencies');
-  return AdminPage.fromJson(response, AdminCompetency.fromJson);
-}
-
-Future<void> reviewCompetency(
-  AdminCompetency competency,
-  String status, {
-  String? reason,
-}) async {
-  await _dio.patch<Map<String, dynamic>>(
-    '/v1/admin/competencies/${competency.id}/review',
-    data: {'status': status, if (reason != null) 'rejection_reason': reason},
-    options: Options(headers: {'Authorization': 'Bearer $_accessToken'}),
-  );
-}
-
-Future<AdminPage<AdminTutorStanding>> tutorStandings() async {
-  final response = await _get('/v1/admin/tutor-standings');
-  return AdminPage.fromJson(response, AdminTutorStanding.fromJson);
-}
-
 class AdminApi {
   AdminApi({required this.baseUrl, Dio? dio})
     : _dio =
@@ -71,127 +49,8 @@ class AdminApi {
     if (tokens == null || user == null) {
       throw const FormatException('The server returned an incomplete sign-in.');
     }
-
-    class AdminCompetency {
-      const AdminCompetency({
-        required this.id,
-        required this.email,
-        required this.name,
-        required this.unit,
-        required this.grade,
-        required this.status,
-        required this.evidence,
-      });
-
-      factory AdminCompetency.fromJson(Map<String, dynamic> json) => AdminCompetency(
-        id: json['id'] as String,
-        email: json['user_email'] as String,
-        name: json['user_name'] as String?,
-        unit: '${json['course_unit_code']} - ${json['course_unit_name']}',
-        grade: json['grade_points'] as String,
-        status: json['status'] as String,
-        evidence: json['evidence_reference'] as String?,
-      );
-
-      final String id;
-      final String email;
-      final String? name;
-      final String unit;
-      final String grade;
-      final String status;
-      final String? evidence;
-    }
-
-    class AdminTutorStanding {
-      const AdminTutorStanding({
-        required this.email,
-        required this.name,
-        required this.standing,
-        required this.sessions,
-        required this.rating,
-      });
-
-      factory AdminTutorStanding.fromJson(Map<String, dynamic> json) =>
-          AdminTutorStanding(
-            email: json['user_email'] as String,
-            name: json['user_name'] as String?,
-            standing: json['standing'] as String,
-            sessions: json['completed_sessions'] as int,
-            rating: json['average_rating'] as String?,
-          );
-
-      final String email;
-      final String? name;
-      final String standing;
-      final int sessions;
-      final String? rating;
-    }
     if (!roles.contains('admin')) {
       throw const AdminAccessException();
-    }
-
-    class CompetenciesPage extends ConsumerWidget {
-      const CompetenciesPage({super.key});
-
-      @override
-      Widget build(BuildContext context, WidgetRef ref) {
-        return AdminDataTable<AdminCompetency>(
-          title: 'Competency review',
-          subtitle: 'Review tutor evidence before granting matching eligibility.',
-          loader: () => ref.read(apiProvider).competencies(),
-          columns: const ['Tutor', 'Unit', 'Grade', 'Status', 'Evidence'],
-          row: (competency) => [
-            competency.name ?? competency.email,
-            competency.unit,
-            competency.grade,
-            competency.status,
-            competency.evidence ?? 'Not supplied',
-          ],
-          actions: (competency) => competency.status == 'pending'
-              ? [
-                  TextButton(
-                    onPressed: () async {
-                      await ref.read(apiProvider).reviewCompetency(
-                        competency,
-                        'verified',
-                      );
-                    },
-                    child: const Text('Verify'),
-                  ),
-                  TextButton(
-                    onPressed: () async {
-                      await ref.read(apiProvider).reviewCompetency(
-                        competency,
-                        'rejected',
-                        reason: 'Evidence requires clarification.',
-                      );
-                    },
-                    child: const Text('Reject'),
-                  ),
-                ]
-              : const [],
-        );
-      }
-    }
-
-    class TutorStandingsPage extends ConsumerWidget {
-      const TutorStandingsPage({super.key});
-
-      @override
-      Widget build(BuildContext context, WidgetRef ref) {
-        return AdminDataTable<AdminTutorStanding>(
-          title: 'Tutor standing',
-          subtitle: 'Review current standing and rating aggregates.',
-          loader: () => ref.read(apiProvider).tutorStandings(),
-          columns: const ['Tutor', 'Standing', 'Sessions', 'Average rating'],
-          row: (standing) => [
-            standing.name ?? standing.email,
-            standing.standing,
-            '${standing.sessions}',
-            standing.rating ?? 'Unrated',
-          ],
-        );
-      }
     }
     final session = AdminSession(
       accessToken: tokens['access_token'] as String,
@@ -209,6 +68,28 @@ class AdminApi {
   Future<AdminPage<AuditEvent>> auditEvents() async {
     final response = await _get('/v1/admin/audit-events');
     return AdminPage.fromJson(response, AuditEvent.fromJson);
+  }
+
+  Future<AdminPage<AdminCompetency>> competencies() async {
+    final response = await _get('/v1/admin/competencies');
+    return AdminPage.fromJson(response, AdminCompetency.fromJson);
+  }
+
+  Future<void> reviewCompetency(
+    AdminCompetency competency,
+    String status, {
+    String? reason,
+  }) async {
+    await _dio.patch<Map<String, dynamic>>(
+      '/v1/admin/competencies/${competency.id}/review',
+      data: {'status': status, if (reason != null) 'rejection_reason': reason},
+      options: Options(headers: {'Authorization': '******'}),
+    );
+  }
+
+  Future<AdminPage<AdminTutorStanding>> tutorStandings() async {
+    final response = await _get('/v1/admin/tutor-standings');
+    return AdminPage.fromJson(response, AdminTutorStanding.fromJson);
   }
 
   void signOut() => _accessToken = null;
@@ -287,6 +168,61 @@ class AuditEvent {
   final String action;
   final String targetType;
   final DateTime createdAt;
+}
+
+class AdminCompetency {
+  const AdminCompetency({
+    required this.id,
+    required this.email,
+    required this.name,
+    required this.unit,
+    required this.grade,
+    required this.status,
+    required this.evidence,
+  });
+
+  factory AdminCompetency.fromJson(Map<String, dynamic> json) => AdminCompetency(
+    id: json['id'] as String,
+    email: json['user_email'] as String,
+    name: json['user_name'] as String?,
+    unit: '${json['course_unit_code']} - ${json['course_unit_name']}',
+    grade: json['grade_points'] as String,
+    status: json['status'] as String,
+    evidence: json['evidence_reference'] as String?,
+  );
+
+  final String id;
+  final String email;
+  final String? name;
+  final String unit;
+  final String grade;
+  final String status;
+  final String? evidence;
+}
+
+class AdminTutorStanding {
+  const AdminTutorStanding({
+    required this.email,
+    required this.name,
+    required this.standing,
+    required this.sessions,
+    required this.rating,
+  });
+
+  factory AdminTutorStanding.fromJson(Map<String, dynamic> json) =>
+      AdminTutorStanding(
+        email: json['user_email'] as String,
+        name: json['user_name'] as String?,
+        standing: json['standing'] as String,
+        sessions: json['completed_sessions'] as int,
+        rating: json['average_rating'] as String?,
+      );
+
+  final String email;
+  final String? name;
+  final String standing;
+  final int sessions;
+  final String? rating;
 }
 
 final apiProvider = Provider<AdminApi>(
@@ -562,6 +498,70 @@ class AuditPage extends ConsumerWidget {
   }
 }
 
+class CompetenciesPage extends ConsumerWidget {
+  const CompetenciesPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return AdminDataTable<AdminCompetency>(
+      title: 'Competency review',
+      subtitle: 'Review tutor evidence before granting matching eligibility.',
+      loader: () => ref.read(apiProvider).competencies(),
+      columns: const ['Tutor', 'Unit', 'Grade', 'Status', 'Evidence'],
+      row: (competency) => [
+        competency.name ?? competency.email,
+        competency.unit,
+        competency.grade,
+        competency.status,
+        competency.evidence ?? 'Not supplied',
+      ],
+      actions: (competency) => competency.status == 'pending'
+          ? [
+              TextButton(
+                onPressed: () async {
+                  await ref.read(apiProvider).reviewCompetency(
+                    competency,
+                    'verified',
+                  );
+                },
+                child: const Text('Verify'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  await ref.read(apiProvider).reviewCompetency(
+                    competency,
+                    'rejected',
+                    reason: 'Evidence requires clarification.',
+                  );
+                },
+                child: const Text('Reject'),
+              ),
+            ]
+          : const [],
+    );
+  }
+}
+
+class TutorStandingsPage extends ConsumerWidget {
+  const TutorStandingsPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return AdminDataTable<AdminTutorStanding>(
+      title: 'Tutor standing',
+      subtitle: 'Review current standing and rating aggregates.',
+      loader: () => ref.read(apiProvider).tutorStandings(),
+      columns: const ['Tutor', 'Standing', 'Sessions', 'Average rating'],
+      row: (standing) => [
+        standing.name ?? standing.email,
+        standing.standing,
+        '${standing.sessions}',
+        standing.rating ?? 'Unrated',
+      ],
+    );
+  }
+}
+
 class AdminDataTable<T> extends StatefulWidget {
   const AdminDataTable({
     required this.title,
@@ -656,10 +656,12 @@ class _AdminDataTableState<T> extends State<AdminDataTable<T>> {
                               for (final value in widget.row(item))
                                 DataCell(Text(value)),
                               if (widget.actions != null)
-                                DataCell(Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: widget.actions!(item),
-                                )),
+                                DataCell(
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: widget.actions!(item),
+                                  ),
+                                ),
                             ],
                           ),
                       ],
