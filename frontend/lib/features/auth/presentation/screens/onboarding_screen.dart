@@ -254,29 +254,78 @@ class _AcademicContextStep extends ConsumerWidget {
             .watch(universitiesProvider)
             .when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Text(
-                'Could not load universities. Check your connection and try again.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.error,
-                ),
+              error: (error, _) => _ReferenceDataUnavailable(
+                message:
+                    'Could not load universities. Check your connection and try again.',
+                onRetry: () => ref.invalidate(universitiesProvider),
               ),
-              data: (_) => const _UniversityPicker(),
+              data: (universities) => universities.isEmpty
+                  ? _ReferenceDataUnavailable(
+                      message: 'No universities are available right now.',
+                      onRetry: () => ref.invalidate(universitiesProvider),
+                    )
+                  : const _UniversityPicker(),
             ),
         const SizedBox(height: AppDimens.lg),
-        ref
-            .watch(facultiesProvider)
-            .when(
-              loading: () => const SizedBox.shrink(),
-              // A faculty list that failed is not shown as an error. The student can
-              // do nothing about it without their university, and an error where
-              // there is not yet a control to need is just noise.
-              error: (error, _) => const SizedBox.shrink(),
-              data: (_) => const _FacultyPicker(),
-            ),
+        const _FacultySection(),
         const SizedBox(height: AppDimens.lg),
         _YearPicker(),
         const SizedBox(height: AppDimens.xl),
         _ConsentBox(),
+      ],
+    );
+  }
+}
+
+class _FacultySection extends ConsumerWidget {
+  const _FacultySection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final universityId = ref.watch(onboardingControllerProvider).universityId;
+    if (universityId == null) return const _FacultyPicker();
+    final faculties = ref.watch(facultiesProvider(universityId));
+
+    return faculties.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => _ReferenceDataUnavailable(
+        message: 'Could not load faculties. Check your connection and try again.',
+        onRetry: () => ref.invalidate(facultiesProvider(universityId)),
+      ),
+      data: (faculties) => faculties.isEmpty
+          ? _ReferenceDataUnavailable(
+              message: 'No faculties are available right now.',
+              onRetry: () => ref.invalidate(facultiesProvider(universityId)),
+            )
+          : const _FacultyPicker(),
+    );
+  }
+}
+
+class _ReferenceDataUnavailable extends StatelessWidget {
+  const _ReferenceDataUnavailable({
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          message,
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.error,
+          ),
+        ),
+        const SizedBox(height: AppDimens.sm),
+        TextButton(onPressed: onRetry, child: const Text('Retry')),
       ],
     );
   }
@@ -336,7 +385,7 @@ class _FacultyPicker extends ConsumerWidget {
     // university would be a guess about a catalogue the student has not seen.
     final enabled = state.universityId != null;
     final faculties = enabled
-        ? ref.watch(facultiesProvider).value
+        ? ref.watch(facultiesProvider(state.universityId!)).value
         : const <Subject>[];
 
     // The wizard clears the faculty when the university changes, so a value left

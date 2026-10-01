@@ -44,7 +44,7 @@ abstract interface class AuthRepository {
   Future<List<UniversityOption>> universities();
 
   /// The faculties the picker offers.
-  Future<List<Subject>> faculties();
+  Future<List<Subject>> faculties({required String universityId});
 
   /// Course units for the given university, for the primary modules step.
   Future<List<CourseUnitOption>> courseUnits({String? universityId});

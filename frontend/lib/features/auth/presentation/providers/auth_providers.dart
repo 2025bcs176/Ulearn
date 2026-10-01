@@ -136,8 +136,11 @@ final universitiesProvider = FutureProvider<List<UniversityOption>>(
 );
 
 /// The faculties the wizard offers.
-final facultiesProvider = FutureProvider<List<Subject>>(
-  (ref) => ref.read(authRepositoryProvider).faculties(),
+// ignore: specify_nonobvious_property_types
+final facultiesProvider = FutureProvider.family<List<Subject>, String>(
+  (ref, universityId) => ref
+      .read(authRepositoryProvider)
+      .faculties(universityId: universityId),
 );
 
 /// Course units scoped to the selected university.

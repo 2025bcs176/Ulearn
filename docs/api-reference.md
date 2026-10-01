@@ -249,23 +249,23 @@ that rather than assuming one.
 ]
 ```
 
-### `GET /v1/academics/faculties`
+### `GET /v1/academics/faculties?university_id=<uuid>`
 
-Every faculty, alphabetically. Returns `[{ "id": …, "name": … }]`.
+Every faculty belonging to the selected university, alphabetically. Returns
+`[{ "id": …, "name": …, "description": …, "university_id": … }]`.
 
-#### Faculties are subjects
+#### Faculties are university-scoped subjects
 
 `GET /faculties` returns rows from `subjects`, and `PATCH /users/me` stores
-`faculty_id` as a `subjects` public id. A faculty is a property of a course unit
-rather than of an institution, so the list is global.
+`faculty_id` as a `subjects` public id. A faculty belongs to one university, so
+the selected university is required for the lookup and a profile cannot combine
+IDs from different universities.
 
-**Consequence to know about before seeding a second university:**
-`subjects.name` is globally unique and `subjects` has no `university_id`. Two
-universities cannot currently have a subject with the same name, and the list
-cannot be filtered per university. Lifting this means moving ownership —
-`subjects` gets a nullable `university_id`, the unique constraint becomes
-`(university_id, name)`, and `/faculties` takes a `university_id` filter. The
-university-first pilot hides this; a multi-institution deployment will not.
+### `GET /v1/academics/programs?university_id=<uuid>`
+
+Every degree or postgraduate offering seeded for the selected university,
+ordered by faculty and name. Programs are reference information and are
+separate from course units, which remain the records used by matching.
 
 ### `GET /v1/academics/course-units`
 
