@@ -475,7 +475,7 @@ void main() {
     );
   });
 
-  testWidgets('an empty university catalogue explains why it cannot continue', (
+  testWidgets('an empty university catalogue keeps MUST onboarding usable', (
     tester,
   ) async {
     final harness = _harness(
@@ -484,13 +484,15 @@ void main() {
     await _pumpWizard(tester, harness);
     await _completeNameStep(tester, harness);
 
-    expect(find.text('No universities are available right now.'), findsOneWidget);
+    expect(find.textContaining('Showing saved MUST options'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Retry'), findsOneWidget);
-    expect(find.text('University'), findsNothing);
+    expect(find.text('University'), findsOneWidget);
     expect(_canAdvance(tester, 'Continue'), isFalse);
   });
 
-  testWidgets('a faculty lookup failure is visible and retryable', (tester) async {
+  testWidgets('a faculty lookup failure is visible and retryable', (
+    tester,
+  ) async {
     final harness = _harness(_UnavailableFacultyRepository());
     await _pumpWizard(tester, harness);
     await _completeNameStep(tester, harness);
@@ -498,7 +500,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text('Could not load faculties. Check your connection and try again.'),
+      find.text(
+        'Could not load faculties. Check your connection and try again.',
+      ),
       findsOneWidget,
     );
     expect(find.widgetWithText(TextButton, 'Retry'), findsOneWidget);
