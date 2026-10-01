@@ -175,6 +175,18 @@ class RemoteAuthRepository implements AuthRepository {
     }
   }
 
+  @override
+  Future<void> deleteAccount() async {
+    // Clear the tokens first, for the same reason as [signOut]: the user's intent
+    // is not conditional on the network. If the request below fails, this device
+    // is signed out and the account is still whole, which is a recoverable state
+    // the user can retry from. The alternative -- keeping the session so the retry
+    // is convenient -- leaves the app holding credentials for an account the
+    // user believes they have just erased.
+    await tokenStore.clear();
+    await auth.deleteAccount();
+  }
+
   /// Signs in or registers, and persists the tokens before returning the user.
   ///
   /// The reading of the body is inside the guard, not applied to its result. A
