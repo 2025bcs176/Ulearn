@@ -23,6 +23,15 @@ its access token happens to expire.
 
 **Timestamps** are ISO 8601 with an offset, in UTC.
 
+## Service probes
+
+`GET /health` is a liveness probe and does not access the database. `GET
+/ready` is a readiness probe and returns `200 {"status":"ok","database":"ok"}`
+only when the API can execute a database health query. A database failure
+returns `503` with the standard problem response; the failure detail does not
+include connection or credential information. Managed-cloud traffic should use
+`/ready` for routing and `/health` for process liveness.
+
 ## Errors
 
 Every error the API returns — framework validation, domain rejection, or an
