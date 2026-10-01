@@ -22,6 +22,7 @@ class UserRole(StrEnum):
 
     STUDENT = "student"
     TUTOR = "tutor"
+    ADMIN = "admin"
 
 
 class VerificationSource(StrEnum):

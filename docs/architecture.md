@@ -169,6 +169,13 @@ core/         → Config, security, database session, exceptions
 - `TutorService` — The discovery rail and one tutor's public profile
 - `SessionService` — Lifecycle of a tutoring session + logging
 - `IncentiveService` — Aggregates hours and prepares certificate data
+- `AdminService` — Least-privilege MUST operations and append-only audit records
+
+Administrative access is a separately provisioned `admin` role in the existing
+role join table. The API fails closed through one dependency before reaching an
+admin route. Admin responses use dedicated schemas rather than student-facing
+schemas, so passwords, refresh tokens, consent timestamps, competency evidence,
+and internal ids cannot be exposed by adding a field to a shared response.
 
 `app/services/` is a package of public functions, and a route calls one of them.
 No router reaches for a `_`-prefixed name: reaching into another module's internals

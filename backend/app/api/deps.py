@@ -105,3 +105,15 @@ async def get_current_user(
 
 #: The authenticated caller, for a route that needs one.
 CurrentUser = Annotated[AuthenticatedUser, Depends(get_current_user)]
+
+
+async def require_admin(caller: CurrentUser) -> AuthenticatedUser:
+    """Allow only explicitly provisioned administrators."""
+    if UserRole.ADMIN not in caller.roles:
+        from app.core.exceptions import AuthorizationProblem
+
+        raise AuthorizationProblem()
+    return caller
+
+
+AdminUser = Annotated[AuthenticatedUser, Depends(require_admin)]

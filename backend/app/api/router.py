@@ -9,6 +9,7 @@ from fastapi import APIRouter
 
 from app.api.v1 import (
     academics,
+    admin,
     auth,
     competencies,
     incentives,
@@ -25,6 +26,7 @@ from app.api.v1 import (
 api_router = APIRouter(prefix="/v1")
 
 api_router.include_router(auth.router)
+api_router.include_router(admin.router)
 api_router.include_router(users.router)
 api_router.include_router(academics.router)
 api_router.include_router(competencies.router)
