@@ -104,6 +104,21 @@ flutter pub get
 flutter run
 ```
 
+### 4. Admin web application
+
+The MUST operations console is a separate Flutter web application and is not
+part of the student mobile client:
+
+```bash
+cd admin_web
+flutter pub get
+flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8000
+```
+
+Only provisioned backend administrators can sign in. See
+[admin_web/README.md](./admin_web/README.md) for the production build
+configuration and the current pilot surface.
+
 ---
 
 ## Regulatory Compliance
