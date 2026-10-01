@@ -49,7 +49,9 @@ async def list_competencies(
     db: DatabaseSession,
     params: AdminPageParams,
 ) -> AdminCompetencyPage:
-    return await admin_service.list_competencies(db, caller.user.id, params)
+    page = await admin_service.list_competencies(db, caller.user.id, params)
+    await db.commit()
+    return page
 
 
 @router.patch(
@@ -62,9 +64,11 @@ async def review_competency(
     caller: AdminUser,
     db: DatabaseSession,
 ) -> AdminCompetencyResponse:
-    return await admin_service.review_competency(
+    response = await admin_service.review_competency(
         db, caller.user.id, competency_id, payload
     )
+    await db.commit()
+    return response
 
 
 @router.get("/tutor-standings", response_model=AdminTutorStandingPage)
@@ -73,4 +77,6 @@ async def list_tutor_standings(
     db: DatabaseSession,
     params: AdminPageParams,
 ) -> AdminTutorStandingPage:
-    return await admin_service.list_tutor_standings(db, caller.user.id, params)
+    page = await admin_service.list_tutor_standings(db, caller.user.id, params)
+    await db.commit()
+    return page

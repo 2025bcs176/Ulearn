@@ -8,10 +8,7 @@ const _accent = Color(0xFF2457D6);
 const _surface = Color(0xFFF7F9FC);
 
 class AdminSession {
-  const AdminSession({
-    required this.accessToken,
-    required this.email,
-  });
+  const AdminSession({required this.accessToken, required this.email});
 
   final String accessToken;
   final String email;
@@ -82,7 +79,10 @@ class AdminApi {
   }) async {
     await _dio.patch<Map<String, dynamic>>(
       '/v1/admin/competencies/${competency.id}/review',
-      data: {'status': status, if (reason != null) 'rejection_reason': reason},
+      data: {
+        'status': status,
+        ...?reason == null ? null : {'rejection_reason': reason},
+      },
       options: Options(headers: {'Authorization': '******'}),
     );
   }
@@ -181,15 +181,16 @@ class AdminCompetency {
     required this.evidence,
   });
 
-  factory AdminCompetency.fromJson(Map<String, dynamic> json) => AdminCompetency(
-    id: json['id'] as String,
-    email: json['user_email'] as String,
-    name: json['user_name'] as String?,
-    unit: '${json['course_unit_code']} - ${json['course_unit_name']}',
-    grade: json['grade_points'] as String,
-    status: json['status'] as String,
-    evidence: json['evidence_reference'] as String?,
-  );
+  factory AdminCompetency.fromJson(Map<String, dynamic> json) =>
+      AdminCompetency(
+        id: json['id'] as String,
+        email: json['user_email'] as String,
+        name: json['user_name'] as String?,
+        unit: '${json['course_unit_code']} - ${json['course_unit_name']}',
+        grade: json['grade_points'] as String,
+        status: json['status'] as String,
+        evidence: json['evidence_reference'] as String?,
+      );
 
   final String id;
   final String email;
@@ -234,8 +235,9 @@ final apiProvider = Provider<AdminApi>(
   ),
 );
 
-final sessionProvider =
-    NotifierProvider<SessionController, AdminSession?>(SessionController.new);
+final sessionProvider = NotifierProvider<SessionController, AdminSession?>(
+  SessionController.new,
+);
 
 class SessionController extends Notifier<AdminSession?> {
   @override
@@ -265,9 +267,7 @@ class AdminApp extends ConsumerWidget {
           border: OutlineInputBorder(),
         ),
       ),
-      home: session == null
-          ? const SignInPage()
-          : AdminShell(session: session),
+      home: session == null ? const SignInPage() : AdminShell(session: session),
     );
   }
 }
@@ -313,7 +313,8 @@ class _SignInPageState extends ConsumerState<SignInPage> {
     } on DioException catch (error) {
       final detail = error.response?.data;
       setState(
-        () => _error = detail is Map<String, dynamic> && detail['detail'] is String
+        () => _error =
+            detail is Map<String, dynamic> && detail['detail'] is String
             ? detail['detail'] as String
             : 'Sign-in failed. Check the server and try again.',
       );
@@ -519,20 +520,21 @@ class CompetenciesPage extends ConsumerWidget {
           ? [
               TextButton(
                 onPressed: () async {
-                  await ref.read(apiProvider).reviewCompetency(
-                    competency,
-                    'verified',
-                  );
+                  await ref
+                      .read(apiProvider)
+                      .reviewCompetency(competency, 'verified');
                 },
                 child: const Text('Verify'),
               ),
               TextButton(
                 onPressed: () async {
-                  await ref.read(apiProvider).reviewCompetency(
-                    competency,
-                    'rejected',
-                    reason: 'Evidence requires clarification.',
-                  );
+                  await ref
+                      .read(apiProvider)
+                      .reviewCompetency(
+                        competency,
+                        'rejected',
+                        reason: 'Evidence requires clarification.',
+                      );
                 },
                 child: const Text('Reject'),
               ),
@@ -626,7 +628,8 @@ class _AdminDataTableState<T> extends State<AdminDataTable<T>> {
                         const Text('Could not load this view.'),
                         const SizedBox(height: 12),
                         OutlinedButton(
-                          onPressed: () => setState(() => _future = widget.loader()),
+                          onPressed: () =>
+                              setState(() => _future = widget.loader()),
                           child: const Text('Retry'),
                         ),
                       ],

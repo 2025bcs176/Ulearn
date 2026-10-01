@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.exceptions import NotFoundProblem, ValidationProblem
 from app.models.audit import AdminAuditEvent
 from app.models.competency import Competency
 from app.models.enums import CompetencyStatus
@@ -132,16 +133,20 @@ async def review_competency(
         )
     )
     if row is None:
-        from app.core.exceptions import NotFoundProblem
-
         raise NotFoundProblem("That competency record could not be found.")
-    if payload.status is CompetencyStatus.REJECTED and not payload.rejection_reason:
-        from app.core.exceptions import ValidationProblem
-
+    if payload.status is CompetencyStatus.PENDING:
+        raise ValidationProblem(
+            "An admin review must verify or reject the competency.",
+            errors={"status": "pending is not a review decision"},
+        )
+    if payload.status is CompetencyStatus.REJECTED and not (
+        payload.rejection_reason and payload.rejection_reason.strip()
+    ):
         raise ValidationProblem(
             "A rejection reason is required.",
             errors={"rejection_reason": "required when rejecting"},
         )
+    row.reviewed_by_id = actor_id
     row.status = payload.status
     row.rejection_reason = (
         payload.rejection_reason
