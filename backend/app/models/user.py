@@ -66,6 +66,16 @@ user_primary_course_units = Table(
     ),
 )
 
+#: What a deleted account is called wherever somebody else is being named.
+#:
+#: A fixed string rather than the scrubbed row, for two reasons. A tombstone has
+#: `full_name = None` and an email rewritten to a synthetic
+#: `deleted+...@deleted.invalid`, so the old `full_name or email` fallback would
+#: render either a blank or an internal placeholder as a person's name. And
+#: "Deleted user" says something about the person, where the placeholder says
+#: something about this database.
+DELETED_USER_DISPLAY_NAME = "Deleted user"
+
 
 class User(Base, TimestampMixin):
     """A person with an account.
@@ -167,6 +177,18 @@ class User(Base, TimestampMixin):
     def is_deleted(self) -> bool:
         """Whether this row is a tombstone rather than a usable account."""
         return self.deleted_at is not None
+
+    @property
+    def display_name(self) -> str:
+        """The name to show where somebody else is being named.
+
+        One definition, because there are three student-facing surfaces that
+        label a person and a fourth copy of this fallback is a fourth place for
+        it to be wrong.
+        """
+        if self.is_deleted:
+            return DELETED_USER_DISPLAY_NAME
+        return self.full_name or self.email
 
     #: Set when a student accepts the academic-data consent. Competency
     #: submission is refused without it, which is the explicit consent the
