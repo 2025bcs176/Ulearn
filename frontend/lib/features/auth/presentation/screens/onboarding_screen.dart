@@ -255,16 +255,19 @@ class _AcademicContextStep extends ConsumerWidget {
             .when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (error, _) => _ReferenceDataUnavailable(
-                message:
-                    'Could not load universities. Check your connection and try again.',
+                message: 'Could not load universities. Check your connection and try again.',
                 onRetry: () => ref.invalidate(universitiesProvider),
               ),
-              data: (universities) => universities.isEmpty
-                  ? _ReferenceDataUnavailable(
-                      message: 'No universities are available right now.',
+              data: (universities) => Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (universities.any((university) => university.isFallback))
+                    _FallbackNotice(
                       onRetry: () => ref.invalidate(universitiesProvider),
-                    )
-                  : const _UniversityPicker(),
+                    ),
+                  const _UniversityPicker(),
+                ],
+              ),
             ),
         const SizedBox(height: AppDimens.lg),
         const _FacultySection(),
@@ -289,15 +292,22 @@ class _FacultySection extends ConsumerWidget {
     return faculties.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, _) => _ReferenceDataUnavailable(
-        message: 'Could not load faculties. Check your connection and try again.',
+        message:
+            'Could not load faculties. Check your connection and try again.',
         onRetry: () => ref.invalidate(facultiesProvider(universityId)),
       ),
-      data: (faculties) => faculties.isEmpty
-          ? _ReferenceDataUnavailable(
-              message: 'No faculties are available right now.',
+      data: (faculties) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (faculties.any(
+            (faculty) => faculty.publicId.startsWith('fallback:'),
+          ))
+            _FallbackNotice(
               onRetry: () => ref.invalidate(facultiesProvider(universityId)),
-            )
-          : const _FacultyPicker(),
+            ),
+          const _FacultyPicker(),
+        ],
+      ),
     );
   }
 }
@@ -327,6 +337,34 @@ class _ReferenceDataUnavailable extends StatelessWidget {
         const SizedBox(height: AppDimens.sm),
         TextButton(onPressed: onRetry, child: const Text('Retry')),
       ],
+    );
+  }
+}
+
+class _FallbackNotice extends StatelessWidget {
+  const _FallbackNotice({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppDimens.md),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text(
+              'Showing saved MUST options while we refresh the catalogue.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          TextButton(onPressed: onRetry, child: const Text('Retry')),
+        ],
+      ),
     );
   }
 }
