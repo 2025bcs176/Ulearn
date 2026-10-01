@@ -90,6 +90,10 @@ Mbarara University of Science and Technology, its faculties, grades, and course
 units. Additional universities can be added to the backend seed data without
 changing the Flutter client.
 
+The current six-unit MUST pilot candidate list is documented in
+[docs/MUST_Pilot_Catalogue.md](./docs/MUST_Pilot_Catalogue.md). It is
+provisional until MUST confirms the launch units and tutor cohort.
+
 > API documentation is available at [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ### 3. Frontend (Flutter)

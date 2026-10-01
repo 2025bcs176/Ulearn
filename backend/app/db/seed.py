@@ -181,12 +181,12 @@ PROGRAMS: tuple[tuple[str, str, str], ...] = (
     ),
 )
 
-#: A starting catalogue: `(faculty, code, name)`.
+#: The provisional MUST pilot catalogue: `(faculty, code, name)`.
 #:
-#: Real unit codes rather than placeholders, because a screen that renders
-#: `BIT 221 Operating Systems` is being tested and one that renders `FAC-1
-#: Course 1` is not. A handful per faculty is enough to prove the grouping works;
-#: the full catalogue is an administrator's job.
+#: These are the only units currently eligible for the closed pilot. They are
+#: existing verified seed entries, not an institutional endorsement or a claim
+#: that MUST's full catalogue has been loaded. Do not derive more units from
+#: programme names: programmes and matchable course units are different records.
 COURSE_UNITS: tuple[tuple[str, str, str], ...] = (
     ("Faculty of Computing and Informatics Sciences", "BIT 221", "Operating Systems"),
     (

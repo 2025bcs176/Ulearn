@@ -794,6 +794,26 @@ async def test_academics_are_readable_before_signing_in(
     ).status_code == 200
 
 
+async def test_seed_exposes_only_the_provisional_pilot_course_units(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    await seed(db_session)
+
+    units = (await client.get("/v1/academics/course-units")).json()
+
+    assert {(unit["code"], unit["name"]) for unit in units} == {
+        ("BIT 221", "Operating Systems"),
+        ("BIT 223", "Database Programming"),
+        ("BIT 225", "Computer Networks"),
+        ("SCH 211", "Organic Chemistry"),
+        ("PHY 212", "Thermodynamics"),
+        ("MTH 213", "Linear Algebra"),
+    }
+    assert not any(
+        unit["name"] in {"Computer Science", "Information Technology"} for unit in units
+    )
+
+
 async def test_the_seeded_gate_admits_a_b_plus_and_refuses_a_b(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
