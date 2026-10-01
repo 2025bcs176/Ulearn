@@ -32,6 +32,22 @@ returns `503` with the standard problem response; the failure detail does not
 include connection or credential information. Managed-cloud traffic should use
 `/ready` for routing and `/health` for process liveness.
 
+## Admin
+
+The `/v1/admin/*` routes are reserved for accounts provisioned with the
+explicit `admin` role. There is no public admin registration endpoint. The
+separate MUST web application uses these routes with the same bearer-token
+contract as the mobile app.
+
+`GET /v1/admin/users` returns a bounded, paginated operational view containing
+public id, email, display name, roles, academic location, active state, and
+creation time. It never returns password hashes, refresh tokens, consent
+timestamps, competency evidence, or internal database ids.
+
+`GET /v1/admin/audit-events` returns the append-only audit events created by
+privileged actions. Audit context contains only action-specific identifiers and
+pagination metadata; request bodies, credentials, and evidence are not stored.
+
 ## Errors
 
 Every error the API returns — framework validation, domain rejection, or an
