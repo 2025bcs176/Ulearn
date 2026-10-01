@@ -1,0 +1,516 @@
+import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+const _ink = Color(0xFF172033);
+const _muted = Color(0xFF667085);
+const _accent = Color(0xFF2457D6);
+const _surface = Color(0xFFF7F9FC);
+
+class AdminSession {
+  const AdminSession({
+    required this.accessToken,
+    required this.email,
+  });
+
+  final String accessToken;
+  final String email;
+}
+
+class AdminApi {
+  AdminApi({required this.baseUrl, Dio? dio})
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
+              baseUrl: baseUrl,
+              connectTimeout: const Duration(seconds: 10),
+              receiveTimeout: const Duration(seconds: 20),
+              validateStatus: (status) =>
+                  status != null && status >= 200 && status < 300,
+            ),
+          );
+
+  final String baseUrl;
+  final Dio _dio;
+  String? _accessToken;
+
+  Future<AdminSession> signIn(String email, String password) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/v1/auth/login',
+      data: {'email': email, 'password': password},
+    );
+    final body = response.data!;
+    final tokens = body['tokens'] as Map<String, dynamic>?;
+    final user = body['user'] as Map<String, dynamic>?;
+    final roles = (user?['roles'] as List<dynamic>? ?? const [])
+        .map((role) => role.toString())
+        .toSet();
+    if (tokens == null || user == null) {
+      throw const FormatException('The server returned an incomplete sign-in.');
+    }
+    if (!roles.contains('admin')) {
+      throw const AdminAccessException();
+    }
+    final session = AdminSession(
+      accessToken: tokens['access_token'] as String,
+      email: user['email'] as String,
+    );
+    _accessToken = session.accessToken;
+    return session;
+  }
+
+  Future<AdminPage<AdminUser>> users() async {
+    final response = await _get('/v1/admin/users');
+    return AdminPage.fromJson(response, AdminUser.fromJson);
+  }
+
+  Future<AdminPage<AuditEvent>> auditEvents() async {
+    final response = await _get('/v1/admin/audit-events');
+    return AdminPage.fromJson(response, AuditEvent.fromJson);
+  }
+
+  void signOut() => _accessToken = null;
+
+  Future<Map<String, dynamic>> _get(String path) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      path,
+      queryParameters: const {'offset': 0, 'limit': 50},
+      options: Options(headers: {'Authorization': 'Bearer $_accessToken'}),
+    );
+    return response.data!;
+  }
+}
+
+class AdminAccessException implements Exception {
+  const AdminAccessException();
+}
+
+class AdminPage<T> {
+  const AdminPage({required this.items, required this.total});
+
+  factory AdminPage.fromJson(
+    Map<String, dynamic> json,
+    T Function(Map<String, dynamic>) parse,
+  ) {
+    return AdminPage(
+      items: (json['items'] as List<dynamic>)
+          .cast<Map<String, dynamic>>()
+          .map(parse)
+          .toList(),
+      total: json['total'] as int,
+    );
+  }
+
+  final List<T> items;
+  final int total;
+}
+
+class AdminUser {
+  const AdminUser({
+    required this.email,
+    required this.name,
+    required this.roles,
+    required this.isActive,
+    required this.createdAt,
+  });
+
+  factory AdminUser.fromJson(Map<String, dynamic> json) => AdminUser(
+    email: json['email'] as String,
+    name: json['full_name'] as String?,
+    roles: (json['roles'] as List<dynamic>).cast<String>(),
+    isActive: json['is_active'] as bool,
+    createdAt: DateTime.parse(json['created_at'] as String),
+  );
+
+  final String email;
+  final String? name;
+  final List<String> roles;
+  final bool isActive;
+  final DateTime createdAt;
+}
+
+class AuditEvent {
+  const AuditEvent({
+    required this.action,
+    required this.targetType,
+    required this.createdAt,
+  });
+
+  factory AuditEvent.fromJson(Map<String, dynamic> json) => AuditEvent(
+    action: json['action'] as String,
+    targetType: json['target_type'] as String,
+    createdAt: DateTime.parse(json['created_at'] as String),
+  );
+
+  final String action;
+  final String targetType;
+  final DateTime createdAt;
+}
+
+final apiProvider = Provider<AdminApi>(
+  (ref) => AdminApi(
+    baseUrl: const String.fromEnvironment(
+      'API_BASE_URL',
+      defaultValue: 'http://localhost:8000',
+    ),
+  ),
+);
+
+final sessionProvider =
+    NotifierProvider<SessionController, AdminSession?>(SessionController.new);
+
+class SessionController extends Notifier<AdminSession?> {
+  @override
+  AdminSession? build() => null;
+
+  void signedIn(AdminSession session) => state = session;
+
+  void signedOut() => state = null;
+}
+
+void main() => runApp(const ProviderScope(child: AdminApp()));
+
+class AdminApp extends ConsumerWidget {
+  const AdminApp({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final session = ref.watch(sessionProvider);
+    return MaterialApp(
+      title: 'PeerPass Admin',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: _accent),
+        scaffoldBackgroundColor: _surface,
+        fontFamily: 'Arial',
+        inputDecorationTheme: const InputDecorationTheme(
+          border: OutlineInputBorder(),
+        ),
+      ),
+      home: session == null
+          ? const SignInPage()
+          : AdminShell(session: session),
+    );
+  }
+}
+
+class SignInPage extends ConsumerStatefulWidget {
+  const SignInPage({super.key});
+
+  @override
+  ConsumerState<SignInPage> createState() => _SignInPageState();
+}
+
+class _SignInPageState extends ConsumerState<SignInPage> {
+  final _email = TextEditingController();
+  final _password = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_email.text.contains('@') || _password.text.isEmpty) {
+      setState(() => _error = 'Enter an administrator email and password.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final session = await ref
+          .read(apiProvider)
+          .signIn(_email.text.trim(), _password.text);
+      ref.read(sessionProvider.notifier).signedIn(session);
+    } on AdminAccessException {
+      setState(
+        () => _error = 'This account is not provisioned for admin access.',
+      );
+    } on DioException catch (error) {
+      final detail = error.response?.data;
+      setState(
+        () => _error = detail is Map<String, dynamic> && detail['detail'] is String
+            ? detail['detail'] as String
+            : 'Sign-in failed. Check the server and try again.',
+      );
+    } on FormatException catch (error) {
+      setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Card(
+            margin: const EdgeInsets.all(24),
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'PeerPass',
+                    style: TextStyle(
+                      color: _accent,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'MUST operations',
+                    style: TextStyle(
+                      color: _ink,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Sign in with a provisioned administrator account.',
+                    style: TextStyle(color: _muted),
+                  ),
+                  const SizedBox(height: 28),
+                  TextField(
+                    controller: _email,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(labelText: 'Email'),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _password,
+                    obscureText: true,
+                    onSubmitted: (_) => _submit(),
+                    decoration: const InputDecoration(labelText: 'Password'),
+                  ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 16),
+                    Text(_error!, style: const TextStyle(color: Colors.red)),
+                  ],
+                  const SizedBox(height: 24),
+                  FilledButton(
+                    onPressed: _busy ? null : _submit,
+                    child: Text(_busy ? 'Signing in...' : 'Sign in'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class AdminShell extends ConsumerStatefulWidget {
+  const AdminShell({required this.session, super.key});
+
+  final AdminSession session;
+
+  @override
+  ConsumerState<AdminShell> createState() => _AdminShellState();
+}
+
+class _AdminShellState extends ConsumerState<AdminShell> {
+  int _selected = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final pages = [const UsersPage(), const AuditPage()];
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('PeerPass Admin'),
+        actions: [
+          Text(widget.session.email),
+          const SizedBox(width: 16),
+          TextButton(
+            onPressed: () {
+              ref.read(apiProvider).signOut();
+              ref.read(sessionProvider.notifier).signedOut();
+            },
+            child: const Text('Sign out'),
+          ),
+          const SizedBox(width: 12),
+        ],
+      ),
+      body: Row(
+        children: [
+          NavigationRail(
+            selectedIndex: _selected,
+            onDestinationSelected: (value) => setState(() => _selected = value),
+            labelType: NavigationRailLabelType.all,
+            destinations: const [
+              NavigationRailDestination(
+                icon: Icon(Icons.people_outline),
+                selectedIcon: Icon(Icons.people),
+                label: Text('Users'),
+              ),
+              NavigationRailDestination(
+                icon: Icon(Icons.history),
+                label: Text('Audit log'),
+              ),
+            ],
+          ),
+          const VerticalDivider(width: 1),
+          Expanded(child: pages[_selected]),
+        ],
+      ),
+    );
+  }
+}
+
+class UsersPage extends ConsumerWidget {
+  const UsersPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return AdminDataTable<AdminUser>(
+      title: 'Pilot users',
+      subtitle: 'Operational visibility for invited students and tutors.',
+      loader: () => ref.read(apiProvider).users(),
+      columns: const ['Name', 'Email', 'Roles', 'Status', 'Created'],
+      row: (user) => [
+        user.name ?? 'Unnamed account',
+        user.email,
+        user.roles.join(', '),
+        user.isActive ? 'Active' : 'Inactive',
+        _date(user.createdAt),
+      ],
+    );
+  }
+}
+
+class AuditPage extends ConsumerWidget {
+  const AuditPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return AdminDataTable<AuditEvent>(
+      title: 'Audit log',
+      subtitle: 'Append-only record of privileged administrative actions.',
+      loader: () => ref.read(apiProvider).auditEvents(),
+      columns: const ['Action', 'Target', 'Created'],
+      row: (event) => [event.action, event.targetType, _date(event.createdAt)],
+    );
+  }
+}
+
+class AdminDataTable<T> extends StatefulWidget {
+  const AdminDataTable({
+    required this.title,
+    required this.subtitle,
+    required this.loader,
+    required this.columns,
+    required this.row,
+    super.key,
+  });
+
+  final String title;
+  final String subtitle;
+  final Future<AdminPage<T>> Function() loader;
+  final List<String> columns;
+  final List<String> Function(T item) row;
+
+  @override
+  State<AdminDataTable<T>> createState() => _AdminDataTableState<T>();
+}
+
+class _AdminDataTableState<T> extends State<AdminDataTable<T>> {
+  late Future<AdminPage<T>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = widget.loader();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.title,
+            style: const TextStyle(
+              color: _ink,
+              fontSize: 28,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(widget.subtitle, style: const TextStyle(color: _muted)),
+          const SizedBox(height: 24),
+          Expanded(
+            child: FutureBuilder<AdminPage<T>>(
+              future: _future,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('Could not load this view.'),
+                        const SizedBox(height: 12),
+                        OutlinedButton(
+                          onPressed: () => setState(() => _future = widget.loader()),
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                final page = snapshot.requireData;
+                if (page.items.isEmpty) {
+                  return const Center(child: Text('No records yet.'));
+                }
+                return Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: DataTable(
+                      columns: [
+                        for (final column in widget.columns)
+                          DataColumn(label: Text(column)),
+                      ],
+                      rows: [
+                        for (final item in page.items)
+                          DataRow(
+                            cells: [
+                              for (final value in widget.row(item))
+                                DataCell(Text(value)),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _date(DateTime value) =>
+    '${value.year}-${value.month.toString().padLeft(2, '0')}-'
+    '${value.day.toString().padLeft(2, '0')}';
