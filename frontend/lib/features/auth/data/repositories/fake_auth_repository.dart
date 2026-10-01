@@ -169,4 +169,13 @@ class FakeAuthRepository implements AuthRepository {
     refreshToken = null;
     await _tokenStore.clear();
   }
+
+  @override
+  Future<void> deleteAccount() async {
+    // Mirrors the live ordering: the session goes first, unconditionally, so a
+    // fake cannot end up modelling the state the real client refuses to be in.
+    session = null;
+    refreshToken = null;
+    await _tokenStore.clear();
+  }
 }

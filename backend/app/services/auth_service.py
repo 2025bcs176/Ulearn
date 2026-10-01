@@ -327,6 +327,13 @@ async def authenticate(db: AsyncSession, request: LoginRequest) -> AuthResponse:
         # password and the response is the same as a wrong password.
         raise _credentials_rejected()
 
+    if user.is_deleted:
+        # Unreachable in practice: deletion rewrites the address, so a tombstone
+        # cannot be reached by the one a student types. Stated anyway, because
+        # this is the path that would hand back a token pair if that ever
+        # stopped being true, and because it costs a comparison.
+        raise _credentials_rejected()
+
     if password_needs_rehash(user.password_hash):
         # The password was correct, so this is the one moment rewriting the
         # stored hash is safe. It is how a raised Argon2 cost reaches existing
@@ -410,6 +417,14 @@ async def refresh(db: AsyncSession, refresh_token: str) -> AuthResponse:
     # outlived its owner means a corrupted database rather than a state worth
     # handling. It is still refused rather than crashing the request.
     if user is None or not user.is_active:
+        raise _credentials_rejected()
+
+    if user.is_deleted:
+        # A tombstone has every refresh token revoked, so `stored.is_revoked`
+        # above already refuses it. Repeated because this is the longest-lived
+        # credential in the system and the one a stolen token would be replayed
+        # through first: the check is a comparison, and the failure mode of
+        # omitting it is a deleted account minting 30-day sessions.
         raise _credentials_rejected()
 
     pair = create_token_pair(subject=user.public_id)

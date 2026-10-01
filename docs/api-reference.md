@@ -204,6 +204,25 @@ grant, and to be logged.
 | 404    | `That faculty could not be found.`    |                                |
 | 422    | `Some of the details you entered are not valid.` | Keyed by field name. |
 
+### `DELETE /v1/users/me`
+
+Close the caller's account. *Auth.* **204, no body.**
+
+Anonymises rather than deletes. Academic evidence is the part of the record that
+cannot be recreated and that other people rely on — a session a tutor taught, a
+rating a student left, an endorsement about a course unit — so it is kept, while
+everything that identifies the account is scrubbed: name, email, phone,
+password hash, university and faculty, and every role. The row stays, marked
+`is_deleted`, so the evidence still refers to somebody.
+
+The access this leaves behind is worth being precise about. **All authentication
+is refused for the account**, including a refresh token issued before the
+deletion, so a deleted user cannot continue to hold a session through a credential
+the deletion did not revoke.
+
+Every refresh token for the account is revoked in the same transaction, so a
+token that has not been used yet cannot be used later.
+
 ## Academics
 
 Read-only, administrator-loaded reference data. No create, update, or delete: a
@@ -266,6 +285,49 @@ believed exists, and the honest answer to "units in this faculty" is "none". A
 This is the endpoint onboarding's **third** step uses, to record the units a
 student takes. It is not matching: a declared unit is a preference, and nothing
 is matched against it until the matching slice lands.
+
+### `GET /v1/academics/grades`
+
+The grade catalogue for the caller's university, each entry carrying the points
+value on that university's scale.
+
+`grade_id` is what a tutor posts, never a raw number. A client that could send
+`grade_points` directly would let a tutor claim an A on a scale their university
+does not use, and the threshold check would then compare two incompatible
+numbers.
+
+### `GET /v1/academics/grading-scales`
+
+The scales themselves, including `competency_min_points` — the bar a verified
+grade has to clear for a tutor to be proposed for a unit on that scale.
+
+## Competencies
+
+### `POST /v1/competencies`
+
+A tutor claiming competence in a course unit. 201 with the competency, created
+`unverified`.
+
+`{"course_unit_id": "1f4a…", "grade_id": "…", "source": "transcript", "evidence_reference": "…"}`.
+The claim is a claim until reviewed; nothing here grants standing.
+
+### `GET /v1/competencies/me`
+
+The caller's own competencies.
+
+### `GET /v1/competencies/{competency_id}`
+
+One competency, by public id.
+
+### `PATCH /v1/competencies/{competency_id}/review`
+
+An administrator's decision on a pending claim: `{"status": "verified",
+"rejection_reason": "..."}`. 200 with the reviewed competency.
+
+`rejection_reason` is **required** when the status is `rejected`. A tutor whose
+claim was turned down with no stated reason has nothing to fix and no way to try
+again, and the alternative — a rejection that looks arbitrary — is how a
+verification process loses the people it is meant to be checking.
 
 ## Tutors
 
@@ -458,6 +520,74 @@ Every open help request the caller created, newest first.
 One help request the caller owns. Someone else's is a 404 rather than a 403, so
 the response does not confirm that it exists.
 
+## Choosing a tutor, and the tutor answering
+
+A proposed list is not a decision. The student names one tutor for a help
+request, that tutor confirms or declines, and only a confirmation creates the
+session.
+
+`PENDING_CONFIRMATION` and `DECLINED` are the two states this added. A request
+the chosen tutor has not answered is `pending_confirmation`, and it stays that
+way indefinitely — there is no expiry job, because an unanswered request that
+quietly closed would leave a student who applied and heard nothing.
+
+### `POST /v1/matching/help-requests/{request_id}/select`
+
+`{"candidate_tutor_id": "8e2c…"}`. The student names one tutor. 200 with the
+updated help request, now `pending_confirmation` and carrying `matched_tutor`.
+
+The eligibility gate is **re-derived here**, not read off the list the client is
+holding. The service re-runs the same candidate search matching answers with and
+refuses anyone it would not propose, so a tutor id posted directly still has to
+pass the competency, grade, university and standing checks for that unit. That
+rule lives in one place; a second copy of it would be a second copy to drift, and
+it would drift at exactly the moment a student is deciding who to trust.
+
+Reachability is checked, not rank: a tutor who passes the gate is acceptable
+even if a client that asked for a short list would not have been shown them. A
+refusal whose only justification is which page the student had scrolled to is
+not a useful one.
+
+| Status | `detail`                                                                | `errors` |
+| ------ | ---------------------------------------------------------------------- | -------- |
+| 401    | Sign-in required.                                                      |          |
+| 404    | That help request could not be found.                                  |          |
+| 409    | This help request is no longer waiting for a tutor to be chosen.      |          |
+| 422    | You cannot choose yourself as your own tutor.                          | `candidate_tutor_id` |
+| 422    | That tutor cannot be chosen for this help request.                     | `candidate_tutor_id` |
+
+"Not eligible" and "no such user" are one answer on purpose: distinguishing them
+would turn the route into a probe of who holds the tutor role at that university,
+which the exclusions in the matching response already answer.
+
+### `POST /v1/matching/help-requests/{request_id}/decline`
+
+No body. The chosen tutor turns the request down. 200 with the help request,
+now `declined`.
+
+Scoped to the tutor the student named, so the answer to "not yours" and "not
+there" is the same and a student cannot decline their own request from the other
+end of the platform.
+
+`declined` is terminal rather than a return to `open`. A request the tutor
+refused is not the same as one nobody was ever asked, and the student reads the
+two differently; re-opening it would also let a tutor decline and then watch the
+student re-select them. The recovery is a new request, which keeps the record of
+what was asked intact.
+
+| Status | `detail`                              | `errors` |
+| ------ | ------------------------------------- | -------- |
+| 401    | Sign-in required.                     |          |
+| 404    | That help request could not be found. |          |
+
+### `GET /v1/matching/help-requests/awaiting-me`
+
+Every help request where **this** caller is the chosen tutor and has not yet
+answered. The list a tutor's "Waiting on you" screen shows.
+
+Scoped to the caller in the query rather than filtered after the fact, so the
+response can never contain a request the caller is not the tutor for.
+
 ### `POST /v1/matching/suggestions`
 
 The canonical path for the unit-only query. It used to be registered at
@@ -479,13 +609,43 @@ asking "who can take this request" was answered about another course entirely.
 
 ## Sessions
 
-All five routes require a signed-in user and are scoped to the caller's own
+All six routes require a signed-in user and are scoped to the caller's own
 sessions; a session the caller is not part of is a 404, not a 403, so the
 response does not confirm that someone else's session exists.
 
 ### `POST /v1/sessions`
 
-Accepts a matched request and creates the live session. 201 with the session.
+Confirms a selected help request and creates the live session. 201 with the
+session, and a generated two-digit `session_pin`.
+
+```json
+{
+  "help_request_id": "3bf3…",
+  "course_unit_id": "1f4a…",
+  "topic": "quick sort",
+  "duration_minutes": 45
+}
+```
+
+This is a **confirmation, not a claim**, and it used to be the other. Any tutor
+could create a session against any unselected request, which set
+`matched_tutor_id` to the caller and left the student never asked — the inverse
+of the decision the platform exists to make. Now only the tutor the student
+already named may confirm, and only from `pending_confirmation`.
+
+One confirmation per request. The `session_per_request` unique constraint is the
+real guarantee, since two simultaneous requests would both pass a check made of a
+read; the status check is what turns the loser of that race into a 409 rather than
+a 500.
+
+| Status | `detail`                                                       | `errors` |
+| ------ | -------------------------------------------------------------- | -------- |
+| 401    | Sign-in required.                                              |          |
+| 403    | Only the tutor the student chose can confirm this request.     |          |
+| 403    | The student cannot create the accepted session.                |          |
+| 404    | That help request could not be found.                          |          |
+| 409    | This help request is not waiting for this tutor's confirmation. |          |
+| 422    | Some of the details you entered are not valid.                 | `course_unit_id` — must match the request. `duration_minutes` — at least 1. |
 
 ### `GET /v1/sessions/me`
 
@@ -501,6 +661,17 @@ One session, by public id.
 `{"status": "..."}` to advance or cancel. The legal moves are enforced in the
 service, not here: requested → accepted → completed, and cancellation from
 anything that has not completed. An illegal move is a 409.
+
+`completed` has an **empty** allowed set, so a session can only be completed
+once. That is what makes the accrual below happen exactly once rather than once
+per retry: the session's minutes and the tutor's `completed_sessions` are written
+after the status is assigned, and a second `completed` transition is refused
+before either write is reached.
+
+The minute accrual runs on this transition, not on the status column. Nothing
+else can reach it, and the ordering matters: a transition that handed the row to
+the accrual before recording `completed` banked nothing at all, silently, on
+every call.
 
 ### `POST /v1/sessions/{session_id}/verify-pin`
 
@@ -550,6 +721,19 @@ student.
 
 Declared after the literal `/me` routes above because FastAPI matches in
 declaration order.
+
+## Incentives
+
+### `GET /v1/incentives/certificate`
+
+The caller's own certificate eligibility: `certified_minutes` and the
+`required_minutes` the university requires. *Auth.*
+
+`required_minutes` is configuration, not a constant, and it is returned with the
+answer so the client renders the number the server will actually judge against.
+A client that hardcodes the threshold shows a tutor who is two hours short a
+progress bar that says they are done, and the failure lands on them at the moment
+they are relying on it.
 
 ## Health
 
