@@ -53,7 +53,8 @@ PeerPass exists to replace the “attend lectures and fight for your life” mod
 
 **Key characteristics**
 
-- Client-server architecture with a single mobile client (Flutter)
+- Client-server architecture with a shared Flutter student client for mobile and web,
+  plus a separate responsive Flutter web admin console
 - Stateless REST API (FastAPI) for all business logic
 - Relational database as the source of truth for users, competencies, and sessions
 - Matching and validation logic live in dedicated backend services (not in the client)
@@ -80,12 +81,14 @@ PeerPass exists to replace the “attend lectures and fight for your life” mod
 Organized in a **feature-first** structure:
 
 - `auth` — Registration, sign-in, and the onboarding wizard
-- `home` — The signed-in hub. Phase 2 ships it as an honest empty state
-- `profile` — Student / tutor profile & role management _(planned)_
-- `matching` — Create topic requests, view matches, accept/reject _(planned)_
-- `sessions` — Schedule, join, and complete micro-sessions _(planned)_
-- `tutor_validation` — Upload transcript / link portfolio, view verification status _(planned)_
-- `incentives` — View logged hours and certificate status _(planned)_
+- `home` — The signed-in hub for matching, active requests, sessions, and incentives
+- `profile` — Student and tutor profile, role, and standing views
+- `matching` — Create topic requests, view candidates, select or decline matches
+- `sessions` — Accept, schedule, complete, and rate tutoring sessions
+- `tutor_validation` — Declare competency evidence and view verification status
+- `incentives` — View logged hours and certificate eligibility
+- `admin_web` — Responsive MUST operations console for users, competencies,
+  tutor standing, and append-only audit events
 
 Shared layers:
 
@@ -344,7 +347,8 @@ index; the public id is random so it encodes nothing about creation time.
 - `user_id` (FK → users), `role` — `student` | `tutor`
 - Composite primary key on (`user_id`, `role`)
 
-There is deliberately no `admin` role. Administrator access is not modelled yet,
+Administrator access is an explicit `admin` role provisioned outside the public
+registration flow,
 and a role that grants it would need audit logging attached before it is worth
 having; adding the string to the enum now would make it look implemented.
 
