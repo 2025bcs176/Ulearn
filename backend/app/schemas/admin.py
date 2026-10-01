@@ -86,3 +86,7 @@ class AdminTutorStandingResponse(OrmSchema):
     completed_sessions: int
     rating_count: int
     average_rating: str | None
+
+
+class AdminTutorStandingPage(Page[AdminTutorStandingResponse]):
+    """A bounded page of tutor standing summaries."""

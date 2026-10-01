@@ -17,6 +17,28 @@ class AdminSession {
   final String email;
 }
 
+Future<AdminPage<AdminCompetency>> competencies() async {
+  final response = await _get('/v1/admin/competencies');
+  return AdminPage.fromJson(response, AdminCompetency.fromJson);
+}
+
+Future<void> reviewCompetency(
+  AdminCompetency competency,
+  String status, {
+  String? reason,
+}) async {
+  await _dio.patch<Map<String, dynamic>>(
+    '/v1/admin/competencies/${competency.id}/review',
+    data: {'status': status, if (reason != null) 'rejection_reason': reason},
+    options: Options(headers: {'Authorization': 'Bearer $_accessToken'}),
+  );
+}
+
+Future<AdminPage<AdminTutorStanding>> tutorStandings() async {
+  final response = await _get('/v1/admin/tutor-standings');
+  return AdminPage.fromJson(response, AdminTutorStanding.fromJson);
+}
+
 class AdminApi {
   AdminApi({required this.baseUrl, Dio? dio})
     : _dio =
@@ -49,8 +71,127 @@ class AdminApi {
     if (tokens == null || user == null) {
       throw const FormatException('The server returned an incomplete sign-in.');
     }
+
+    class AdminCompetency {
+      const AdminCompetency({
+        required this.id,
+        required this.email,
+        required this.name,
+        required this.unit,
+        required this.grade,
+        required this.status,
+        required this.evidence,
+      });
+
+      factory AdminCompetency.fromJson(Map<String, dynamic> json) => AdminCompetency(
+        id: json['id'] as String,
+        email: json['user_email'] as String,
+        name: json['user_name'] as String?,
+        unit: '${json['course_unit_code']} - ${json['course_unit_name']}',
+        grade: json['grade_points'] as String,
+        status: json['status'] as String,
+        evidence: json['evidence_reference'] as String?,
+      );
+
+      final String id;
+      final String email;
+      final String? name;
+      final String unit;
+      final String grade;
+      final String status;
+      final String? evidence;
+    }
+
+    class AdminTutorStanding {
+      const AdminTutorStanding({
+        required this.email,
+        required this.name,
+        required this.standing,
+        required this.sessions,
+        required this.rating,
+      });
+
+      factory AdminTutorStanding.fromJson(Map<String, dynamic> json) =>
+          AdminTutorStanding(
+            email: json['user_email'] as String,
+            name: json['user_name'] as String?,
+            standing: json['standing'] as String,
+            sessions: json['completed_sessions'] as int,
+            rating: json['average_rating'] as String?,
+          );
+
+      final String email;
+      final String? name;
+      final String standing;
+      final int sessions;
+      final String? rating;
+    }
     if (!roles.contains('admin')) {
       throw const AdminAccessException();
+    }
+
+    class CompetenciesPage extends ConsumerWidget {
+      const CompetenciesPage({super.key});
+
+      @override
+      Widget build(BuildContext context, WidgetRef ref) {
+        return AdminDataTable<AdminCompetency>(
+          title: 'Competency review',
+          subtitle: 'Review tutor evidence before granting matching eligibility.',
+          loader: () => ref.read(apiProvider).competencies(),
+          columns: const ['Tutor', 'Unit', 'Grade', 'Status', 'Evidence'],
+          row: (competency) => [
+            competency.name ?? competency.email,
+            competency.unit,
+            competency.grade,
+            competency.status,
+            competency.evidence ?? 'Not supplied',
+          ],
+          actions: (competency) => competency.status == 'pending'
+              ? [
+                  TextButton(
+                    onPressed: () async {
+                      await ref.read(apiProvider).reviewCompetency(
+                        competency,
+                        'verified',
+                      );
+                    },
+                    child: const Text('Verify'),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      await ref.read(apiProvider).reviewCompetency(
+                        competency,
+                        'rejected',
+                        reason: 'Evidence requires clarification.',
+                      );
+                    },
+                    child: const Text('Reject'),
+                  ),
+                ]
+              : const [],
+        );
+      }
+    }
+
+    class TutorStandingsPage extends ConsumerWidget {
+      const TutorStandingsPage({super.key});
+
+      @override
+      Widget build(BuildContext context, WidgetRef ref) {
+        return AdminDataTable<AdminTutorStanding>(
+          title: 'Tutor standing',
+          subtitle: 'Review current standing and rating aggregates.',
+          loader: () => ref.read(apiProvider).tutorStandings(),
+          columns: const ['Tutor', 'Standing', 'Sessions', 'Average rating'],
+          row: (standing) => [
+            standing.name ?? standing.email,
+            standing.standing,
+            '${standing.sessions}',
+            standing.rating ?? 'Unrated',
+          ],
+        );
+      }
     }
     final session = AdminSession(
       accessToken: tokens['access_token'] as String,
@@ -329,7 +470,12 @@ class _AdminShellState extends ConsumerState<AdminShell> {
 
   @override
   Widget build(BuildContext context) {
-    final pages = [const UsersPage(), const AuditPage()];
+    final pages = [
+      const UsersPage(),
+      const CompetenciesPage(),
+      const TutorStandingsPage(),
+      const AuditPage(),
+    ];
     return Scaffold(
       appBar: AppBar(
         title: const Text('PeerPass Admin'),
@@ -357,6 +503,14 @@ class _AdminShellState extends ConsumerState<AdminShell> {
                 icon: Icon(Icons.people_outline),
                 selectedIcon: Icon(Icons.people),
                 label: Text('Users'),
+              ),
+              NavigationRailDestination(
+                icon: Icon(Icons.verified_outlined),
+                label: Text('Competencies'),
+              ),
+              NavigationRailDestination(
+                icon: Icon(Icons.verified_user_outlined),
+                label: Text('Tutor standing'),
               ),
               NavigationRailDestination(
                 icon: Icon(Icons.history),
@@ -415,6 +569,7 @@ class AdminDataTable<T> extends StatefulWidget {
     required this.loader,
     required this.columns,
     required this.row,
+    this.actions,
     super.key,
   });
 
@@ -423,6 +578,7 @@ class AdminDataTable<T> extends StatefulWidget {
   final Future<AdminPage<T>> Function() loader;
   final List<String> columns;
   final List<String> Function(T item) row;
+  final List<Widget> Function(T item)? actions;
 
   @override
   State<AdminDataTable<T>> createState() => _AdminDataTableState<T>();
@@ -487,7 +643,10 @@ class _AdminDataTableState<T> extends State<AdminDataTable<T>> {
                     scrollDirection: Axis.horizontal,
                     child: DataTable(
                       columns: [
-                        for (final column in widget.columns)
+                        for (final column in [
+                          ...widget.columns,
+                          if (widget.actions != null) 'Actions',
+                        ])
                           DataColumn(label: Text(column)),
                       ],
                       rows: [
@@ -496,6 +655,11 @@ class _AdminDataTableState<T> extends State<AdminDataTable<T>> {
                             cells: [
                               for (final value in widget.row(item))
                                 DataCell(Text(value)),
+                              if (widget.actions != null)
+                                DataCell(Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: widget.actions!(item),
+                                )),
                             ],
                           ),
                       ],

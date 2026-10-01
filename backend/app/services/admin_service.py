@@ -19,6 +19,7 @@ from app.schemas.admin import (
     AdminCompetencyPage,
     AdminCompetencyResponse,
     AdminCompetencyReviewRequest,
+    AdminTutorStandingPage,
     AdminTutorStandingResponse,
     AdminUserPage,
     AdminUserResponse,
@@ -176,7 +177,7 @@ async def review_competency(
 
 async def list_tutor_standings(
     db: AsyncSession, actor_id: uuid.UUID, params: PageParams
-) -> list[AdminTutorStandingResponse]:
+) -> AdminTutorStandingPage:
     query = (
         select(TutorProfile)
         .join(TutorProfile.user)
@@ -193,7 +194,7 @@ async def list_tutor_standings(
         target_type="tutor",
         context={"limit": params.limit, "offset": params.offset},
     )
-    return [
+    items = [
         AdminTutorStandingResponse(
             user_id=row.user.public_id,
             user_email=row.user.email,
@@ -207,6 +208,12 @@ async def list_tutor_standings(
         )
         for row in rows
     ]
+    return AdminTutorStandingPage(
+        items=items,
+        total=await db.scalar(select(func.count()).select_from(TutorProfile)) or 0,
+        limit=params.limit,
+        offset=params.offset,
+    )
 
 
 def _competency_response(row: Competency) -> AdminCompetencyResponse:

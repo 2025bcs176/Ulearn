@@ -11,7 +11,7 @@ from app.schemas.admin import (
     AdminCompetencyPage,
     AdminCompetencyResponse,
     AdminCompetencyReviewRequest,
-    AdminTutorStandingResponse,
+    AdminTutorStandingPage,
     AdminUserPage,
 )
 from app.schemas.common import PageParams
@@ -67,10 +67,10 @@ async def review_competency(
     )
 
 
-@router.get("/tutor-standings", response_model=list[AdminTutorStandingResponse])
+@router.get("/tutor-standings", response_model=AdminTutorStandingPage)
 async def list_tutor_standings(
     caller: AdminUser,
     db: DatabaseSession,
     params: AdminPageParams,
-) -> list[AdminTutorStandingResponse]:
+) -> AdminTutorStandingPage:
     return await admin_service.list_tutor_standings(db, caller.user.id, params)
