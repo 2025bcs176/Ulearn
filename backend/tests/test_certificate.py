@@ -18,8 +18,8 @@ The last group is the accrual rule, tested against what `record_completion`
 actually does rather than against what it ought to: only a session that is
 already COMPLETED contributes, and it contributes `max(duration_minutes, 0)`. A
 session that was cancelled keeps the duration it was booked with and must
-contribute none of it. The last test in that group is marked `xfail` and says
-why -- see its docstring, it is a defect in the caller, not in this rule.
+contribute none of it. The last test in that group is the one a client actually
+walks -- session service, not a direct call to the increment.
 """
 
 import uuid
