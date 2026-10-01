@@ -8,9 +8,14 @@ const _accent = Color(0xFF2457D6);
 const _surface = Color(0xFFF7F9FC);
 
 class AdminSession {
-  const AdminSession({required this.accessToken, required this.email});
+  const AdminSession({
+    required this.accessToken,
+    required this.refreshToken,
+    required this.email,
+  });
 
   final String accessToken;
+  final String refreshToken;
   final String email;
 }
 
@@ -31,6 +36,8 @@ class AdminApi {
   final String baseUrl;
   final Dio _dio;
   String? _accessToken;
+  String? _refreshToken;
+  Future<bool>? _refreshInFlight;
 
   Future<AdminSession> signIn(String email, String password) async {
     final response = await _dio.post<Map<String, dynamic>>(
@@ -51,9 +58,11 @@ class AdminApi {
     }
     final session = AdminSession(
       accessToken: tokens['access_token'] as String,
+      refreshToken: tokens['refresh_token'] as String,
       email: user['email'] as String,
     );
     _accessToken = session.accessToken;
+    _refreshToken = session.refreshToken;
     return session;
   }
 
@@ -77,13 +86,15 @@ class AdminApi {
     String status, {
     String? reason,
   }) async {
-    await _dio.patch<Map<String, dynamic>>(
+    await _authorized(
+      () => _dio.patch<Map<String, dynamic>>(
       '/v1/admin/competencies/${competency.id}/review',
       data: {
         'status': status,
         ...?reason == null ? null : {'rejection_reason': reason},
       },
-      options: Options(headers: {'Authorization': '******'}),
+        options: _authOptions(),
+      ),
     );
   }
 
@@ -92,15 +103,68 @@ class AdminApi {
     return AdminPage.fromJson(response, AdminTutorStanding.fromJson);
   }
 
-  void signOut() => _accessToken = null;
+  void signOut() {
+    _accessToken = null;
+    _refreshToken = null;
+  }
 
   Future<Map<String, dynamic>> _get(String path) async {
-    final response = await _dio.get<Map<String, dynamic>>(
-      path,
-      queryParameters: const {'offset': 0, 'limit': 50},
-      options: Options(headers: {'Authorization': 'Bearer $_accessToken'}),
+    final response = await _authorized(
+      () => _dio.get<Map<String, dynamic>>(
+        path,
+        queryParameters: const {'offset': 0, 'limit': 50},
+        options: _authOptions(),
+      ),
     );
     return response.data!;
+  }
+
+  Options _authOptions() =>
+      Options(headers: {'Authorization': 'Bearer $_accessToken'});
+
+  Future<Response<T>> _authorized<T>(
+    Future<Response<T>> Function() request,
+  ) async {
+    try {
+      return await request();
+    } on DioException catch (error) {
+      if (error.response?.statusCode != 401 || !await _refresh()) {
+        rethrow;
+      }
+      return request();
+    }
+  }
+
+  Future<bool> _refresh() async {
+    final token = _refreshToken;
+    if (token == null) return false;
+    final inFlight = _refreshInFlight;
+    if (inFlight != null) return inFlight;
+
+    final future = _refreshInFlight = () async {
+      try {
+        final response = await _dio.post<Map<String, dynamic>>(
+          '/v1/auth/refresh',
+          data: {'refresh_token': token},
+        );
+        final tokens = response.data?['tokens'] as Map<String, dynamic>?;
+        final access = tokens?['access_token'];
+        final refresh = tokens?['refresh_token'];
+        if (access is! String || refresh is! String) {
+          signOut();
+          return false;
+        }
+        _accessToken = access;
+        _refreshToken = refresh;
+        return true;
+      } on DioException {
+        signOut();
+        return false;
+      } finally {
+        _refreshInFlight = null;
+      }
+    }();
+    return future;
   }
 }
 
@@ -413,6 +477,25 @@ class _AdminShellState extends ConsumerState<AdminShell> {
       const TutorStandingsPage(),
       const AuditPage(),
     ];
+    final destinations = const [
+      NavigationRailDestination(
+        icon: Icon(Icons.people_outline),
+        selectedIcon: Icon(Icons.people),
+        label: Text('Users'),
+      ),
+      NavigationRailDestination(
+        icon: Icon(Icons.verified_outlined),
+        label: Text('Competencies'),
+      ),
+      NavigationRailDestination(
+        icon: Icon(Icons.verified_user_outlined),
+        label: Text('Tutor standing'),
+      ),
+      NavigationRailDestination(
+        icon: Icon(Icons.history),
+        label: Text('Audit log'),
+      ),
+    ];
     return Scaffold(
       appBar: AppBar(
         title: const Text('PeerPass Admin'),
@@ -429,35 +512,42 @@ class _AdminShellState extends ConsumerState<AdminShell> {
           const SizedBox(width: 12),
         ],
       ),
-      body: Row(
-        children: [
-          NavigationRail(
-            selectedIndex: _selected,
-            onDestinationSelected: (value) => setState(() => _selected = value),
-            labelType: NavigationRailLabelType.all,
-            destinations: const [
-              NavigationRailDestination(
-                icon: Icon(Icons.people_outline),
-                selectedIcon: Icon(Icons.people),
-                label: Text('Users'),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 700) {
+            return pages[_selected];
+          }
+          return Row(
+            children: [
+              NavigationRail(
+                selectedIndex: _selected,
+                onDestinationSelected: (value) =>
+                    setState(() => _selected = value),
+                labelType: NavigationRailLabelType.all,
+                destinations: destinations,
               ),
-              NavigationRailDestination(
-                icon: Icon(Icons.verified_outlined),
-                label: Text('Competencies'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.verified_user_outlined),
-                label: Text('Tutor standing'),
-              ),
-              NavigationRailDestination(
-                icon: Icon(Icons.history),
-                label: Text('Audit log'),
-              ),
+              const VerticalDivider(width: 1),
+              Expanded(child: pages[_selected]),
             ],
-          ),
-          const VerticalDivider(width: 1),
-          Expanded(child: pages[_selected]),
-        ],
+          );
+        },
+      ),
+      bottomNavigationBar: LayoutBuilder(
+        builder: (context, constraints) => constraints.maxWidth < 700
+            ? NavigationBar(
+                selectedIndex: _selected,
+                onDestinationSelected: (value) =>
+                    setState(() => _selected = value),
+                destinations: [
+                  for (final destination in destinations)
+                    NavigationDestination(
+                      icon: destination.icon,
+                      selectedIcon: destination.selectedIcon,
+                      label: (destination.label as Text).data!,
+                    ),
+                ],
+              )
+            : const SizedBox.shrink(),
       ),
     );
   }
@@ -516,25 +606,62 @@ class CompetenciesPage extends ConsumerWidget {
         competency.status,
         competency.evidence ?? 'Not supplied',
       ],
-      actions: (competency) => competency.status == 'pending'
+      actions: (competency, refresh) => competency.status == 'pending'
           ? [
               TextButton(
                 onPressed: () async {
-                  await ref
-                      .read(apiProvider)
-                      .reviewCompetency(competency, 'verified');
+                  try {
+                    await ref
+                        .read(apiProvider)
+                        .reviewCompetency(competency, 'verified');
+                    refresh();
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Competency verified.')),
+                      );
+                    }
+                  } on DioException {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Could not verify competency.'),
+                        ),
+                      );
+                    }
+                  }
                 },
                 child: const Text('Verify'),
               ),
               TextButton(
                 onPressed: () async {
-                  await ref
-                      .read(apiProvider)
-                      .reviewCompetency(
-                        competency,
-                        'rejected',
-                        reason: 'Evidence requires clarification.',
+                  final reason = await showDialog<String>(
+                    context: context,
+                    builder: (context) => const _RejectionReasonDialog(),
+                  );
+                  if (reason == null || reason.trim().isEmpty) return;
+                  try {
+                    await ref
+                        .read(apiProvider)
+                        .reviewCompetency(
+                          competency,
+                          'rejected',
+                          reason: reason.trim(),
+                        );
+                    refresh();
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Competency rejected.')),
                       );
+                    }
+                  } on DioException {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Could not reject competency.'),
+                        ),
+                      );
+                    }
+                  }
                 },
                 child: const Text('Reject'),
               ),
@@ -564,6 +691,49 @@ class TutorStandingsPage extends ConsumerWidget {
   }
 }
 
+class _RejectionReasonDialog extends StatefulWidget {
+  const _RejectionReasonDialog();
+
+  @override
+  State<_RejectionReasonDialog> createState() => _RejectionReasonDialogState();
+}
+
+class _RejectionReasonDialogState extends State<_RejectionReasonDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Reject competency'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        maxLines: 3,
+        decoration: const InputDecoration(
+          labelText: 'Reason',
+          hintText: 'Explain what needs to be corrected.',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: const Text('Reject'),
+        ),
+      ],
+    );
+  }
+}
+
 class AdminDataTable<T> extends StatefulWidget {
   const AdminDataTable({
     required this.title,
@@ -580,7 +750,7 @@ class AdminDataTable<T> extends StatefulWidget {
   final Future<AdminPage<T>> Function() loader;
   final List<String> columns;
   final List<String> Function(T item) row;
-  final List<Widget> Function(T item)? actions;
+  final List<Widget> Function(T item, VoidCallback refresh)? actions;
 
   @override
   State<AdminDataTable<T>> createState() => _AdminDataTableState<T>();
@@ -662,7 +832,12 @@ class _AdminDataTableState<T> extends State<AdminDataTable<T>> {
                                 DataCell(
                                   Row(
                                     mainAxisSize: MainAxisSize.min,
-                                    children: widget.actions!(item),
+                                    children: widget.actions!(
+                                      item,
+                                      () => setState(
+                                        () => _future = widget.loader(),
+                                      ),
+                                    ),
                                   ),
                                 ),
                             ],
