@@ -17,6 +17,11 @@ import 'package:peerpass/features/auth/presentation/screens/sign_up_screen.dart'
 import 'package:peerpass/features/incentives/data/repositories/fake_incentives_repository.dart';
 import 'package:peerpass/features/incentives/data/repositories/incentives_repository.dart';
 import 'package:peerpass/features/incentives/presentation/screens/certificate_screen.dart';
+import 'package:peerpass/features/matching/data/repositories/fake_matching_repository.dart';
+import 'package:peerpass/features/matching/data/repositories/matching_repository.dart';
+import 'package:peerpass/features/matching/presentation/screens/tutor_requests_screen.dart';
+import 'package:peerpass/features/sessions/data/repositories/fake_sessions_repository.dart';
+import 'package:peerpass/features/sessions/data/repositories/sessions_repository.dart';
 
 const String _signedOutText = 'Sign in';
 
@@ -344,11 +349,51 @@ void main() {
 
     expect(find.text(_homeText), findsOneWidget);
 
+    // Scrolled to rather than tapped where it happens to be. The dashboard is a
+    // scroll view and the tutor-only entries sit below the fold once the rail is
+    // on screen, so a tap at the recorded position would land on whatever happens
+    // to be there instead of the entry -- which reads as a broken tile rather than
+    // as a test that did not scroll.
+    await tester.scrollUntilVisible(find.text('My certificate'), 200);
+    await _settle(tester);
+
     await tester.tap(find.text('My certificate'));
     await _settle(tester);
 
     expect(find.byType(CertificateScreen), findsOneWidget);
     expect(find.text('10h of 40h'), findsOneWidget);
+    expect(find.text(_homeText), findsNothing);
+  });
+
+  testWidgets('the waiting list is reached from home and kept by the guard', (
+    tester,
+  ) async {
+    // The other half of the choice, and the same chain as the certificate: the
+    // entry on home, the registration in the shell's router, and the guard
+    // declining to send the tutor back. Without the route registration this screen
+    // would exist, be tested in isolation, and be unreachable in the app.
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(_signedIn(profile: _tutor)),
+          matchingRepositoryProvider.overrideWithValue(FakeMatchingRepository()),
+          sessionsRepositoryProvider.overrideWithValue(FakeSessionsRepository()),
+        ],
+        child: const PeerPassApp(),
+      ),
+    );
+    await _settle(tester);
+
+    await tester.scrollUntilVisible(find.text('Waiting on you'), 200);
+    await _settle(tester);
+
+    await tester.tap(find.text('Waiting on you'));
+    await _settle(tester);
+
+    expect(find.byType(TutorRequestsScreen), findsOneWidget);
+    // The empty state, because this fake proposes nobody. What is asserted is the
+    // screen and its honest copy, not the absence of an error.
+    expect(find.text('No one is waiting on you'), findsOneWidget);
     expect(find.text(_homeText), findsNothing);
   });
 }

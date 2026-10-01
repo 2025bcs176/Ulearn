@@ -109,7 +109,13 @@ async def test_create_session_from_help_request_and_generate_pin(db_session):
         select(HelpRequest).where(HelpRequest.public_id == request.id)
     )
     help_request.matched_tutor_id = tutor.id
-    help_request.status = HelpRequestStatus.MATCHED
+    # `PENDING_CONFIRMATION`, not `MATCHED`: that is the state the student choosing
+    # this tutor establishes, and `create_session` is what moves it to `MATCHED`.
+    # The tests below are about PINs and the session clock, so they start from the
+    # state a chosen request is actually in rather than from the one the
+    # confirmation produces. Who may confirm is asserted in
+    # `test_help_request_selection.py`.
+    help_request.status = HelpRequestStatus.PENDING_CONFIRMATION
     await db_session.commit()
 
     session = await session_service.create_session(
@@ -150,7 +156,13 @@ async def test_starting_a_session_requires_the_correct_pin(db_session):
         select(HelpRequest).where(HelpRequest.public_id == request.id)
     )
     help_request.matched_tutor_id = tutor.id
-    help_request.status = HelpRequestStatus.MATCHED
+    # `PENDING_CONFIRMATION`, not `MATCHED`: that is the state the student choosing
+    # this tutor establishes, and `create_session` is what moves it to `MATCHED`.
+    # The tests below are about PINs and the session clock, so they start from the
+    # state a chosen request is actually in rather than from the one the
+    # confirmation produces. Who may confirm is asserted in
+    # `test_help_request_selection.py`.
+    help_request.status = HelpRequestStatus.PENDING_CONFIRMATION
     await db_session.commit()
     created = await session_service.create_session(
         db_session,
@@ -211,7 +223,13 @@ async def test_a_session_without_a_stored_pin_rejects_every_candidate(db_session
         select(HelpRequest).where(HelpRequest.public_id == request.id)
     )
     help_request.matched_tutor_id = tutor.id
-    help_request.status = HelpRequestStatus.MATCHED
+    # `PENDING_CONFIRMATION`, not `MATCHED`: that is the state the student choosing
+    # this tutor establishes, and `create_session` is what moves it to `MATCHED`.
+    # The tests below are about PINs and the session clock, so they start from the
+    # state a chosen request is actually in rather than from the one the
+    # confirmation produces. Who may confirm is asserted in
+    # `test_help_request_selection.py`.
+    help_request.status = HelpRequestStatus.PENDING_CONFIRMATION
     await db_session.commit()
     created = await session_service.create_session(
         db_session,
@@ -255,7 +273,13 @@ async def test_the_correct_pin_is_accepted_despite_surrounding_whitespace(db_ses
         select(HelpRequest).where(HelpRequest.public_id == request.id)
     )
     help_request.matched_tutor_id = tutor.id
-    help_request.status = HelpRequestStatus.MATCHED
+    # `PENDING_CONFIRMATION`, not `MATCHED`: that is the state the student choosing
+    # this tutor establishes, and `create_session` is what moves it to `MATCHED`.
+    # The tests below are about PINs and the session clock, so they start from the
+    # state a chosen request is actually in rather than from the one the
+    # confirmation produces. Who may confirm is asserted in
+    # `test_help_request_selection.py`.
+    help_request.status = HelpRequestStatus.PENDING_CONFIRMATION
     await db_session.commit()
     created = await session_service.create_session(
         db_session,
@@ -290,7 +314,13 @@ async def test_marking_a_session_complete_stops_the_clock(db_session):
         select(HelpRequest).where(HelpRequest.public_id == request.id)
     )
     help_request.matched_tutor_id = tutor.id
-    help_request.status = HelpRequestStatus.MATCHED
+    # `PENDING_CONFIRMATION`, not `MATCHED`: that is the state the student choosing
+    # this tutor establishes, and `create_session` is what moves it to `MATCHED`.
+    # The tests below are about PINs and the session clock, so they start from the
+    # state a chosen request is actually in rather than from the one the
+    # confirmation produces. Who may confirm is asserted in
+    # `test_help_request_selection.py`.
+    help_request.status = HelpRequestStatus.PENDING_CONFIRMATION
     await db_session.commit()
     created = await session_service.create_session(
         db_session,
@@ -372,7 +402,7 @@ async def test_completing_through_the_lifecycle_banks_minutes_and_counts_the_ses
             select(HelpRequest).where(HelpRequest.public_id == request.id)
         )
         help_request.matched_tutor_id = tutor.id
-        help_request.status = HelpRequestStatus.MATCHED
+        help_request.status = HelpRequestStatus.PENDING_CONFIRMATION
         await db_session.commit()
         created = await session_service.create_session(
             db_session,
@@ -432,7 +462,7 @@ async def test_a_session_is_banked_once_even_across_repeated_calls(db_session):
         select(HelpRequest).where(HelpRequest.public_id == request.id)
     )
     help_request.matched_tutor_id = tutor.id
-    help_request.status = HelpRequestStatus.MATCHED
+    help_request.status = HelpRequestStatus.PENDING_CONFIRMATION
     await db_session.commit()
     created = await session_service.create_session(
         db_session,

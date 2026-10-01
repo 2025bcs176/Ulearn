@@ -117,6 +117,21 @@ class HomeScreen extends ConsumerWidget {
                     // whose honest answer is that they have not applied yet, which
                     // is a worse first impression than not seeing the tile.
                     if (profile?.hasRole(UserRole.tutor) ?? false) ...[
+                      // Above the certificate rather than below it: the requests
+                      // waiting on an answer are the only tiles on this screen
+                      // that are about somebody else waiting for something, and
+                      // they go stale. A tutor who has to scroll past their own
+                      // progress to reach a student who chose them has been
+                      // given a reason to never open the screen again.
+                      const SizedBox(height: AppDimens.md),
+                      _FeatureEntry(
+                        icon: Icons.mark_email_unread_outlined,
+                        title: 'Waiting on you',
+                        body:
+                            'Students who asked you to tutor them, and the '
+                            'sessions they are waiting on you to confirm.',
+                        onTap: () => context.push(AppRoutes.tutorRequests),
+                      ),
                       const SizedBox(height: AppDimens.md),
                       _FeatureEntry(
                         icon: Icons.workspace_premium_outlined,

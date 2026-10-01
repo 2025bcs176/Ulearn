@@ -314,4 +314,65 @@ void main() {
     expect(find.text('Certificate screen here'), findsOneWidget);
     expect(find.byType(HomeScreen), findsNothing);
   });
+
+  testWidgets('a tutor is told what is waiting on them, and a student is not', (
+    tester,
+  ) async {
+    // The requests are the only entries on this screen about somebody else waiting
+    // for something, so they go stale. A tutor who never learns they were chosen
+    // is a tutor who never answers.
+    await _pumpHome(tester, _harness(_enrolled));
+
+    expect(find.text('Waiting on you'), findsNothing);
+
+    await _pumpHome(tester, _harness(_tutor));
+
+    expect(find.text('Waiting on you'), findsOneWidget);
+  });
+
+  testWidgets("the waiting entry comes before the tutor's own progress", (
+    tester,
+  ) async {
+    // Ordering is the only thing that makes this entry get read. It is a decision
+    // about a tutor scrolling, so it is asserted rather than left to the widget
+    // order it happens to have.
+    await _pumpHome(tester, _harness(_tutor));
+
+    final waiting = tester.getTopLeft(find.text('Waiting on you')).dy;
+    final certificate = tester.getTopLeft(find.text('My certificate')).dy;
+
+    expect(waiting, lessThan(certificate));
+  });
+
+  testWidgets('tapping it opens the list of requests awaiting an answer', (
+    tester,
+  ) async {
+    // Through a real router, because the claim under test is a navigation.
+    final harness = _harness(_tutor);
+    final router = GoRouter(
+      initialLocation: '/',
+      routes: [
+        GoRoute(path: '/', builder: (_, _) => const HomeScreen()),
+        GoRoute(
+          path: AppRoutes.tutorRequests,
+          builder: (_, _) => const Scaffold(body: Text('Waiting screen here')),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: harness.container,
+        child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+      ),
+    );
+    await _settle(tester);
+
+    await tester.tap(find.text('Waiting on you'));
+    await _settle(tester);
+
+    expect(find.text('Waiting screen here'), findsOneWidget);
+    expect(find.byType(HomeScreen), findsNothing);
+  });
 }

@@ -42,11 +42,17 @@ async def create_session(
     user: User,
     payload: SessionCreate,
 ) -> SessionResponse:
-    """Create a session for a matched help request.
+    """Confirm a selected help request and create the session for it.
 
-    The session is created by the tutor once the match has been accepted. A
-    session without a help request is not the primary flow for the MVP: a real
-    tutoring session always starts from a problem the student asked for.
+    The tutor confirms; they do not claim. A session used to be creatable by any
+    tutor against any unselected request, which set `matched_tutor_id` to the
+    caller and left the student never asked -- the inverse of MVP decision 3, and
+    the one place a tutor could take work the student had refused them. Only the
+    tutor the student already named may confirm, and only from the state that says
+    the student is waiting on them.
+
+    The session is not the primary flow for the MVP: a real tutoring session always
+    starts from a problem the student asked for.
     """
     roles = await load_roles(db, user.id)
     if not has_role(roles, UserRole.TUTOR):
@@ -61,17 +67,17 @@ async def create_session(
     help_request = await _load_help_request(db, payload.help_request_id)
     if help_request.tutee_id == user.id:
         raise AuthorizationProblem("The student cannot create the accepted session.")
-    if (
-        help_request.matched_tutor_id is not None
-        and help_request.matched_tutor_id != user.id
-    ):
-        raise AuthorizationProblem("Only the matched tutor can accept this request.")
-    if help_request.matched_tutor_id is None:
-        help_request.matched_tutor_id = user.id
-        help_request.status = HelpRequestStatus.MATCHED
-
-    if help_request.status in {HelpRequestStatus.WITHDRAWN, HelpRequestStatus.EXPIRED}:
-        raise ConflictProblem("This help request is no longer active.")
+    if help_request.matched_tutor_id != user.id:
+        raise AuthorizationProblem(
+            "Only the tutor the student chose can confirm this request."
+        )
+    # One confirmation per request, and only out of `PENDING_CONFIRMATION`. This
+    # is also where `MATCHED` is refused: a retried POST is ordinary on a phone,
+    # and re-accepting would hand the student a second session for one question.
+    if help_request.status is not HelpRequestStatus.PENDING_CONFIRMATION:
+        raise ConflictProblem(
+            "This help request is not waiting for this tutor's confirmation."
+        )
 
     course_unit = await _load_course_unit(db, payload.course_unit_id)
     if course_unit.id != help_request.course_unit_id:
@@ -80,6 +86,9 @@ async def create_session(
             errors={"course_unit_id": "must match the request"},
         )
 
+    # The `session_per_request` unique constraint is the real guarantee -- two
+    # simultaneous requests would both pass a check made of a read -- and this is
+    # what turns the loser of that race into a 409 rather than a 500.
     existing = await db.scalar(
         select(Session.id).where(Session.help_request_id == help_request.id)
     )
