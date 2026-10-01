@@ -81,8 +81,14 @@ pip install -r requirements.txt
 
 # Apply migrations and start the server
 alembic upgrade head
+python -m app.db.seed
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+The seed command is idempotent and loads the v1 reference catalogue, including
+Mbarara University of Science and Technology, its faculties, grades, and course
+units. Additional universities can be added to the backend seed data without
+changing the Flutter client.
 
 > API documentation is available at [http://localhost:8000/docs](http://localhost:8000/docs)
 

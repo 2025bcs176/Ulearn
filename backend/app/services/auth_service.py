@@ -496,9 +496,17 @@ async def update_profile(
     sent = request.model_dump(exclude_unset=True)
 
     if "university_id" in sent:
+        previous_university = user.university_id
         user.university_id = await _resolve_university(db, sent["university_id"])
+        if user.university_id != previous_university:
+            user.faculty_id = None
     if "faculty_id" in sent:
-        user.faculty_id = await _resolve_subject(db, sent["faculty_id"])
+        faculty_university = user.university_id
+        user.faculty_id = await _resolve_subject(
+            db,
+            sent["faculty_id"],
+            university_id=faculty_university,
+        )
     if "year_of_study" in sent:
         user.year_of_study = sent["year_of_study"]
     if "full_name" in sent:
@@ -540,12 +548,20 @@ async def _resolve_university(
 
 
 async def _resolve_subject(
-    db: AsyncSession, public_id: uuid.UUID | None
+    db: AsyncSession,
+    public_id: uuid.UUID | None,
+    *,
+    university_id: uuid.UUID | None = None,
 ) -> uuid.UUID | None:
     """The primary key for a faculty's public id, or `NotFoundProblem`."""
     if public_id is None:
         return None
-    result = await db.execute(select(Subject.id).where(Subject.public_id == public_id))
+    result = await db.execute(
+        select(Subject.id).where(
+            Subject.public_id == public_id,
+            Subject.university_id == university_id,
+        )
+    )
     row = result.scalar_one_or_none()
     if row is None:
         raise NotFoundProblem("That faculty could not be found.")

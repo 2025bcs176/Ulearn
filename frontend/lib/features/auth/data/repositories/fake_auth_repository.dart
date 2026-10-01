@@ -102,7 +102,8 @@ class FakeAuthRepository implements AuthRepository {
   Future<List<UniversityOption>> universities() async => universityOptions;
 
   @override
-  Future<List<Subject>> faculties() async => facultyOptions;
+  Future<List<Subject>> faculties({required String universityId}) async =>
+      facultyOptions;
 
   @override
   Future<List<CourseUnitOption>> courseUnits({String? universityId}) async =>

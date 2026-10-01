@@ -297,18 +297,19 @@ carries a filter for sessions that never happened.
 | **Competencies**  | `user_id`, `course_unit_id`, `grade_id`, `status`, `source`    | Validation gate requiring a verified grade at or above the scale's threshold            |
 | **Refresh_Tokens** | `id` (PK), `user_id` (FK → users), `token_hash` (unique), `expires_at`, `revoked_at`, `replaced_by_id` (FK → refresh_tokens, optional) | The handle is a JWT; only its peppered hash is stored, so a database disclosure yields no usable token. `replaced_by_id` forms the chain that makes reuse of an already-rotated token detectable. Every row is deleted on user deletion |
 
-##### A known limitation: `subjects` is global
+##### Faculties and programs are university-scoped
 
-`users.faculty_id` points at `subjects`, because a faculty is a property of a
-course unit rather than of an institution. The consequence is that
-`subjects.name` is **globally unique** and `subjects` carries no
-`university_id`. So `GET /v1/academics/faculties` is a global list, and two
-universities cannot have a subject with the same name.
+`users.faculty_id` and `course_units.subject_id` point at `subjects`, and each
+seeded subject belongs to one university. Faculty names are unique within a
+university rather than globally, so two institutions may both have a Faculty of
+Science without sharing a catalogue. `GET /v1/academics/faculties` therefore
+requires the selected university.
 
-A single-institution pilot hides this. A multi-institution deployment will not,
-and it will be discovered by a seed failure rather than by reading this. Lifting
-it: give `subjects` a nullable `university_id`, change the unique constraint to
-`(university_id, name)`, and add a `university_id` filter to `/faculties`.
+Degree and postgraduate offerings are stored as `programs`, linked to both the
+university and faculty. Programs describe what an institution offers; course
+units remain the specific records used by help requests, competencies, and
+matching. This prevents a degree name such as Medicine and Surgery from being
+mistaken for a matchable course unit.
 
 **Help_Requests** | `tutee_id`, `course_unit_id`, `topic`, `status`                | What was asked for, before a tutor was matched                                          |
 | **Sessions**      | `tutee_id`, `tutor_id`, `course_unit_id`, `status`, `duration_minutes`, `session_pin`, `meeting_link` | A session that happened; the source for tutor hours and certificates. Includes PIN for handshake and copyable meeting link |
