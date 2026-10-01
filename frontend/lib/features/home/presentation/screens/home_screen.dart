@@ -153,14 +153,6 @@ class HomeScreen extends ConsumerWidget {
                         icon: const Icon(Icons.verified_user_outlined),
                         label: const Text('Become a tutor'),
                       ),
-                    const SizedBox(height: AppDimens.md),
-                    const _PendingCard(
-                      icon: Icons.calendar_month_outlined,
-                      title: 'Book a session',
-                      body:
-                          'Booking opens once there are tutors to book with. '
-                          'Nothing is lost by waiting.',
-                    ),
                     const SizedBox(height: AppDimens.xxl),
                     Text(
                       'Signed in as ${profile?.email ?? ''}',
@@ -189,58 +181,6 @@ class HomeScreen extends ConsumerWidget {
   String _greeting(UserProfile? profile) {
     final firstName = profile?.firstName;
     return firstName == null ? 'Hello' : 'Hello, $firstName';
-  }
-}
-
-/// A tile for something that exists as a promise, not yet as a feature.
-class _PendingCard extends StatelessWidget {
-  const _PendingCard({
-    required this.icon,
-    required this.title,
-    required this.body,
-  });
-
-  final IconData icon;
-  final String title;
-  final String body;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppDimens.lg),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: theme.colorScheme.onSurfaceVariant),
-            const SizedBox(width: AppDimens.lg),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(title, style: theme.textTheme.titleMedium),
-                      const SizedBox(width: AppDimens.sm),
-                      _SoonChip(),
-                    ],
-                  ),
-                  const SizedBox(height: AppDimens.xs),
-                  Text(
-                    body,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 
@@ -298,31 +238,6 @@ class _FeatureEntry extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// A small marker that a tile is not live.
-class _SoonChip extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.sm,
-        vertical: AppDimens.xxs,
-      ),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(AppDimens.radiusSm),
-      ),
-      child: Text(
-        'Soon',
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: theme.colorScheme.onSecondaryContainer,
         ),
       ),
     );
