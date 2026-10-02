@@ -32,6 +32,7 @@ dependencies:
   flutter_secure_storage: ^11.2.0
 
   # Declarative routing with a redirect-based auth guard.
+  flutter_splash_screen: ^4.0.0
   go_router: ^18.0.1
 
   # Date and number formatting for session times and rating aggregates.

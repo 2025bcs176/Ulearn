@@ -81,13 +81,26 @@ class _PeerPassAnimation extends StatelessWidget {
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return SizedBox(
-      width: 160,
-      height: 160,
-      child: Lottie.asset(
-        'assets/lotties/PeerPass.json',
-        animate: !reducedMotion,
-        repeat: true,
-        fit: BoxFit.contain,
+      width: double.infinity,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final availableSize = constraints.biggest.shortestSide;
+          final animationSize =
+              (availableSize * AppDimens.splashAnimationFraction).clamp(
+                AppDimens.splashAnimationMin,
+                AppDimens.splashAnimationMax,
+              );
+
+          return SizedBox.square(
+            dimension: animationSize,
+            child: Lottie.asset(
+              'assets/lotties/PeerPass.json',
+              animate: !reducedMotion,
+              repeat: true,
+              fit: BoxFit.contain,
+            ),
+          );
+        },
       ),
     );
   }
