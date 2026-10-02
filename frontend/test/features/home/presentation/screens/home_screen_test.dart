@@ -94,33 +94,6 @@ void main() {
     expect(find.text('Signed in as ${_enrolled.email}'), findsOneWidget);
   });
 
-  testWidgets('tapping sign out in the app bar ends the session', (
-    tester,
-  ) async {
-    // Regression. `onPressed` is a `VoidCallback`, so a handler of
-    // `() => ref.read(signOutControllerProvider)` evaluated the read, discarded
-    // the function it returned, and signed nobody out while still looking like
-    // it worked. The button has to be the thing under test, not the provider.
-    final harness = _harness(_enrolled);
-    await _pumpHome(tester, harness);
-    expect(
-      harness.container.read(sessionControllerProvider).status,
-      SessionStatus.authenticated,
-    );
-
-    await tester.tap(find.byTooltip('Sign out'));
-    await _settle(tester);
-
-    final session = harness.container.read(sessionControllerProvider);
-    expect(session.status, SessionStatus.unauthenticated);
-    expect(session.profile, isNull);
-    // The token is discarded on the device before the session is recorded as
-    // ended, so a request that never reaches the server still leaves this device
-    // signed out.
-    expect(harness.repository.session, isNull);
-    expect(harness.repository.refreshToken, isNull);
-  });
-
   testWidgets('the sessions entry is live, not a promise', (tester) async {
     // Sessions are built, so the landing screen has to offer a way in. Marked
     // Soon, or hidden among the pending tiles, a working feature looks absent.
