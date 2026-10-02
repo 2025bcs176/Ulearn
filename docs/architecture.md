@@ -81,10 +81,12 @@ PeerPass exists to replace the “attend lectures and fight for your life” mod
 Organized in a **feature-first** structure:
 
 - `auth` — Registration, sign-in, and the onboarding wizard
-- `home` — The signed-in hub for matching, active requests, sessions, and incentives
-- `profile` — Student and tutor profile, role, and standing views
+- `home` — The signed-in Home tab for matching and active-session discovery
+- `sessions` — The authenticated Sessions tab for active/past sessions and
+  tutor-only request/certificate insights
+- `profile` — The authenticated Profile tab for account information, roles,
+  sign-out, and account deletion
 - `matching` — Create topic requests, view candidates, select or decline matches
-- `sessions` — Accept, schedule, complete, and rate tutoring sessions
 - `tutor_validation` — Declare competency evidence and view verification status
 - `incentives` — View logged hours and certificate eligibility
 - `admin_web` — Responsive MUST operations console for users, competencies,
