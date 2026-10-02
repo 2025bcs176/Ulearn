@@ -1,6 +1,6 @@
-import 'package:dotlottie_flutter/dotlottie_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lottie/lottie.dart';
 import 'package:peerpass/core/constants/app_dimens.dart';
 import 'package:peerpass/core/error/failures.dart';
 import 'package:peerpass/core/state/session.dart';
@@ -83,11 +83,10 @@ class _PeerPassAnimation extends StatelessWidget {
     return SizedBox(
       width: 160,
       height: 160,
-      child: DotLottieView(
-        sourceType: 'asset',
-        source: 'lotties/PeerPass.lottie',
-        autoplay: !reducedMotion,
-        loop: true,
+      child: Lottie.asset(
+        'assets/lotties/PeerPass.json',
+        animate: !reducedMotion,
+        repeat: true,
         fit: BoxFit.contain,
       ),
     );
