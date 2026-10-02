@@ -44,9 +44,6 @@ abstract final class AppDimens {
   /// unreadable when the same widgets render wide.
   static const double maxContentWidth = 640;
 
-  /// Minimum splash animation size on compact screens.
-  static const double splashAnimationMin = 200;
-
   /// Maximum splash animation size on tablets and web.
   static const double splashAnimationMax = 320;
 
