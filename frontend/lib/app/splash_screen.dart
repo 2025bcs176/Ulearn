@@ -1,6 +1,6 @@
+import 'package:dotlottie_flutter/dotlottie_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:peerpass/app/widgets/splash_morph.dart';
 import 'package:peerpass/core/constants/app_dimens.dart';
 import 'package:peerpass/core/error/failures.dart';
 import 'package:peerpass/core/state/session.dart';
@@ -33,7 +33,7 @@ class SplashScreen extends ConsumerWidget {
             Text('PeerPass', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: AppDimens.xl),
             if (failure == null) ...[
-              const SplashMorph(),
+              const _PeerPassAnimation(),
               const SizedBox(height: AppDimens.lg),
               const CircularProgressIndicator.adaptive(),
             ] else ...[
@@ -48,7 +48,8 @@ class SplashScreen extends ConsumerWidget {
               ),
               const SizedBox(height: AppDimens.xl),
               FilledButton(
-                onPressed: () => ref.read(authControllerProvider).retryRestore(),
+                onPressed: () =>
+                    ref.read(authControllerProvider).retryRestore(),
                 child: const Text('Retry'),
               ),
             ],
@@ -70,3 +71,25 @@ String _messageFor(Failure failure) => switch (failure) {
     'Could not reach PeerPass. Check your connection and try again.',
   _ => 'Something went wrong. Try again.',
 };
+
+class _PeerPassAnimation extends StatelessWidget {
+  const _PeerPassAnimation();
+
+  @override
+  Widget build(BuildContext context) {
+    final reducedMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+
+    return SizedBox(
+      width: 160,
+      height: 160,
+      child: DotLottieView(
+        sourceType: 'asset',
+        source: 'lotties/PeerPass.lottie',
+        autoplay: !reducedMotion,
+        loop: true,
+        fit: BoxFit.contain,
+      ),
+    );
+  }
+}
