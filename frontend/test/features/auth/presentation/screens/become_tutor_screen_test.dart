@@ -128,4 +128,25 @@ void main() {
     expect(repository.submittedCompetencies.first['course_unit_id'], 'unit-1');
     expect(repository.submittedCompetencies.first['grade_id'], 'grade-1');
   });
+
+  testWidgets('requires an explicit grade selection', (tester) async {
+    final repository = FakeAuthRepository(
+      session: _student,
+      refreshToken: 'refresh',
+      courseUnitOptions: _courseUnits,
+      gradeOptions: _gradeOptions,
+    );
+
+    await _pumpScreen(tester, repository);
+
+    final submit = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Submit proof'),
+    );
+    expect(submit.onPressed, isNull);
+    expect(repository.submittedCompetencies, isEmpty);
+
+    await tester.tap(find.byKey(const ValueKey('Grade')));
+    await tester.pumpAndSettle();
+    expect(find.text('Select grade').last, findsOneWidget);
+  });
 }
