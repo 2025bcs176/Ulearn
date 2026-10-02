@@ -19,6 +19,7 @@ dependencies:
   # auth header and token refresh are attached without touching call sites.
   dio: ^5.11.1
 
+  dotlottie_flutter: ^0.1.7
   flutter:
     sdk: flutter
 
@@ -58,3 +59,4 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/
+    - lotties/
