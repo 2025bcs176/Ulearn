@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:peerpass/app/widgets/splash_morph.dart';
+import 'package:lottie/lottie.dart';
 import 'package:peerpass/core/constants/app_dimens.dart';
 import 'package:peerpass/core/error/failures.dart';
 import 'package:peerpass/core/state/session.dart';
@@ -26,33 +26,50 @@ class SplashScreen extends ConsumerWidget {
     final failure = ref.watch(sessionControllerProvider).restoreFailure;
 
     return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('PeerPass', style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: AppDimens.xl),
-            if (failure == null) ...[
-              const SplashMorph(),
-              const SizedBox(height: AppDimens.lg),
-              const CircularProgressIndicator.adaptive(),
-            ] else ...[
-              // The mark stops and the failure is stated. Running the animation
-              // here would imply progress that is not being made.
-              const Icon(Icons.cloud_off_outlined, size: 44),
-              const SizedBox(height: AppDimens.lg),
-              Text(
-                _messageFor(failure),
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium,
+      body: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(AppDimens.screenPadding),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'PeerPass',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: AppDimens.xl),
+                    if (failure == null) ...[
+                      _PeerPassAnimation(
+                        maxWidth:
+                            constraints.maxWidth -
+                            (AppDimens.screenPadding * 2),
+                        maxHeight: constraints.maxHeight,
+                      ),
+                      const SizedBox(height: AppDimens.lg),
+                      const CircularProgressIndicator.adaptive(),
+                    ] else ...[
+                      const Icon(Icons.cloud_off_outlined, size: 44),
+                      const SizedBox(height: AppDimens.lg),
+                      Text(
+                        _messageFor(failure),
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: AppDimens.xl),
+                      FilledButton(
+                        onPressed: () =>
+                            ref.read(authControllerProvider).retryRestore(),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ],
+                ),
               ),
-              const SizedBox(height: AppDimens.xl),
-              FilledButton(
-                onPressed: () => ref.read(authControllerProvider).retryRestore(),
-                child: const Text('Retry'),
-              ),
-            ],
-          ],
+            ),
+          ),
         ),
       ),
     );
@@ -70,3 +87,35 @@ String _messageFor(Failure failure) => switch (failure) {
     'Could not reach PeerPass. Check your connection and try again.',
   _ => 'Something went wrong. Try again.',
 };
+
+class _PeerPassAnimation extends StatelessWidget {
+  const _PeerPassAnimation({required this.maxWidth, required this.maxHeight});
+
+  final double maxWidth;
+  final double maxHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    final reducedMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+
+    final availableSize = (maxWidth * AppDimens.splashAnimationFraction).clamp(
+      0.0,
+      maxHeight * AppDimens.splashAnimationFraction,
+    );
+    final animationSize = availableSize.clamp(
+      0.0,
+      AppDimens.splashAnimationMax,
+    );
+
+    return SizedBox.square(
+      dimension: animationSize,
+      child: Lottie.asset(
+        'assets/lotties/PeerPass.json',
+        animate: !reducedMotion,
+        repeat: true,
+        fit: BoxFit.contain,
+      ),
+    );
+  }
+}
