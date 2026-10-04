@@ -43,11 +43,17 @@ abstract interface class AuthRepository {
   /// The universities the picker offers.
   Future<List<UniversityOption>> universities();
 
+  /// Resolves a public university identifier to its display name.
+  Future<String?> universityNameById(String universityId);
+
   /// The faculties the picker offers.
   Future<List<Subject>> faculties({required String universityId});
 
   /// Course units for the given university, for the primary modules step.
-  Future<List<CourseUnitOption>> courseUnits({String? universityId});
+  Future<List<CourseUnitOption>> courseUnits({
+    String? universityId,
+    String? subjectId,
+  });
 
   /// Every grade on the university's published scale.
   Future<List<GradeOption>> grades({String? universityId});

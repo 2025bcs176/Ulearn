@@ -107,12 +107,26 @@ class RemoteAuthRepository implements AuthRepository {
       _guard(academics.universities);
 
   @override
+  Future<String?> universityNameById(String universityId) async {
+    final universities = await this.universities();
+    for (final university in universities) {
+      if (university.publicId == universityId) return university.name;
+    }
+    return null;
+  }
+
+  @override
   Future<List<Subject>> faculties({required String universityId}) =>
       _guard(() => academics.faculties(universityId: universityId));
 
   @override
-  Future<List<CourseUnitOption>> courseUnits({String? universityId}) =>
-      _guard(() => academics.courseUnits(universityId: universityId));
+  Future<List<CourseUnitOption>> courseUnits({
+    String? universityId,
+    String? subjectId,
+  }) => _guard(
+    () =>
+        academics.courseUnits(universityId: universityId, subjectId: subjectId),
+  );
 
   @override
   Future<List<GradeOption>> grades({String? universityId}) =>
@@ -125,16 +139,15 @@ class RemoteAuthRepository implements AuthRepository {
     required String source,
     String? evidenceReference,
     String? notes,
-  }) =>
-      _guard(
-        () => auth.submitCompetency(
-          courseUnitId: courseUnitId,
-          gradeId: gradeId,
-          source: source,
-          evidenceReference: evidenceReference,
-          notes: notes,
-        ),
-      );
+  }) => _guard(
+    () => auth.submitCompetency(
+      courseUnitId: courseUnitId,
+      gradeId: gradeId,
+      source: source,
+      evidenceReference: evidenceReference,
+      notes: notes,
+    ),
+  );
 
   @override
   Future<UserProfile> updateProfile({
