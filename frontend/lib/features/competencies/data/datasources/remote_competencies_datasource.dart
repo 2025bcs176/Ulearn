@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:peerpass/features/competencies/data/models/tutor_claim.dart';
 
 /// The remote shape of a tutor's own competency claims.
@@ -36,9 +37,30 @@ class RemoteCompetenciesDatasource {
         .toList(growable: false);
   }
 
-  /// Submits proof for one course unit.
+  /// Uploads transcript/QR evidence for an already-submitted claim.
   ///
-  /// Returns the stored claim rather than nothing, so a screen that has just
+  /// Returns the updated claim, whose [TutorClaim.evidenceReference] now
+  /// points at the stored object key.
+  Future<TutorClaim> uploadEvidence({
+    required String competencyId,
+    required PlatformFile file,
+  }) async {
+    final bytes = await file.readAsBytes();
+    final formData = FormData.fromMap({
+      'upload': MultipartFile.fromBytes(bytes, filename: file.name),
+    });
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/v1/competencies/$competencyId/evidence',
+      data: formData,
+    );
+    final body = response.data;
+    if (body == null) {
+      throw const FormatException('the upload response carried no body');
+    }
+    return TutorClaim.fromJson(body);
+  }
+
+  /// Submits proof for one course unit.
   /// submitted can show the state the API actually recorded instead of assuming
   /// `pending`.
   Future<TutorClaim> submit({

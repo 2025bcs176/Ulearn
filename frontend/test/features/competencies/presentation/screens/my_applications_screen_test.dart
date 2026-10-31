@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -268,5 +269,11 @@ class _ExplodingRepository implements CompetenciesRepository {
     required String source,
     String? evidenceReference,
     String? notes,
+  }) async => throw StateError('unreachable');
+
+  @override
+  Future<TutorClaim> uploadEvidence({
+    required String competencyId,
+    required PlatformFile file,
   }) async => throw StateError('unreachable');
 }

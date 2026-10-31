@@ -103,7 +103,11 @@ class UpdateProfileRequest(RequestSchema):
     )
     university_id: uuid.UUID | None = None
     faculty_id: uuid.UUID | None = None
+    program_id: uuid.UUID | None = None
     year_of_study: int | None = Field(default=None, ge=1, le=6)
+    semester: int | None = Field(default=None, ge=1, le=2)
+    reg_no: str | None = Field(default=None, max_length=64)
+    tel: str | None = Field(default=None, max_length=32)
     academic_data_consented: bool | None = Field(
         default=None,
         description=(
@@ -168,7 +172,13 @@ class CurrentUserResponse(OrmSchema):
     faculty_id: uuid.UUID | None = Field(
         default=None, validation_alias="faculty_public_id"
     )
+    program_id: uuid.UUID | None = Field(
+        default=None, validation_alias="program_public_id"
+    )
     year_of_study: int | None = None
+    semester: int | None = None
+    reg_no: str | None = None
+    tel: str | None = None
     academic_data_consented_at: datetime | None = None
     primary_course_unit_ids: list[uuid.UUID] = Field(default_factory=list)
     created_at: datetime

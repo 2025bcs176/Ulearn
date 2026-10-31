@@ -3,6 +3,7 @@
 import uuid
 from decimal import Decimal
 
+from fastapi import UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -97,6 +98,19 @@ async def create_competency(
     # that is scoped away from every Medicine student.
     faculty_scope.require_own_faculty(course_unit, user)
 
+    # A tutor may only claim units they have actually completed: a YR2 student
+    # cannot tutor a YR4 unit. When either side is unknown we let it through and
+    # leave the decision to the reviewer, so onboarding gaps do not hard-block.
+    if (
+        user.year_of_study is not None
+        and course_unit.year_level is not None
+        and user.year_of_study < course_unit.year_level
+    ):
+        raise ValidationProblem(
+            "You have not yet completed this course unit.",
+            errors={"course_unit_id": "unit not yet completed"},
+        )
+
     grade = await _load_grade(db, payload.grade_id)
     if course_unit.university.grading_scale_id is None:
         raise ValidationProblem(
@@ -161,6 +175,7 @@ async def create_competency(
     )
     db.add(competency)
     await db.flush()
+    await db.flush()
     await db.commit()
     # Re-read rather than building the response off the flushed instance: the
     # relationships `_competency_response` walks are not populated on a row that
@@ -168,17 +183,110 @@ async def create_competency(
     return _competency_response(await _load_competency(db, user, competency.public_id))
 
 
-def _utcnow():
+async def upload_evidence(
+    db: AsyncSession,
+    user: User,
+    competency_id: uuid.UUID,
+    upload: UploadFile,
+) -> CompetencyResponse:
+    """Upload a transcript/QR file and verify it against the claimed unit/grade.
+
+    When the competency's source is 'transcript', the file is parsed for a MUST
+    QR stamp, the selected course unit code and the claimed grade. A valid
+    transcript with a qualifying grade (A or B+) verifies the tutor on the spot;
+    any mismatch rejects the claim with a reason. Claims without a transcript
+    stay pending for manual (Dean) review.
+    """
+    competency = await _load_competency(db, user, competency_id)
     from datetime import UTC, datetime
 
-    return datetime.now(UTC)
+    from app.services import storage_service, transcript_parser
+
+    object_key = (
+        f"transcripts/{user.public_id}/{competency.public_id}/{upload.filename}"
+    )
+    object_key = storage_service.upload_transcript(upload, object_key)
+    competency.evidence_reference = object_key
+    await db.flush()
+
+    source_val = getattr(competency.source, "value", str(competency.source))
+    if source_val == "transcript":
+        upload.file.seek(0)
+        content = await upload.read()
+        parsed = transcript_parser.parse_transcript(
+            content, upload.content_type or "", upload.filename or "transcript"
+        )
+        rejection: str | None = None
+        if not parsed.qr_valid:
+            rejection = "Transcript QR code is not a valid MUST stamp."
+        elif competency.course_unit.code not in parsed.course_codes:
+            rejection = (
+                f"Transcript does not list the selected course unit "
+                f"({competency.course_unit.code})."
+            )
+        elif competency.grade.label not in parsed.grades:
+            rejection = (
+                f"Claimed grade {competency.grade.label} does not match the transcript."
+            )
+        else:
+            scale = competency.course_unit.university.grading_scale
+            minimum = scale.competency_min_points if scale else None
+            if minimum is not None and competency.grade.grade_points < minimum:
+                rejection = (
+                    f"Grade {competency.grade.label} is below the competency "
+                    f"threshold (requires B+ or higher)."
+                )
+
+        if rejection is not None:
+            competency.status = CompetencyStatus.REJECTED
+            competency.rejection_reason = rejection
+            competency.verified_at = None
+            competency.reviewed_by_id = None
+        else:
+            competency.status = CompetencyStatus.VERIFIED
+            competency.verified_at = datetime.now(UTC)
+            competency.rejection_reason = None
+            from sqlalchemy import select
+
+            from app.models.enums import UserRole
+            from app.models.tutor_profile import TutorProfile
+            from app.models.user import load_roles, set_roles
+
+            roles = set(await load_roles(db, user.id))
+            roles.add(UserRole.TUTOR)
+            await set_roles(db, user.id, roles)
+            profile = await db.scalar(
+                select(TutorProfile).where(TutorProfile.user_id == user.id)
+            )
+            if profile is None:
+                db.add(TutorProfile(user_id=user.id))
+
+    await db.flush()
+    await db.commit()
+    return _competency_response(await _load_competency(db, user, competency.public_id))
+
+
+async def download_evidence(
+    db: AsyncSession,
+    user: User,
+    competency_id: uuid.UUID,
+) -> tuple[bytes, str]:
+    """Return the bytes and content type of a competency's stored evidence."""
+    competency = await _load_competency(db, user, competency_id)
+    if not competency.evidence_reference:
+        raise NotFoundProblem("No evidence has been uploaded for this competency.")
+    from app.services import storage_service
+
+    return storage_service.download_transcript(competency.evidence_reference)
 
 
 async def _load_course_unit(db: AsyncSession, public_id: uuid.UUID) -> CourseUnit:
     result = await db.execute(
         select(CourseUnit)
         .where(CourseUnit.public_id == public_id)
-        .options(selectinload(CourseUnit.university))
+        .options(
+            selectinload(CourseUnit.university).selectinload(University.grading_scale)
+        )
     )
     course_unit = result.scalar_one_or_none()
     if course_unit is None:

@@ -48,3 +48,4 @@ ignore = [
 # `--autogenerate`, and its shape is SQLAlchemy's to decide. The checks that
 # still matter on a migration -- unused imports, undefined names -- stay on.
 "alembic/versions/*" = ["E501", "I001"]
+"app/db/seed.py" = ["E501"]

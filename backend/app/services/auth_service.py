@@ -43,7 +43,7 @@ from app.core.security import (
     password_needs_rehash,
     verify_password_async,
 )
-from app.models.course_unit import Subject, University
+from app.models.course_unit import Program, Subject, University
 from app.models.enums import UserRole
 from app.models.user import RefreshToken, User, load_roles, set_roles
 from app.schemas.user import (
@@ -200,6 +200,7 @@ def _user_query():
     return select(User).options(
         selectinload(User.university),
         selectinload(User.faculty),
+        selectinload(User.program),
     )
 
 
@@ -641,6 +642,14 @@ async def update_profile(
             await _clear_primary_course_units(db, user)
     if "year_of_study" in sent:
         user.year_of_study = sent["year_of_study"]
+    if "semester" in sent:
+        user.semester = sent["semester"]
+    if "reg_no" in sent:
+        user.reg_no = sent["reg_no"]
+    if "tel" in sent:
+        user.tel = sent["tel"]
+    if "program_id" in sent:
+        user.program_id = await _resolve_program(db, sent["program_id"])
     if "full_name" in sent:
         user.full_name = sent["full_name"]
     if sent.get("academic_data_consented") and user.academic_data_consented_at is None:
@@ -707,6 +716,19 @@ async def _resolve_subject(
     row = result.scalar_one_or_none()
     if row is None:
         raise NotFoundProblem("That faculty could not be found.")
+    return row
+
+
+async def _resolve_program(
+    db: AsyncSession, public_id: uuid.UUID | None
+) -> uuid.UUID | None:
+    """The primary key for a programme's public id, or `NotFoundProblem`."""
+    if public_id is None:
+        return None
+    result = await db.execute(select(Program.id).where(Program.public_id == public_id))
+    row = result.scalar_one_or_none()
+    if row is None:
+        raise NotFoundProblem("That programme could not be found.")
     return row
 
 

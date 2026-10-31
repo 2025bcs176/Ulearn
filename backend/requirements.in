@@ -40,3 +40,12 @@ pyjwt
 # `argon2-cffi-bindings` publishes a single `abi3` wheel covering CPython 3.10
 # through 3.15 on manylinux x86_64 and aarch64, macOS arm64, and Windows.
 argon2-cffi
+
+# Object storage for transcript/QR evidence (optional).
+firebase-admin
+
+# Multipart uploads for transcript/QR evidence.
+python-multipart
+
+# Cloud storage for transcript/QR evidence (free tier, no billing).
+supabase

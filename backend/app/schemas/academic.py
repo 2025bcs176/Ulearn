@@ -89,6 +89,8 @@ class CourseUnitResponse(OrmSchema):
     code: str
     name: str
     description: str | None = None
+    year_level: int | None = None
+    semester: int | None = None
     university_id: uuid.UUID = Field(validation_alias="university_public_id")
     subject_id: uuid.UUID | None = Field(
         default=None, validation_alias="subject_public_id"

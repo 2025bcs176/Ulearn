@@ -507,6 +507,15 @@ async def _search_candidates_for_units(
             exclude(tutor.public_id, "same_university_only")
             continue
 
+        # A tutor can only tutor units they have already completed.
+        if (
+            tutor.year_of_study is not None
+            and competency.course_unit.year_level is not None
+            and tutor.year_of_study < competency.course_unit.year_level
+        ):
+            exclude(tutor.public_id, "unit_not_yet_completed")
+            continue
+
         profile = tutor.tutor_profile
         if profile is not None and profile.standing is TutorStanding.SUSPENDED:
             exclude(tutor.public_id, "suspended")

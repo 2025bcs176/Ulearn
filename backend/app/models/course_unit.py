@@ -10,7 +10,7 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, String, UniqueConstraint
+from sqlalchemy import ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -168,7 +168,14 @@ class CourseUnit(Base, TimestampMixin):
 
     name: Mapped[str] = mapped_column(String(200), nullable=False)
 
-    #: Free-text summary used to widen a match when an exact unit yields no
+    #: The academic year this unit is taught in (1-5), derived from the MUST
+    #: course code's year digit. Used to enforce that a tutor can only tutor
+    #: units they have already completed.
+    year_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    #: The semester this unit is taught in (1 or 2), derived from the MUST
+    #: course code's semester digit.
+    semester: Mapped[int | None] = mapped_column(Integer, nullable=True)
     #: eligible tutor. Advisory only: nothing is matched on it, because an
     #: unindexed text column cannot be matched on reliably.
     description: Mapped[str | None] = mapped_column(String(1000), nullable=True)

@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:peerpass/core/constants/app_dimens.dart';
@@ -31,6 +32,7 @@ class _SubmitClaimScreenState extends ConsumerState<SubmitClaimScreen> {
   String? _courseUnitId;
   String? _gradeId;
   bool _submitting = false;
+  PlatformFile? _selectedFile;
 
   @override
   void dispose() {
@@ -50,7 +52,14 @@ class _SubmitClaimScreenState extends ConsumerState<SubmitClaimScreen> {
     final isMustAsync = ref.watch(isMustUniversityProvider(universityId));
 
     final courseUnits = courseUnitsAsync.maybeWhen(
-      data: (items) => items,
+      data: (items) => items
+          .where(
+            (unit) =>
+                profile?.yearOfStudy == null ||
+                unit.yearLevel == null ||
+                unit.yearLevel! <= profile!.yearOfStudy!,
+          )
+          .toList(),
       orElse: () => const <CourseUnitOption>[],
     );
     final liveGrades = gradesAsync.maybeWhen(
@@ -192,11 +201,40 @@ class _SubmitClaimScreenState extends ConsumerState<SubmitClaimScreen> {
                         setState(() => _source = value ?? 'transcript'),
                   ),
                   const SizedBox(height: AppDimens.md),
+                  if (_source == 'transcript') ...[
+                    const SizedBox(height: AppDimens.md),
+                    OutlinedButton.icon(
+                      onPressed: _pickTranscript,
+                      icon: const Icon(Icons.attach_file_outlined),
+                      label: Text(
+                        _selectedFile == null
+                            ? 'Attach transcript (PDF/image)'
+                            : _selectedFile!.name,
+                      ),
+                    ),
+                    if (_selectedFile != null) ...[
+                      const SizedBox(height: AppDimens.sm),
+                      Text(
+                        'Selected: ${_selectedFile!.name}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      TextButton(
+                        onPressed: () => setState(() => _selectedFile = null),
+                        child: const Text('Remove attachment'),
+                      ),
+                    ],
+                    const SizedBox(height: AppDimens.sm),
+                    Text(
+                      'Accepted: PDF, PNG, JPG. Max 5 MB.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                  const SizedBox(height: AppDimens.md),
                   TextFormField(
                     controller: _evidenceController,
                     decoration: const InputDecoration(
-                      labelText: 'Evidence reference or link',
-                      hintText: 'https://... or transcript reference',
+                      labelText: 'Other reference URLs or GitHub',
+                      hintText: 'https://github.com/... or other links',
                     ),
                   ),
                   const SizedBox(height: AppDimens.md),
@@ -227,6 +265,25 @@ class _SubmitClaimScreenState extends ConsumerState<SubmitClaimScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _pickTranscript() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg'],
+    );
+    if (result.isEmpty) return;
+    final file = result.first;
+    final bytes = await file.readAsBytes();
+    if (bytes.length > 5 * 1024 * 1024) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('File too large. Maximum size is 5 MB.')),
+        );
+      }
+      return;
+    }
+    setState(() => _selectedFile = file);
   }
 
   Future<void> _submit() async {
@@ -263,7 +320,7 @@ class _SubmitClaimScreenState extends ConsumerState<SubmitClaimScreen> {
         gradeId = resolved.first.publicId;
       }
 
-      final failure = await ref
+      final result = await ref
           .read(submitClaimProvider)
           .submit(
             courseUnitId: _courseUnitId!,
@@ -278,15 +335,32 @@ class _SubmitClaimScreenState extends ConsumerState<SubmitClaimScreen> {
           );
 
       if (!mounted) return;
-      if (failure != null) {
+      if (result.failure != null) {
         // The controller returns the failure rather than throwing, so this branch
         // and the success one are visibly different: a refusal keeps the tutor on
         // the form with their answers intact, which matters because the two
         // refusals they can hit are a duplicate claim and a lost connection, and
         // neither is fixed by retyping.
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(failure.message)));
+            .showSnackBar(SnackBar(content: Text(result.failure!.message)));
         return;
+      }
+
+      // If a transcript file was attached, upload it now that the claim exists.
+      if (_selectedFile != null && result.claim != null) {
+        final uploadFailure = await ref
+            .read(submitClaimProvider)
+            .uploadEvidence(
+              competencyId: result.claim!.id,
+              file: _selectedFile!,
+            );
+        if (!mounted) return;
+        if (uploadFailure != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(uploadFailure.message)),
+          );
+          return;
+        }
       }
 
       ScaffoldMessenger.of(context).showSnackBar(

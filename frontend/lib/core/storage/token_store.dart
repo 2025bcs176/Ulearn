@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Persistence for the access and refresh tokens.
 ///
@@ -56,15 +58,39 @@ abstract interface class SecureStorage {
   Future<void> delete(String key);
 }
 
+/// [SecureStorage] backed by `shared_preferences` (localStorage on web).
+///
+/// Used on web because `flutter_secure_storage` relies on the Web Crypto API,
+/// which is only available in secure contexts (HTTPS or localhost). Serving the
+/// pilot over plain HTTP on a LAN address would otherwise make every write fail.
+class WebSecureStorage implements SecureStorage {
+  const WebSecureStorage();
+
+  Future<SharedPreferences> get _prefs => SharedPreferences.getInstance();
+
+  @override
+  Future<String?> read(String key) async =>
+      (await _prefs).getString(key);
+
+  @override
+  Future<void> write(String key, String value) async {
+    await (await _prefs).setString(key, value);
+  }
+
+  @override
+  Future<void> delete(String key) async {
+    await (await _prefs).remove(key);
+  }
+}
+
 /// [SecureStorage] over the platform's own credential store.
 ///
 /// Android is backed by the EncryptedSharedPreferences keystore and iOS by the
 /// keychain. A token never goes in `shared_preferences`, which is plain text on
 /// disk.
-class PlatformSecureStorage implements SecureStorage {
-  const PlatformSecureStorage([
-    this._storage = const FlutterSecureStorage(),
-  ]);
+/// [SecureStorage] over `flutter_secure_storage`.
+class FlutterSecureStorageAdapter implements SecureStorage {
+  const FlutterSecureStorageAdapter([this._storage = const FlutterSecureStorage()]);
 
   final FlutterSecureStorage _storage;
 
@@ -77,6 +103,25 @@ class PlatformSecureStorage implements SecureStorage {
 
   @override
   Future<void> delete(String key) => _storage.delete(key: key);
+}
+class PlatformSecureStorage implements SecureStorage {
+  const PlatformSecureStorage([SecureStorage? storage])
+    : _storage = storage ??
+          (kIsWeb
+              ? const WebSecureStorage()
+              : const FlutterSecureStorageAdapter());
+
+  final SecureStorage _storage;
+
+  @override
+  Future<String?> read(String key) => _storage.read(key);
+
+  @override
+  Future<void> write(String key, String value) =>
+      _storage.write(key, value);
+
+  @override
+  Future<void> delete(String key) => _storage.delete(key);
 }
 
 /// [TokenStore] backed by the platform keystore, for the refresh token only.

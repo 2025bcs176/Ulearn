@@ -40,7 +40,7 @@ from app.models.enums import UserRole
 
 if TYPE_CHECKING:
     from app.models.competency import Competency
-    from app.models.course_unit import Subject, University
+    from app.models.course_unit import Program, Subject, University
     from app.models.tutor_profile import TutorProfile
 
 
@@ -123,6 +123,22 @@ class User(Base, TimestampMixin):
     #: the interesting thing about them. Not used by matching.
     year_of_study: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    #: Registration number issued by the university (e.g. 2025/BCS/176).
+    reg_no: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    #: Phone number in international format (e.g. +2567...).
+    tel: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+    #: The degree programme the student is enrolled in.
+    program_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("programs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    #: The semester the student is currently in (1 or 2).
+    semester: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     #: The faculty the student belongs to.
     #:
     #: This points at `subjects` rather than a dedicated faculties table, and
@@ -201,6 +217,7 @@ class User(Base, TimestampMixin):
 
     university: Mapped[University | None] = relationship()
     faculty: Mapped[Subject | None] = relationship()
+    program: Mapped[Program | None] = relationship()
     #: `foreign_keys` is required because `competencies` points at `users` twice
     #: -- the holder and the reviewer -- leaving the join otherwise ambiguous.
     competencies: Mapped[list[Competency]] = relationship(
@@ -232,6 +249,10 @@ class User(Base, TimestampMixin):
         the raw key column by accident.
         """
         return self.faculty.public_id if self.faculty else None
+
+    @property
+    def program_public_id(self) -> uuid.UUID | None:
+        return self.program.public_id if self.program else None
 
     def __repr__(self) -> str:
         return f"<User {self.email}>"

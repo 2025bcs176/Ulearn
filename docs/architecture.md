@@ -1,16 +1,8 @@
-<<<<<<< HEAD
-# Ulearn Architecture
-
-**System Design & Technical Blueprint**
-
-> This document describes the high-level architecture, core components, data model, matching engine, and validation protocol of Ulearn — a peer-to-peer academic support network for university students.
-=======
 # PeerPass Architecture
 
 **System Design & Technical Blueprint**
 
 > This document describes the high-level architecture, core components, data model, matching engine, and validation protocol of PeerPass — a peer-to-peer academic support network for university students.
->>>>>>> 48c4f527679b8c55f4e3a015c45d6ff56ce12121
 
 **Last Updated**: September 2026 | **Status**: Active
 
@@ -18,11 +10,7 @@
 
 ## 1. Vision & Design Goals
 
-<<<<<<< HEAD
-Ulearn exists to replace the “attend lectures and fight for your life” model with a reliable, stigma-free micro-intervention safety net. The architecture is shaped by the following goals:
-=======
 PeerPass exists to replace the “attend lectures and fight for your life” model with a reliable, stigma-free micro-intervention safety net. The architecture is shaped by the following goals:
->>>>>>> 48c4f527679b8c55f4e3a015c45d6ff56ce12121
 
 | Goal                        | Architectural Implication                                                           |
 | --------------------------- | ----------------------------------------------------------------------------------- |
@@ -57,12 +45,8 @@ PeerPass exists to replace the “attend lectures and fight for your life” mod
                                                   │  Users               │
                                                   │  Course_Units        │
                                                   │  Competencies        │
-<<<<<<< HEAD
-                                                  │  Session_Logs        │
-=======
                                                   │  Help_Requests       │
                                                   │  Sessions            │
->>>>>>> 48c4f527679b8c55f4e3a015c45d6ff56ce12121
                                                   │  Ratings             │
                                                   └──────────────────────┘
 ```
@@ -96,21 +80,6 @@ PeerPass exists to replace the “attend lectures and fight for your life” mod
 
 Organized in a **feature-first** structure:
 
-<<<<<<< HEAD
-- `auth` — Login, registration, SSO hand-off
-- `profile` — Student / tutor profile & role management
-- `matching` — Create topic requests, view matches, accept/reject
-- `sessions` — Schedule, join, and complete micro-sessions
-- `tutor_validation` — Upload transcript / link portfolio, view verification status
-- `incentives` — View logged hours and certificate status
-
-Shared layers:
-
-- Network client (Dio or equivalent)
-- Riverpod (or similar) for state management
-- Core theme, constants, and reusable widgets
-
-=======
 - `auth` — Registration, sign-in, and the onboarding wizard
 - `home` — The signed-in Home tab for matching and active-session discovery
 - `sessions` — The authenticated Sessions tab for active/past sessions and
@@ -219,7 +188,6 @@ animation package, no image assets. They are also finite rather than looping, so
 timeline forever behind a static screen. All of them respect
 `MediaQuery.disableAnimations`.
 
->>>>>>> 48c4f527679b8c55f4e3a015c45d6ff56ce12121
 ### 4.2 Backend (FastAPI)
 
 Layered structure:
@@ -236,11 +204,6 @@ core/         → Config, security, database session, exceptions
 
 - `MatchingService` — Core algorithm that pairs tutee requests with eligible tutors
 - `ValidationService` — Implements the three-tier tutor quality gate
-<<<<<<< HEAD
-- `SessionService` — Lifecycle of a tutoring session + logging
-- `IncentiveService` — Aggregates hours and prepares certificate data
-
-=======
 - `TutorService` — The discovery rail and one tutor's public profile
 - `SessionService` — Lifecycle of a tutoring session + logging
 - `IncentiveService` — Aggregates hours and prepares certificate data
@@ -272,20 +235,10 @@ for two of them. The ownership check and the response shape of a help request ar
 one decision, which is why they are one public function rather than two internals
 a route could mix and match.
 
->>>>>>> 48c4f527679b8c55f4e3a015c45d6ff56ce12121
 ### 4.3 Database (PostgreSQL)
 
 Primary tables (see Section 5 for details):
 
-<<<<<<< HEAD
-| Table          | Responsibility                                                  |
-| -------------- | --------------------------------------------------------------- |
-| `users`        | Identity, role (`tutee`, `provisional_tutor`, `verified_tutor`) |
-| `course_units` | University curriculum mapping                                   |
-| `competencies` | Tutor eligibility per course unit (grade + verification status) |
-| `session_logs` | Record of every completed or cancelled session                  |
-| `ratings`      | Post-session feedback that drives tutor promotion / demotion    |
-=======
 | Table               | Responsibility                                                   |
 | ------------------- | ---------------------------------------------------------------- |
 | `users`             | Identity and contact details; roles live in the `user_roles` join |
@@ -361,7 +314,6 @@ decision, never a product one.
 **Trimming is per field, not per model.** `app.schemas.base.Trimmed` is applied
 to names, topics, and feedback, and deliberately *not* to passwords, whose
 leading and trailing spaces are part of the secret.
->>>>>>> 48c4f527679b8c55f4e3a015c45d6ff56ce12121
 
 ---
 
@@ -370,72 +322,6 @@ leading and trailing spaces are part of the secret.
 ### 5.1 Entity Relationships (Conceptual)
 
 ```
-<<<<<<< HEAD
-Users 1 ─────── * Competencies * ─────── 1 Course_Units
-  │
-  │ 1
-  │
-  * Session_Logs
-  │
-  │ 1
-  │
-  * Ratings
-```
-
-### 5.2 Schema Highlights
-
-| Table            | Core Attributes                                               | Purpose                                                                               |
-| ---------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| **Users**        | `user_id`, `role_type`                                        | Tracks role (`tutee`, `provisional_tutor`, `verified_tutor`) to control access levels |
-| **Course_Units** | `unit_id`, `unit_code`                                        | Maps the exact university curriculum                                                  |
-| **Competencies** | `user_id`, `unit_id`, `grade_achieved`, `verification_status` | Validation gate requiring a minimum of B+ or A                                        |
-| **Session_Logs** | `session_id`, `status`, `duration_minutes`                    | Record of every tutoring session; feeds matching priority                             |
-| **Ratings**      | `session_id`, `score`, `feedback_text`                        | Post-session feedback; low ratings reduce matching priority                           |
-
-### 5.3 Detailed Table Definitions
-
-**Users**
-
-- `user_id` (PK)
-- `email`, `full_name`, `university_id` (optional)
-- `role_type` — `tutee` | `provisional_tutor` | `verified_tutor`
-- `is_active`, timestamps
-
-**Course_Units**
-
-- `unit_id` (PK)
-- `unit_code`, `unit_name`, `faculty`, `year_level`
-- Optional metadata for matching (topics, keywords)
-
-**Competencies**
-
-- `competency_id` (PK)
-- `user_id` (FK → users)
-- `unit_id` (FK → course_units)
-- `grade_achieved` (e.g. A, B+)
-- `verification_status` (boolean or enum: pending / verified / rejected)
-- `verification_source` (transcript | portfolio | manual)
-- Unique constraint on (`user_id`, `unit_id`)
-
-**Session_Logs**
-
-- `session_id` (PK)
-- `tutee_id`, `tutor_id` (FK → users)
-- `unit_id` / topic
-- `requested_at`, `started_at`, `ended_at`
-- `status` (requested | matched | completed | cancelled)
-- `duration_minutes`
-
-**Ratings**
-
-- `rating_id` (PK)
-- `session_id` (FK)
-- `rater_id`, `ratee_id`
-- `score` (e.g. 1–5)
-- `feedback_text`
-- Used by the validation engine to promote or demote tutors
-
-=======
 Universities 1 ─── * Grading_Scales 1 ─── * Grades
       │ 1                │ 1
       │                  │
@@ -680,11 +566,7 @@ because every table in this codebase carries one.
 
 ## 6. Multi-Tiered Tutor Validation Protocol
 
-<<<<<<< HEAD
-A peer-to-peer system is only useful if tutors are competent. Ulearn enforces quality through three sequential gates:
-=======
 A peer-to-peer system is only useful if tutors are competent. PeerPass enforces quality through three sequential gates:
->>>>>>> 48c4f527679b8c55f4e3a015c45d6ff56ce12121
 
 ### Tier 1 — Academic Data Gate (Hard Gate)
 
@@ -700,12 +582,6 @@ A peer-to-peer system is only useful if tutors are competent. PeerPass enforces 
 
 ### Tier 3 — Probationary Feedback Loop (Community Gate)
 
-<<<<<<< HEAD
-- New tutors start as `provisional_tutor`.
-- Every completed session requires a rating from the tutee.
-- High average rating → promotion to `verified_tutor` + leadership credits.
-- Low average rating → reduced matching priority or revocation of tutor status for that unit.
-=======
 - New tutors start at standing `probationary`.
 - Every completed session requires a rating from the tutee.
 - High average rating → standing `verified` + leadership credits.
@@ -717,7 +593,6 @@ what a person may do; the standing says how much they are trusted. Collapsing th
 two into one column, as the earlier draft did with `role_type`, would make a
 suspension indistinguishable from a role change and would lose the per-unit
 revocation this tier exists to express.
->>>>>>> 48c4f527679b8c55f4e3a015c45d6ff56ce12121
 
 This logic lives in `ValidationService` and is consulted by `MatchingService` before any match is proposed.
 
@@ -727,22 +602,6 @@ This logic lives in `ValidationService` and is consulted by `MatchingService` be
 
 ### High-Level Flow
 
-<<<<<<< HEAD
-1. Tutee submits a **topic request** (course unit + specific concept).
-2. System queries `Competencies` for tutors who:
-   - Have verified (or provisional) status for that unit
-   - Meet the current rating threshold
-   - Are available / not overloaded
-3. Ranking may consider:
-   - Verification tier (verified > provisional)
-   - Average rating
-   - Number of completed sessions in the unit
-   - Recency of activity
-4. Top candidate(s) are presented to the tutee (or auto-matched, depending on configuration).
-5. Once accepted, a `Session_Log` is created and the scheduling flow begins.
-
-The matching service is deliberately kept pure (no UI concerns) so it can later be exposed to institutional dashboards or LMS plugins.
-=======
 1. A tutee submits a **topic request** (course unit + specific concept), or asks
    for tutors for a course unit directly.
 2. One query runs over `competencies` joined to `user_roles`, keeping tutors who:
@@ -989,23 +848,6 @@ Tutor confirms → POST /v1/sessions
 Session Scheduled (in-app)
       │
       ▼
-<<<<<<< HEAD
-=======
-PIN Handshake: tutor reveals a 2-digit PIN, tutee submits it
-      │   (a missing PIN fails closed — never treated as a match)
-      ▼
-Session Completed  (status assigned first, then the accrual —
-                   so minutes bank exactly once)
-      │
-      ▼
-Rating Submitted → ValidationService updates tutor status
-      │
-      ▼
-IncentiveService logs hours → certificate eligibility
-```
-
-<<<<<<< HEAD
-=======
 ### 8.1 The PIN handshake is attendance evidence
 
 A two-digit PIN is weak as a secret and is not one. It exists to make attendance
@@ -1037,18 +879,10 @@ mistake is retractable. The unique constraint on
 under concurrent retries, and it is a database constraint rather than a service
 check because two simultaneous requests would both pass the check.
 
->>>>>>> 48c4f527679b8c55f4e3a015c45d6ff56ce12121
 ---
 
 ## 9. Security & Compliance
 
-<<<<<<< HEAD
-- **Authentication**: JWT for mobile sessions; designed for future University SSO (SAML/OAuth).
-- **Authorization**: Role-based access control via `role_type` and competency checks.
-- **Data Protection**: Compliant with the Uganda Data Protection and Privacy Act, 2019 (DPPA). Sensitive academic data (grades, transcripts) requires explicit consent and secure storage.
-- **Transport**: HTTPS only.
-- **Secrets**: Never committed; loaded from environment variables.
-=======
 The pilot's threat model is specific: an attacker holding a list of student email
 addresses, or a stolen copy of the database. Every choice below is aimed at one of
 those two, and the reasoning is recorded so a later change can be judged against
@@ -1441,15 +1275,10 @@ Stated explicitly so nothing here is mistaken for a control that exists:
 
 ## 12. Related Documents
 
-<<<<<<< HEAD
-- [CONTRIBUTING.md](./Contribution.md) — Contribution guidelines and Code of Conduct
-- [README.md](../README.md) — Project overview and local setup
-=======
 - [Contribution Guide](./Contribution.md) — Contribution guidelines and Code of Conduct
 - [Project Structure](./project-structure.md) — Repository layout and dependency direction
 - [README.md](../README.md) — Project overview and local setup
 - [MVP Brief](./MVP_Brief.md) - MVP Brief, covers what is in scope for the MVP and what is not and also future improvements.
->>>>>>> 48c4f527679b8c55f4e3a015c45d6ff56ce12121
 - Pilot roadmap and research proposal (project root / docs)
 
 ---

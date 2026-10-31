@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:peerpass/core/error/failures.dart';
 import 'package:peerpass/features/competencies/data/models/tutor_claim.dart';
 import 'package:peerpass/features/competencies/data/repositories/competencies_repository.dart';
@@ -82,6 +83,35 @@ class FakeCompetenciesRepository implements CompetenciesRepository {
     );
     claims.insert(0, created);
     return created;
+  }
+
+  @override
+  Future<TutorClaim> uploadEvidence({
+    required String competencyId,
+    required PlatformFile file,
+  }) async {
+    final index = claims.indexWhere((c) => c.id == competencyId);
+    if (index == -1) {
+      throw const NotFoundFailure('That claim could not be found.');
+    }
+    final updated = TutorClaim(
+      id: claims[index].id,
+      courseUnitId: claims[index].courseUnitId,
+      courseUnitCode: claims[index].courseUnitCode,
+      courseUnitName: claims[index].courseUnitName,
+      gradeId: claims[index].gradeId,
+      gradeLabel: claims[index].gradeLabel,
+      statusWire: claims[index].statusWire,
+      status: claims[index].status,
+      gradePoints: claims[index].gradePoints,
+      meetsThreshold: claims[index].meetsThreshold,
+      createdAt: claims[index].createdAt,
+      verifiedAt: claims[index].verifiedAt,
+      rejectionReason: claims[index].rejectionReason,
+      evidenceReference: 'uploaded://${file.name}',
+    );
+    claims[index] = updated;
+    return updated;
   }
 }
 
