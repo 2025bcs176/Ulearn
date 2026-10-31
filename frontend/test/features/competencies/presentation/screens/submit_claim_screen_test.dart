@@ -125,7 +125,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(
-      find.widgetWithText(TextFormField, 'Evidence reference or link'),
+      find.widgetWithText(TextFormField, 'Other reference URLs or GitHub'),
       'https://drive.example/transcript.pdf',
     );
     await tester.enterText(
@@ -198,7 +198,7 @@ void main() {
     await tester.tap(find.text('B+ (4.5)').last);
     await tester.pumpAndSettle();
     await tester.enterText(
-      find.widgetWithText(TextFormField, 'Evidence reference or link'),
+      find.widgetWithText(TextFormField, 'Other reference URLs or GitHub'),
       'transcript ref 4471',
     );
     await tester.pump();
@@ -214,7 +214,7 @@ void main() {
     // Still on the form, still holding what was typed.
     expect(find.text('Submit proof'), findsOneWidget);
     expect(
-      find.widgetWithText(TextFormField, 'Evidence reference or link'),
+      find.widgetWithText(TextFormField, 'Other reference URLs or GitHub'),
       findsOneWidget,
     );
     expect(find.text('Awaiting review'), findsNothing);
