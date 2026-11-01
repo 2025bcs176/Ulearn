@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:peerpass/app/app.dart';
 import 'package:peerpass/core/config/app_config.dart';
 import 'package:peerpass/core/network/api_client.dart';
+import 'package:peerpass/core/storage/session_cache.dart';
 import 'package:peerpass/core/storage/token_store.dart';
 import 'package:peerpass/features/auth/data/datasources/remote_academics_datasource.dart';
 import 'package:peerpass/features/auth/data/datasources/remote_auth_datasource.dart';
@@ -24,9 +25,12 @@ import 'package:peerpass/features/tutors/data/datasources/remote_tutors_datasour
 import 'package:peerpass/features/tutors/data/repositories/remote_tutors_repository.dart';
 import 'package:peerpass/features/tutors/data/repositories/tutors_repository.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   final config = AppConfig.fromEnvironment();
   final tokenStore = SecureTokenStore();
+  final sessionCache = SessionCache();
+  await sessionCache.open();
 
   // The refresh callback and the repository refer to each other: the
   // interceptor needs to be able to refresh, and refreshing is a repository
@@ -55,7 +59,7 @@ void main() {
   );
 
   final sessionsRepository = RemoteSessionsRepository(
-    RemoteSessionsDatasource(dio),
+    RemoteSessionsDatasource(dio, cache: sessionCache),
   );
 
   // One `Dio` for every datasource, so the token, the refresh and the retry

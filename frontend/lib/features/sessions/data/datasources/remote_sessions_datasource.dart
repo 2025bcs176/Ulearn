@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:peerpass/core/storage/session_cache.dart';
 
 /// Talks to the `/v1/sessions` and `/v1/ratings` endpoints the screens use.
 ///
@@ -9,9 +10,10 @@ import 'package:dio/dio.dart';
 /// the repository is where the wire shape becomes a model, so there is one place
 /// to look when the two disagree.
 class RemoteSessionsDatasource {
-  const RemoteSessionsDatasource(this._dio);
+  const RemoteSessionsDatasource(this._dio, {this.cache});
 
   final Dio _dio;
+  final SessionCache? cache;
 
   /// Every session the signed-in user is part of, newest first.
   ///
@@ -20,8 +22,18 @@ class RemoteSessionsDatasource {
   /// comes back. Asking the server to pre-sort or pre-filter would be a second
   /// place where "active" is defined.
   Future<List<Map<String, dynamic>>> sessionsForMe() async {
-    final response = await _dio.get<List<dynamic>>('/v1/sessions/me');
-    return (response.data ?? const <dynamic>[]).whereType<Map<String, dynamic>>().toList();
+    try {
+      final response = await _dio.get<List<dynamic>>('/v1/sessions/me');
+      final sessions = (response.data ?? const <dynamic>[])
+          .whereType<Map<String, dynamic>>()
+          .toList();
+      await cache?.writeSessions(sessions);
+      return sessions;
+    } on DioException {
+      final cached = await cache?.readSessions();
+      if (cached != null) return cached;
+      rethrow;
+    }
   }
 
   /// One session, re-read by public id.
