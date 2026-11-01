@@ -416,12 +416,12 @@ class TestRating:
     @pytest.mark.parametrize("score", [MIN_RATING - 1, MAX_RATING + 1, 0])
     def test_an_out_of_range_score_is_rejected(self, score: int) -> None:
         with pytest.raises(ValidationError):
-            RatingCreate(score=score)
+            RatingCreate(comprehension_helped=True, score=score)
 
     @pytest.mark.parametrize("score", [MIN_RATING, MAX_RATING])
     def test_the_bounds_themselves_are_accepted(self, score: int) -> None:
         """A gate at exactly B+ is a gate the boundary values must pass."""
-        assert RatingCreate(score=score).score == score
+        assert RatingCreate(comprehension_helped=True, score=score).score == score
 
     def test_the_bounds_agree_with_the_database(self) -> None:
         """Stated in two places, so the two are pinned to each other.
