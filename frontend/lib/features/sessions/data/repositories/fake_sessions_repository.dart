@@ -296,6 +296,14 @@ class FakeSessionsRepository implements SessionsRepository {
     return rating;
   }
 
+  @override
+  Future<RatingModel?> receivedRating({required String sessionId}) async {
+    for (final rating in submittedRatings) {
+      if (rating.sessionId == sessionId) return rating;
+    }
+    return null;
+  }
+
   /// The session with [sessionId], or a failure the way the API would.
   SessionModel _require(String sessionId) {
     for (final session in _sessions) {

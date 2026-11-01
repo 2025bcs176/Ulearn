@@ -990,6 +990,12 @@ opened the screen would be handed a tutor standing.
 
 The last 20 ratings the caller has received.
 
+### `GET /v1/ratings/session/{session_id}`
+
+Returns the tutee's submitted rating for a session to the tutor who taught it.
+The response is read-only and can be `null` while feedback is still outstanding;
+other users cannot use this endpoint to read the session's feedback.
+
 ### `POST /v1/ratings/{session_id}`
 
 `{"score": 1-5, "comprehension_helped": true, "feedback_text": "...", "endorsed_course_unit_ids": ["..."]}`.

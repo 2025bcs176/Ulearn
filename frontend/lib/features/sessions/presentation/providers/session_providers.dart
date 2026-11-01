@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:peerpass/core/error/failures.dart';
+import 'package:peerpass/core/state/session.dart';
 import 'package:peerpass/features/sessions/data/models/rating_model.dart';
 import 'package:peerpass/features/sessions/data/models/session_model.dart';
 import 'package:peerpass/features/sessions/data/repositories/sessions_repository.dart';
@@ -59,6 +60,23 @@ final activeSessionProvider = FutureProvider<SessionModel?>((ref) async {
   return activeSessionFrom(sessions);
 }, retry: (retryCount, error) => null);
 
+// Riverpod's family return type is not surfaced clearly enough for the analyzer
+// to infer this declaration without an explicit annotation.
+// ignore: specify_nonobvious_property_types
+final receivedRatingProvider = FutureProvider.family<RatingModel?, String>((
+  ref,
+  sessionId,
+) {
+  final viewerId = ref.watch(sessionControllerProvider).profile?.publicId;
+  final session = ref.watch(sessionDetailProvider(sessionId)).session;
+  if (viewerId == null || session == null || !session.isTutor(viewerId)) {
+    return null;
+  }
+  return ref
+      .read(sessionsRepositoryProvider)
+      .receivedRating(sessionId: sessionId);
+});
+
 /// Picks the session the home card shows out of [sessions].
 ///
 /// A function rather than a line inside the provider so the choice is testable on
@@ -82,10 +100,10 @@ SessionModel? activeSessionFrom(List<SessionModel> sessions) {
 /// one value -- an [AsyncError] would throw the session away to report a rejected
 /// six-digit guess.
 ///
-/// The rating is held here rather than re-read because there is no endpoint that
-/// returns it: `GET /v1/ratings/me/recent` is ratings *received* by a tutor, and
-/// `SessionResponse` carries only `is_rated`. So the score is known to the client
-/// that submitted it, and only for as long as this state is alive.
+/// A submitted rating is held here so the tutee can see it immediately after
+/// submission. Tutors read their received feedback through the scoped provider
+/// below, rather than treating the session-level `is_rated` flag as their own
+/// submission.
 @immutable
 class SessionDetailState {
   const SessionDetailState({

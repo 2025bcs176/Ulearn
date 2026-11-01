@@ -45,7 +45,14 @@ class SessionDetailScreen extends ConsumerWidget {
       final failure = state.loadFailure;
       if (failure != null) {
         return Scaffold(
-          appBar: AppBar(title: const Text('Session')),
+          appBar: AppBar(
+            title: const Text('Session'),
+            leading: IconButton(
+              tooltip: 'Back to Home',
+              icon: const Icon(Icons.home_outlined),
+              onPressed: () => context.go(AppRoutes.home),
+            ),
+          ),
           body: SafeArea(
             child: Center(
               child: ContentWidthLimiter(
@@ -140,6 +147,10 @@ class _Body extends ConsumerWidget {
         ],
         const SizedBox(height: AppDimens.lg),
         SessionPinSection(session: session, viewerId: viewerId),
+        if (session.status == TutoringSessionStatus.completed &&
+            viewerId != null &&
+            session.isTutor(viewerId))
+          _ReceivedRating(sessionId: session.id),
         if (state.actionFailure != null && !state.pinRejected) ...[
           const SizedBox(height: AppDimens.md),
           Text(
@@ -178,6 +189,55 @@ class _Body extends ConsumerWidget {
     final name = session.otherPartyName(viewerId);
     if (name != null && name.trim().isNotEmpty) return name;
     return session.otherPartyId(viewerId) ?? 'Not available';
+  }
+}
+
+class _ReceivedRating extends ConsumerWidget {
+  const _ReceivedRating({required this.sessionId});
+
+  final String sessionId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final rating = ref.watch(receivedRatingProvider(sessionId));
+    return rating.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.only(top: AppDimens.lg),
+        child: LinearProgressIndicator(),
+      ),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (value) {
+        if (value == null) return const SizedBox.shrink();
+        return Card(
+          margin: const EdgeInsets.only(top: AppDimens.lg),
+          child: Padding(
+            padding: const EdgeInsets.all(AppDimens.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Feedback received',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: AppDimens.sm),
+                Text('${value.score}/5 stars'),
+                if (value.feedbackText case final note?) ...[
+                  const SizedBox(height: AppDimens.sm),
+                  Text(note),
+                ],
+                const SizedBox(height: AppDimens.xs),
+                Text(
+                  value.comprehensionHelped
+                      ? 'The student said the session helped them understand the topic.'
+                      : 'The student said they still need help with the topic.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 

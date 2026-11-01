@@ -92,6 +92,29 @@ async def test_submit_rating_promotes_a_tutor_to_verified(db_session):
     assert profile.rating_count == 4
 
 
+async def test_tutor_can_read_the_feedback_received_for_a_session(db_session):
+    student, tutor, session, _profile = await _seed_session(db_session)
+
+    await rating_service.submit_rating(
+        db_session,
+        student,
+        session.public_id,
+        RatingCreate(
+            comprehension_helped=True,
+            score=5,
+            feedback_text="The explanation helped.",
+        ),
+    )
+
+    rating = await rating_service.get_session_rating(
+        db_session, tutor, session.public_id
+    )
+
+    assert rating is not None
+    assert rating.score == 5
+    assert rating.feedback_text == "The explanation helped."
+
+
 async def test_submit_rating_reduces_standing_when_average_falls_below_bar(db_session):
     student = User(
         email="student2@mak.ac.ug",

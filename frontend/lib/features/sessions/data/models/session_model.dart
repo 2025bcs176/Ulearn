@@ -251,11 +251,9 @@ class SessionModel {
 
   /// Whether a rating exists for this session yet.
   ///
-  /// A flag and not the rating. `GET /v1/ratings/me/recent` returns ratings
-  /// *received* by a tutor, so a client has no endpoint that returns the rating
-  /// the signed-in user gave for a given session; the score itself is only known
-  /// to the client that just submitted it, and is held on the detail screen for
-  /// as long as that screen is open.
+  /// A flag and not the rating. The session detail screen fetches the
+  /// participant-scoped rating separately when the tutor needs to read feedback
+  /// received for this session.
   final bool isRated;
 
   final bool isOfflineSnapshot;

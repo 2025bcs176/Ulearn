@@ -131,6 +131,14 @@ class RemoteSessionsRepository implements SessionsRepository {
     );
   }
 
+  @override
+  Future<RatingModel?> receivedRating({required String sessionId}) {
+    return _guard(() async {
+      final payload = await _remote.receivedRating(sessionId);
+      return payload == null ? null : RatingModel.fromJson(payload);
+    });
+  }
+
   /// Runs a call and translates whatever comes back into a [Failure].
   Future<T> _guard<T>(Future<T> Function() call) async {
     try {

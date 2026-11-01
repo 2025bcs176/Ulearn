@@ -99,6 +99,9 @@ abstract interface class SessionsRepository {
     String? feedbackText,
     List<String> endorsedCourseUnitIds = const [],
   });
+
+  /// The tutor's read-only feedback for one completed session.
+  Future<RatingModel?> receivedRating({required String sessionId});
 }
 
 /// The sessions contract, as a live instance.

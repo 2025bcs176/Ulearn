@@ -455,3 +455,38 @@ async def list_recent_ratings(
         .limit(limit)
     )
     return [RatingResponse.model_validate(row) for row in result.scalars()]
+
+
+async def get_session_rating(
+    db: AsyncSession,
+    user: User,
+    session_id: uuid.UUID,
+) -> RatingResponse | None:
+    """Return the tutee's rating to the tutor for one session.
+
+    The tutor may read only feedback attached to a session they taught. The
+    tutee submits it, but both participants may see the resulting record through
+    their own session; this endpoint is used by the tutor's read-only detail
+    view.
+    """
+    result = await db.execute(
+        select(Rating)
+        .join(Rating.session)
+        .where(
+            Session.public_id == session_id,
+            Rating.rater_id == Session.tutee_id,
+        )
+        .options(
+            selectinload(Rating.session),
+            selectinload(Rating.rater),
+            selectinload(Rating.ratee),
+        )
+    )
+    rating = result.scalar_one_or_none()
+    if rating is None:
+        return None
+    if rating.ratee_id != user.id:
+        raise AuthorizationProblem(
+            "Only the tutor who taught this session can view it."
+        )
+    return RatingResponse.model_validate(rating)

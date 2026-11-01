@@ -192,4 +192,11 @@ class RemoteSessionsDatasource {
     );
     return response.data!;
   }
+
+  Future<Map<String, dynamic>?> receivedRating(String sessionId) async {
+    final response = await _dio.get<Map<String, dynamic>?>(
+      '/v1/ratings/session/$sessionId',
+    );
+    return response.data;
+  }
 }

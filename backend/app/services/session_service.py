@@ -42,7 +42,7 @@ MAX_PIN_ATTEMPTS = 5
 #: A cooldown rather than a permanent lock, because the session still has to be
 #: startable and both parties are physically present.
 PIN_LOCKOUT = timedelta(minutes=15)
-PIN_LIFETIME = timedelta(minutes=20)
+PIN_LIFETIME = timedelta(hours=1)
 
 
 def _utc(dt: datetime) -> datetime:

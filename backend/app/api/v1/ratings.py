@@ -35,6 +35,20 @@ async def my_recent_ratings(
 # order, and a `POST /ratings/{session_id}` would otherwise sit in front of a
 # literal path that shares the prefix.
 @router.post(
+    "/session/{session_id}",
+    response_model=RatingResponse | None,
+    summary="Read feedback received for one session",
+)
+async def session_rating(
+    session_id: uuid.UUID,
+    caller: CurrentUser,
+    db: DatabaseSession,
+) -> RatingResponse | None:
+    """Return the tutor's read-only feedback for a completed session."""
+    return await rating_service.get_session_rating(db, caller.user, session_id)
+
+
+@router.post(
     "/{session_id}",
     response_model=RatingResponse,
     status_code=status.HTTP_201_CREATED,
