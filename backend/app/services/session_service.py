@@ -260,6 +260,31 @@ async def reveal_completion_pin(
     if session.completion_requested_at is None:
         raise ConflictProblem("The tutor has not requested completion.")
 
+    locked_result = await db.execute(
+        select(Session)
+        .where(Session.id == session.id)
+        .options(
+            selectinload(Session.help_request),
+            selectinload(Session.tutee),
+            selectinload(Session.tutor),
+            selectinload(Session.course_unit),
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    session = locked_result.scalar_one()
+    if session.status is not SessionStatus.IN_PROGRESS:
+        raise ConflictProblem("This session is not waiting for completion.")
+    if session.completion_requested_at is None:
+        raise ConflictProblem("The tutor has not requested completion.")
+    if session.completion_pin_locked_until and (
+        _utc(session.completion_pin_locked_until) > _utc(datetime.now(UTC))
+    ):
+        raise TooManyRequestsProblem(
+            "Too many wrong completion codes. Wait before trying again.",
+            retry_after_seconds=_completion_pin_lock_remaining(session),
+        )
+
     code, session.completion_pin_hash = Session.generate_session_pin()
     session.completion_pin_expires_at = _utc(datetime.now(UTC) + PIN_LIFETIME)
     session.completion_pin_failed_attempts = 0
@@ -283,9 +308,20 @@ async def verify_completion_pin(
         raise ConflictProblem("This session is not waiting for completion.")
 
     locked_result = await db.execute(
-        select(Session).where(Session.id == session.id).with_for_update()
+        select(Session)
+        .where(Session.id == session.id)
+        .options(
+            selectinload(Session.help_request),
+            selectinload(Session.tutee),
+            selectinload(Session.tutor),
+            selectinload(Session.course_unit),
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     session = locked_result.scalar_one()
+    if session.status is not SessionStatus.IN_PROGRESS:
+        raise ConflictProblem("This session is not waiting for completion.")
     if session.completion_pin_locked_until and (
         _utc(session.completion_pin_locked_until) > _utc(datetime.now(UTC))
     ):

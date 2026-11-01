@@ -100,6 +100,7 @@ Future<void> main() async {
       // the failure is immediate and names the missing override.
       overrides: [
         authRepositoryProvider.overrideWithValue(repository),
+        sessionCacheProvider.overrideWithValue(sessionCache),
         sessionsRepositoryProvider.overrideWithValue(sessionsRepository),
         tutorsRepositoryProvider.overrideWithValue(tutorsRepository),
         matchingRepositoryProvider.overrideWithValue(matchingRepository),

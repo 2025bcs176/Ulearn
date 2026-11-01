@@ -137,9 +137,12 @@ async def test_completion_code_is_revealed_to_tutee_and_verified_by_tutor(
 
 
 async def test_direct_completion_transition_is_rejected(handshake: dict) -> None:
+    started = await _enter_start(handshake, handshake["start_pin"])
+    assert started.status_code == 200
     response = await handshake["client"].post(
         f"/v1/sessions/{handshake['session_id']}/transition",
-        headers=bearer(handshake["student"]),
+        headers=bearer(handshake["tutor"]),
         json={"status": "completed"},
     )
     assert response.status_code == 422
+    assert response.json()["errors"]["status"] == "completion handshake required"

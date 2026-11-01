@@ -1,6 +1,7 @@
 import uuid
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -42,7 +43,15 @@ async def create_report(
         description=payload.description,
     )
     db.add(report)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as error:
+        await db.rollback()
+        if "uq_session_reports_open_reporter" not in str(error.orig):
+            raise
+        raise ConflictProblem(
+            "You already have an open report for this session."
+        ) from error
     result = await db.execute(
         select(SessionReport)
         .where(SessionReport.id == report.id)

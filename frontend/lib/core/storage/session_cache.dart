@@ -1,7 +1,10 @@
 import 'dart:convert';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+
+final sessionCacheProvider = Provider<SessionCache?>((ref) => null);
 
 /// Encrypted, bounded cache for read-only session history.
 class SessionCache {
@@ -20,6 +23,22 @@ class SessionCache {
 
   final FlutterSecureStorage _secureStorage;
   late final Box<String> _box;
+  String? _accountId;
+
+  String? get accountId => _accountId;
+
+  /// Switches the cache namespace before authenticated reads begin.
+  ///
+  /// A namespace is captured at the start of each operation, so a response
+  /// finishing after sign-out cannot write into the next account's cache.
+  void activateAccount(String accountId) {
+    if (accountId.isEmpty || accountId == _accountId) return;
+    _accountId = accountId;
+  }
+
+  void deactivateAccount() {
+    _accountId = null;
+  }
 
   Future<void> open() async {
     await Hive.initFlutter();
@@ -37,13 +56,16 @@ class SessionCache {
   }
 
   Future<List<Map<String, dynamic>>?> readSessions() async {
-    final storedAt = _box.get(_storedAtKey);
-    final payload = _box.get(_payloadKey);
+    final keys = _keys(_payloadKey, _storedAtKey);
+    if (keys == null) return null;
+    final storedAt = _box.get(keys.$2);
+    final payload = _box.get(keys.$1);
     if (storedAt == null || payload == null) return null;
     final timestamp = DateTime.tryParse(storedAt);
     if (timestamp == null ||
         DateTime.now().toUtc().difference(timestamp.toUtc()) > _maxAge) {
-      await clear();
+      await _box.delete(keys.$1);
+      await _box.delete(keys.$2);
       return null;
     }
     final decoded = jsonDecode(payload);
@@ -55,17 +77,24 @@ class SessionCache {
   }
 
   Future<void> writeSessions(List<Map<String, dynamic>> sessions) async {
-    await _box.put(_payloadKey, jsonEncode(sessions));
-    await _box.put(_storedAtKey, DateTime.now().toUtc().toIso8601String());
+    final keys = _keys(_payloadKey, _storedAtKey);
+    if (keys == null) return;
+    await _box.put(keys.$1, jsonEncode(sessions));
+    await _box.put(keys.$2, DateTime.now().toUtc().toIso8601String());
   }
 
   Future<List<Map<String, dynamic>>?> readHelpRequests({
     required bool awaitingTutor,
   }) async {
-    return await _readList(
-      awaitingTutor ? _awaitingRequestsPayloadKey : _myRequestsPayloadKey,
-      awaitingTutor ? _awaitingRequestsStoredAtKey : _myRequestsStoredAtKey,
-    );
+    final payloadKey = awaitingTutor
+        ? _awaitingRequestsPayloadKey
+        : _myRequestsPayloadKey;
+    final storedAtKey = awaitingTutor
+        ? _awaitingRequestsStoredAtKey
+        : _myRequestsStoredAtKey;
+    final keys = _keys(payloadKey, storedAtKey);
+    if (keys == null) return null;
+    return await _readList(keys.$1, keys.$2);
   }
 
   Future<void> writeHelpRequests(
@@ -78,8 +107,10 @@ class SessionCache {
     final storedAtKey = awaitingTutor
         ? _awaitingRequestsStoredAtKey
         : _myRequestsStoredAtKey;
-    await _box.put(payloadKey, jsonEncode(requests));
-    await _box.put(storedAtKey, DateTime.now().toUtc().toIso8601String());
+    final keys = _keys(payloadKey, storedAtKey);
+    if (keys == null) return;
+    await _box.put(keys.$1, jsonEncode(requests));
+    await _box.put(keys.$2, DateTime.now().toUtc().toIso8601String());
   }
 
   Future<List<Map<String, dynamic>>?> _readList(
@@ -104,5 +135,26 @@ class SessionCache {
         .toList();
   }
 
-  Future<void> clear() => _box.clear();
+  Future<void> clear() async {
+    final account = _accountId;
+    if (account == null) return;
+    for (final key in [
+      _payloadKey,
+      _storedAtKey,
+      _myRequestsPayloadKey,
+      _myRequestsStoredAtKey,
+      _awaitingRequestsPayloadKey,
+      _awaitingRequestsStoredAtKey,
+    ]) {
+      await _box.delete(_scopedKey(account, key));
+    }
+  }
+
+  (String, String)? _keys(String payloadKey, String storedAtKey) {
+    final account = _accountId;
+    if (account == null) return null;
+    return (_scopedKey(account, payloadKey), _scopedKey(account, storedAtKey));
+  }
+
+  String _scopedKey(String account, String key) => '$account::$key';
 }
