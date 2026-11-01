@@ -10,6 +10,7 @@ import 'package:peerpass/app/splash_screen.dart';
 import 'package:peerpass/core/error/failures.dart';
 import 'package:peerpass/core/models/user_profile.dart';
 import 'package:peerpass/core/models/user_role.dart';
+import 'package:peerpass/core/state/session.dart';
 import 'package:peerpass/features/auth/data/repositories/auth_repository.dart';
 import 'package:peerpass/features/auth/data/repositories/fake_auth_repository.dart';
 import 'package:peerpass/features/auth/presentation/providers/auth_providers.dart';
@@ -182,6 +183,37 @@ void main() {
 
     expect(find.text(_homeText), findsNothing);
     expect(find.text('What is your name?'), findsOneWidget);
+  });
+
+  test('a late restore cannot replace a newer signed-in account', () async {
+    const arali = UserProfile(
+      publicId: 'arali',
+      email: 'arali@must.ac.ug',
+      fullName: 'Arali Amooti',
+      roles: {UserRole.student},
+    );
+    const gilbert = UserProfile(
+      publicId: 'gilbert',
+      email: 'gilbert@must.ac.ug',
+      fullName: 'Gilbert Asiimwe',
+      roles: {UserRole.student, UserRole.tutor},
+    );
+    final repository = _GatedAuthRepository()
+      ..session = arali
+      ..refreshToken = 'refresh';
+    final container = ProviderContainer(
+      overrides: [authRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+
+    final controller = container.read(authControllerProvider);
+    repository.session = gilbert;
+    await controller.signIn(email: gilbert.email, password: 'password');
+
+    repository.release(profile: arali);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(container.read(sessionControllerProvider).profile, gilbert);
   });
 
   testWidgets('a network failure keeps the user on splash with a way out', (
