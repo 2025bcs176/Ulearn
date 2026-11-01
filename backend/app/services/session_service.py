@@ -48,6 +48,7 @@ MAX_PIN_ATTEMPTS = 5
 #: enough that brute-forcing 100 candidates is pointless and short enough that a
 #: genuine typo is not a dead session.
 PIN_LOCKOUT = timedelta(minutes=15)
+PIN_LIFETIME = timedelta(minutes=20)
 
 
 def _utc(dt: datetime) -> datetime:
@@ -115,6 +116,7 @@ async def create_session(
     if existing is not None:
         raise ConflictProblem("That help request already has an accepted session.")
 
+    _, session_pin_hash = Session.generate_session_pin()
     session = Session(
         help_request_id=help_request.id,
         tutee_id=help_request.tutee_id,
@@ -123,7 +125,8 @@ async def create_session(
         topic=payload.topic or help_request.topic,
         scheduled_start=payload.scheduled_start,
         duration_minutes=payload.duration_minutes,
-        session_pin=Session.generate_session_pin(),
+        session_pin_hash=session_pin_hash,
+        session_pin_expires_at=_utc(datetime.now(UTC) + PIN_LIFETIME),
         meeting_link=(payload.meeting_link or "").strip() or None,
         status=SessionStatus.SCHEDULED,
     )
@@ -204,16 +207,10 @@ async def transition_session(
         )
 
     if payload.status is SessionStatus.COMPLETED:
-        if session.started_at is None:
-            raise ValidationProblem(
-                "The session must start before it can be completed.",
-                errors={"status": "in_progress required"},
-            )
-        session.ended_at = _utc(session.ended_at or datetime.now(UTC))
-        elapsed = int(
-            (_utc(session.ended_at) - _utc(session.started_at)).total_seconds() // 60
+        raise ValidationProblem(
+            "Use the completion handshake to complete this session.",
+            errors={"status": "completion handshake required"},
         )
-        session.duration_minutes = max(1, elapsed)
 
     if payload.status is SessionStatus.CANCELLED:
         session.cancelled_by_id = user.id
@@ -240,6 +237,81 @@ async def transition_session(
     return await _session_response(db, session)
 
 
+async def request_completion_pin(
+    db: AsyncSession, user: User, session_id: uuid.UUID
+) -> SessionPinResponse:
+    """Create the one-time code used to confirm a completed session."""
+    session = await _load_session_for_user(db, user, session_id)
+    if session.tutor_id != user.id:
+        raise AuthorizationProblem("Only the tutor can request completion.")
+    if session.status is not SessionStatus.IN_PROGRESS:
+        raise ConflictProblem("Only an in-progress session can be completed.")
+
+    code, session.completion_pin_hash = Session.generate_session_pin()
+    session.completion_pin_expires_at = _utc(datetime.now(UTC) + PIN_LIFETIME)
+    session.completion_requested_at = _utc(datetime.now(UTC))
+    session.completion_pin_failed_attempts = 0
+    session.completion_pin_locked_until = None
+    await db.commit()
+    return SessionPinResponse(
+        session_id=session.public_id,
+        session_pin=code,
+        attempts_remaining=MAX_PIN_ATTEMPTS,
+    )
+
+
+async def verify_completion_pin(
+    db: AsyncSession, user: User, session_id: uuid.UUID, pin: str
+) -> SessionResponse:
+    """Confirm completion with the code requested by the tutor."""
+    session = await _load_session_for_user(db, user, session_id)
+    if session.tutor_id != user.id:
+        raise AuthorizationProblem("Only the tutor can confirm completion.")
+    if session.status is not SessionStatus.IN_PROGRESS:
+        raise ConflictProblem("This session is not waiting for completion.")
+
+    locked_result = await db.execute(
+        select(Session).where(Session.id == session.id).with_for_update()
+    )
+    session = locked_result.scalar_one()
+    if session.completion_pin_locked_until and (
+        _utc(session.completion_pin_locked_until) > _utc(datetime.now(UTC))
+    ):
+        raise TooManyRequestsProblem(
+            "Too many wrong completion codes. Wait before trying again.",
+            retry_after_seconds=_completion_pin_lock_remaining(session),
+        )
+    if (
+        not session.completion_pin_hash
+        or not session.completion_pin_expires_at
+        or _utc(session.completion_pin_expires_at) <= _utc(datetime.now(UTC))
+    ):
+        raise ConflictProblem("The completion code has expired.")
+
+    supplied = Session.hash_session_pin(pin.strip())
+    if not secrets.compare_digest(supplied, session.completion_pin_hash):
+        session.completion_pin_failed_attempts += 1
+        if session.completion_pin_failed_attempts >= MAX_PIN_ATTEMPTS:
+            session.completion_pin_locked_until = _utc(datetime.now(UTC) + PIN_LOCKOUT)
+        await db.commit()
+        raise ValidationProblem(
+            "The completion code is incorrect.",
+            errors={"pin": "incorrect"},
+        )
+
+    session.status = SessionStatus.COMPLETED
+    session.ended_at = _utc(datetime.now(UTC))
+    elapsed = int(
+        (_utc(session.ended_at) - _utc(session.started_at)).total_seconds() // 60
+    )
+    session.duration_minutes = max(1, elapsed)
+    session.completion_pin_hash = None
+    session.completion_pin_expires_at = None
+    await rating_service.record_completion(db, session)
+    await db.commit()
+    return await _session_response(db, session)
+
+
 async def reveal_session_pin(
     db: AsyncSession,
     user: User,
@@ -261,13 +333,15 @@ async def reveal_session_pin(
     if session.status is not SessionStatus.SCHEDULED:
         raise ConflictProblem("This session has already started.")
 
-    pin = (session.session_pin or "").strip()
-    if not pin:
-        raise ConflictProblem("This session has no handshake PIN to reveal.")
+    code, session.session_pin_hash = Session.generate_session_pin()
+    session.session_pin_expires_at = _utc(datetime.now(UTC) + PIN_LIFETIME)
+    await db.commit()
 
+    # The code is returned only through this party-specific endpoint. The
+    # shared session response never carries it.
     return SessionPinResponse(
         session_id=session.public_id,
-        session_pin=pin,
+        session_pin=code,
         attempts_remaining=max(0, MAX_PIN_ATTEMPTS - session.pin_failed_attempts),
     )
 
@@ -282,13 +356,22 @@ def _pin_lock_remaining(session: Session) -> int:
     return int(remaining) + 1 if remaining > 0 else 0
 
 
+def _completion_pin_lock_remaining(session: Session) -> int:
+    if session.completion_pin_locked_until is None:
+        return 0
+    remaining = (
+        _utc(session.completion_pin_locked_until) - _utc(datetime.now(UTC))
+    ).total_seconds()
+    return int(remaining) + 1 if remaining > 0 else 0
+
+
 async def verify_session_pin(
     db: AsyncSession,
     user: User,
     session_id: uuid.UUID,
     pin: str,
 ) -> SessionResponse:
-    """The tutee enters the two digits the tutor read out, starting the session.
+    """The tutee enters the six-digit code delivered for this session.
 
     Throttled on the row. The pin has 100 possible values, so without a ceiling
     this endpoint is a free oracle: a caller can walk the whole space in a second
@@ -323,8 +406,13 @@ async def verify_session_pin(
 
     # Fails closed: a session with no stored PIN must reject every candidate,
     # including a blank one, rather than treating "no PIN" as "PIN matches".
-    expected = (session.session_pin or "").strip()
-    if not expected or not secrets.compare_digest(pin.strip(), expected):
+    expires_at = session.session_pin_expires_at
+    if expires_at is None or _utc(expires_at) <= _utc(datetime.now(UTC)):
+        raise ConflictProblem("The session PIN has expired.")
+
+    expected = session.session_pin_hash
+    supplied = Session.hash_session_pin(pin.strip())
+    if not expected or not secrets.compare_digest(supplied, expected):
         session.pin_failed_attempts += 1
         if session.pin_failed_attempts >= MAX_PIN_ATTEMPTS:
             session.pin_locked_until = _utc(datetime.now(UTC) + PIN_LOCKOUT)
@@ -341,6 +429,8 @@ async def verify_session_pin(
     # typos the tutee already recovered from.
     session.pin_failed_attempts = 0
     session.pin_locked_until = None
+    session.session_pin_hash = None
+    session.session_pin_expires_at = None
     session.status = SessionStatus.IN_PROGRESS
     session.started_at = _utc(session.started_at or datetime.now(UTC))
     await db.flush()

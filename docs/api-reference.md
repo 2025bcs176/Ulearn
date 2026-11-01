@@ -848,8 +848,8 @@ response does not confirm that someone else's session exists.
 
 ### `POST /v1/sessions`
 
-Confirms a selected help request and creates the live session. 201 with the
-session, and a two-digit handshake PIN is issued.
+Confirms a selected help request and creates the scheduled session. 201 with the
+session, and a six-digit one-time handshake code is issued.
 
 The PIN is **not** in the response. It belongs to the tutor and is read from
 `GET /v1/sessions/{session_id}/pin`; see below for why it is not shared.
@@ -911,15 +911,15 @@ every call.
 
 ### `POST /v1/sessions/{session_id}/verify-pin`
 
-`{"pin": "42"}` — **the tutee submits the code the tutor read out.** Moves the
+`{"pin": "123456"}` — **the tutee submits the code the tutor shared.** Moves the
 session to `in_progress` when the code matches.
 
 The tutee only. A tutor asking here gets a 403: they are the one reading the
 digits aloud, so entering them would prove nothing, and it would let a tutor
 start a session on behalf of a student who never arrived.
 
-Two-digit, so the whole search space is 100 values, which is why attempts are
-counted. After **5** wrong entries the tutee is put on a **15 minute** cooldown
+Six-digit and stored only as a SHA-256 digest. The code expires after **20
+minutes**. After **5** wrong entries the tutee is put on a **15 minute** cooldown
 and every further attempt — including the correct one — is a **429** carrying
 `retry_after_seconds`. The counter is on the session row, not in process memory,
 so it survives a restart and is shared across workers; it is committed on the
@@ -928,14 +928,14 @@ treated as a match.
 
 ### `GET /v1/sessions/{session_id}/pin`
 
-The tutor's half of the handshake: the two digits to read out. **403 for the
+The tutor's half of the handshake: the six digits to share. **403 for the
 tutee**, because a tutee who could read their own code would have nothing to
 prove. Unavailable once the session has started.
 
 ```json
 {
   "session_id": "9f35…",
-  "session_pin": "42",
+  "session_pin": "123456",
   "attempts_remaining": 5
 }
 ```
@@ -953,12 +953,23 @@ with no attempt counter, which made all 100 candidates walkable without touching
 the cooldown; it now refuses `in_progress` and points here. One path means the
 ceiling cannot be circumvented.
 
+### `POST /v1/sessions/{session_id}/request-completion`
+
+The tutor requests a second six-digit one-time code after the session has
+started. The code expires after 20 minutes and is shared with the tutee.
+
+### `POST /v1/sessions/{session_id}/verify-completion`
+
+The tutor submits the second code. A successful verification records the end
+timestamp, calculates session minutes, and moves the session to `completed`.
+Direct `completed` transitions are rejected. An expired or exhausted code leaves
+the session in progress for operator review.
+
 ## Ratings
 
-One rating per (rater, session). A second submission from the same rater
-**updates** the existing row and adjusts the tutor's running total rather than
-counting the change twice, so the route returns 201 either way and the body is
-the rating that now stands. Ratings exist only for `completed` sessions.
+One immutable tutee rating per session. A second submission is rejected, and
+tutor-to-tutee ratings are not accepted. Ratings exist only for `completed`
+sessions and include the required comprehension answer.
 
 ### `GET /v1/ratings/me`
 
@@ -973,7 +984,7 @@ The last 20 ratings the caller has received.
 
 ### `POST /v1/ratings/{session_id}`
 
-`{"score": 1-5, "feedback_text": "...", "endorsed_course_unit_ids": ["..."]}`.
+`{"score": 1-5, "comprehension_helped": true, "feedback_text": "...", "endorsed_course_unit_ids": ["..."]}`.
 201 with the rating.
 
 `endorsed_course_unit_ids` is optional and is **not** part of the score. It
@@ -981,13 +992,18 @@ records "this tutor knows this unit" — a claim about subject coverage that is
 stored separately in `unit_endorsements` and is never read when promotion is
 computed. Only the session's own `course_unit_id` may be endorsed; any other
 unit is a 422, because a session is evidence about one unit and no more.
-Submitting a corrected rating replaces the rater's previous endorsements for
-that session rather than accumulating them.
+Feedback cannot be edited after submission. The comprehension answer is stored
+with the rating and contributes to anonymized pilot analytics.
 
-Either party may rate a completed session. Only the session's **tutor** has
-standing to move: a tutor rating their tutee stores the feedback and leaves
-every tutor counter untouched, and does not create a `Tutor_Profile` for the
-student.
+## Safeguarding reports
+
+### `POST /v1/sessions/{session_id}/reports`
+
+Creates a report for a session participant. The category is one of `safety`,
+`harassment`, `fraud`, `venue`, or `other`; an optional description is retained
+for operator review. A reporter may not create a second open report for the same
+session. Reports are visible to the safeguarding operator, not to the other
+participant.
 
 Declared after the literal `/me` routes above because FastAPI matches in
 declaration order.

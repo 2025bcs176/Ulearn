@@ -82,7 +82,7 @@ async def transition_session(
 @router.post(
     "/{session_id}/verify-pin",
     response_model=SessionResponse,
-    summary="Verify the two-digit session handshake pin",
+    summary="Verify the six-digit session handshake code",
 )
 async def verify_session_pin(
     session_id: uuid.UUID,
@@ -113,3 +113,34 @@ async def reveal_session_pin(
     own PIN the handshake would prove nothing.
     """
     return await session_service.reveal_session_pin(db, caller.user, session_id)
+
+
+@router.post(
+    "/{session_id}/request-completion",
+    response_model=SessionPinResponse,
+    summary="Request a completion confirmation code",
+)
+async def request_completion_pin(
+    session_id: uuid.UUID,
+    caller: CurrentUser,
+    db: DatabaseSession,
+) -> SessionPinResponse:
+    """Generate a one-time completion code for the tutor to share."""
+    return await session_service.request_completion_pin(db, caller.user, session_id)
+
+
+@router.post(
+    "/{session_id}/verify-completion",
+    response_model=SessionResponse,
+    summary="Verify the completion confirmation code",
+)
+async def verify_completion_pin(
+    session_id: uuid.UUID,
+    payload: VerifyPinRequest,
+    caller: CurrentUser,
+    db: DatabaseSession,
+) -> SessionResponse:
+    """Confirm the session and record its end timestamp."""
+    return await session_service.verify_completion_pin(
+        db, caller.user, session_id, payload.pin
+    )

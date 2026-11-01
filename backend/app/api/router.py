@@ -15,6 +15,7 @@ from app.api.v1 import (
     incentives,
     matching,
     ratings,
+    reports,
     sessions,
     tutors,
     users,
@@ -33,5 +34,6 @@ api_router.include_router(competencies.router)
 api_router.include_router(incentives.router)
 api_router.include_router(matching.router)
 api_router.include_router(ratings.router)
+api_router.include_router(reports.router)
 api_router.include_router(sessions.router)
 api_router.include_router(tutors.router)

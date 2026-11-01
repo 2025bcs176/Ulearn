@@ -257,6 +257,6 @@ class VerifyPinRequest(RequestSchema):
     """
 
     pin: str = Field(
-        pattern=r"^[0-9]{2}$",
-        description="The two digits the tutor read out.",
+        pattern=r"^[0-9]{6}$",
+        description="The six-digit one-time handshake code.",
     )
