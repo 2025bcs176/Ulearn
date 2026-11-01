@@ -39,6 +39,13 @@ abstract interface class SessionsRepository {
   /// student clears by reinstalling the app.
   Future<SessionModel> verifyPin({required String sessionId, required String pin});
 
+  Future<SessionPinModel> requestCompletionCode({required String sessionId});
+
+  Future<SessionModel> verifyCompletionCode({
+    required String sessionId,
+    required String code,
+  });
+
   /// Confirms a help request the student named this tutor on, and returns the
   /// session that confirmation created.
   ///
@@ -83,6 +90,7 @@ abstract interface class SessionsRepository {
   Future<RatingModel> rateSession({
     required String sessionId,
     required int score,
+    bool comprehensionHelped = false,
     String? feedbackText,
     List<String> endorsedCourseUnitIds = const [],
   });

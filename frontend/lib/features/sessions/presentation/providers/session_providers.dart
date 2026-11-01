@@ -311,6 +311,7 @@ class SessionDetailController extends Notifier<SessionDetailState> {
 class RatingFormState {
   const RatingFormState({
     this.score,
+    this.comprehensionHelped,
     this.feedback = '',
     this.endorsing = false,
     this.submitting = false,
@@ -319,6 +320,8 @@ class RatingFormState {
 
   /// The chosen score, or null before one is chosen.
   final int? score;
+
+  final bool? comprehensionHelped;
 
   final String feedback;
 
@@ -339,10 +342,12 @@ class RatingFormState {
   /// A rating is not optional in the sense of being skippable -- the API takes it
   /// whenever it is given -- but it cannot be sent without a score, so the button
   /// stays disabled until one is chosen rather than failing on tap.
-  bool get canSubmit => score != null && !submitting;
+  bool get canSubmit =>
+      score != null && comprehensionHelped != null && !submitting;
 
   RatingFormState copyWith({
     int? score,
+    bool? comprehensionHelped,
     String? feedback,
     bool? endorsing,
     bool? submitting,
@@ -351,6 +356,7 @@ class RatingFormState {
   }) {
     return RatingFormState(
       score: score ?? this.score,
+      comprehensionHelped: comprehensionHelped ?? this.comprehensionHelped,
       feedback: feedback ?? this.feedback,
       endorsing: endorsing ?? this.endorsing,
       submitting: submitting ?? this.submitting,
@@ -363,13 +369,21 @@ class RatingFormState {
       identical(this, other) ||
       other is RatingFormState &&
           other.score == score &&
+          other.comprehensionHelped == comprehensionHelped &&
           other.feedback == feedback &&
           other.endorsing == endorsing &&
           other.submitting == submitting &&
           other.failure == failure;
 
   @override
-  int get hashCode => Object.hash(score, feedback, endorsing, submitting, failure);
+  int get hashCode => Object.hash(
+    score,
+    comprehensionHelped,
+    feedback,
+    endorsing,
+    submitting,
+    failure,
+  );
 }
 
 /// The rating form for one session.
@@ -392,6 +406,11 @@ class RatingFormController extends Notifier<RatingFormState> {
   void chooseScore(int score) {
     if (state.submitting) return;
     state = state.copyWith(score: score, clearFailure: true);
+  }
+
+  void chooseComprehension({required bool helped}) {
+    if (state.submitting) return;
+    state = state.copyWith(comprehensionHelped: helped, clearFailure: true);
   }
 
   void writeFeedback(String value) {
@@ -433,6 +452,7 @@ class RatingFormController extends Notifier<RatingFormState> {
           .rateSession(
             sessionId: sessionId,
             score: score,
+            comprehensionHelped: state.comprehensionHelped!,
             // Omitted rather than sent empty: a blank note is the absence of a
             // note, and sending `''` would be a client asserting that the field
             // is empty rather than that it has nothing to say.

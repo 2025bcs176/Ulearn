@@ -79,7 +79,7 @@ class RemoteSessionsDatasource {
     return response.data!;
   }
 
-  /// Reads the two-digit handshake pin the tutor has to read aloud.
+  /// Reads the six-digit handshake code the tutor shares with the tutee.
   ///
   /// Tutor-only, and it is a separate call rather than a field on the session:
   /// the pin lives in a payload both parties could otherwise fetch, which would
@@ -91,7 +91,7 @@ class RemoteSessionsDatasource {
     return response.data!;
   }
 
-  /// Submits the two-digit handshake pin for a session.
+  /// Submits the six-digit handshake code for a session.
   ///
   /// The dedicated route rather than a transition carrying the pin, because it is
   /// the only move whose precondition is a secret and it deserves a path that says
@@ -109,6 +109,24 @@ class RemoteSessionsDatasource {
     return response.data!;
   }
 
+  Future<Map<String, dynamic>> requestCompletionCode(String sessionId) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/v1/sessions/$sessionId/request-completion',
+    );
+    return response.data!;
+  }
+
+  Future<Map<String, dynamic>> verifyCompletionCode(
+    String sessionId,
+    String code,
+  ) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/v1/sessions/$sessionId/verify-completion',
+      data: <String, dynamic>{'pin': code},
+    );
+    return response.data!;
+  }
+
   /// Creates or updates the rating the signed-in user gives for a session.
   ///
   /// The session comes from the path, never from the body, so a client cannot
@@ -116,10 +134,14 @@ class RemoteSessionsDatasource {
   Future<Map<String, dynamic>> submitRating(
     String sessionId, {
     required int score,
+    bool comprehensionHelped = false,
     String? feedbackText,
     List<String> endorsedCourseUnitIds = const [],
   }) async {
-    final data = <String, dynamic>{'score': score};
+    final data = <String, dynamic>{
+      'score': score,
+      'comprehension_helped': comprehensionHelped,
+    };
     // Only sent when there is something to say. A null `feedback_text` would be
     // read as "clear whatever was stored", which is not what an untouched field
     // on a re-submit means.

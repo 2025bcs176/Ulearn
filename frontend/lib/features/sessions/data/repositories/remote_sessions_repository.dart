@@ -51,6 +51,27 @@ class RemoteSessionsRepository implements SessionsRepository {
   }
 
   @override
+  Future<SessionPinModel> requestCompletionCode({required String sessionId}) {
+    return _guard(
+      () async => SessionPinModel.fromJson(
+        await _remote.requestCompletionCode(sessionId),
+      ),
+    );
+  }
+
+  @override
+  Future<SessionModel> verifyCompletionCode({
+    required String sessionId,
+    required String code,
+  }) {
+    return _guard(
+      () async => SessionModel.fromJson(
+        await _remote.verifyCompletionCode(sessionId, code),
+      ),
+    );
+  }
+
+  @override
   Future<SessionModel> confirmRequest({
     required String requestId,
     required String courseUnitId,
@@ -82,6 +103,7 @@ class RemoteSessionsRepository implements SessionsRepository {
   Future<RatingModel> rateSession({
     required String sessionId,
     required int score,
+    bool comprehensionHelped = false,
     String? feedbackText,
     List<String> endorsedCourseUnitIds = const [],
   }) {
@@ -90,6 +112,7 @@ class RemoteSessionsRepository implements SessionsRepository {
         await _remote.submitRating(
           sessionId,
           score: score,
+          comprehensionHelped: comprehensionHelped,
           feedbackText: feedbackText,
           endorsedCourseUnitIds: endorsedCourseUnitIds,
         ),

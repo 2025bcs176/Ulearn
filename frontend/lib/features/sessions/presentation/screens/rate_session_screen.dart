@@ -106,8 +106,8 @@ class _Form extends ConsumerWidget {
           const SizedBox(height: AppDimens.xs),
           Text(
             alreadySubmitted
-                ? 'You already rated this session. Sending this replaces it.'
-                : 'A rating is required to finish this session review.',
+                ? 'Feedback has already been submitted for this session.'
+                : 'Both answers are required to finish this session review.',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -117,6 +117,25 @@ class _Form extends ConsumerWidget {
             score: form.score,
             enabled: !form.submitting,
             onSelected: controller.chooseScore,
+          ),
+          const SizedBox(height: AppDimens.lg),
+          Text(
+            'Did this session help you understand the topic?',
+            style: theme.textTheme.titleSmall,
+          ),
+          const SizedBox(height: AppDimens.sm),
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(value: true, label: Text('Yes')),
+              ButtonSegment(value: false, label: Text('No')),
+            ],
+            selected: form.comprehensionHelped == null
+                ? <bool>{}
+                : <bool>{form.comprehensionHelped!},
+            onSelectionChanged: form.submitting
+                ? null
+                : (selection) =>
+                    controller.chooseComprehension(helped: selection.first),
           ),
           const SizedBox(height: AppDimens.lg),
           Text('Add a note (optional)', style: theme.textTheme.titleSmall),
@@ -186,7 +205,7 @@ class _Form extends ConsumerWidget {
                     width: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : Text(alreadySubmitted ? 'Update rating' : 'Submit rating'),
+                : const Text('Submit feedback'),
           ),
         ],
       ),

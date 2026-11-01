@@ -134,6 +134,7 @@ class _RefusingSessionsRepository extends FakeSessionsRepository {
   Future<RatingModel> rateSession({
     required String sessionId,
     required int score,
+    bool comprehensionHelped = false,
     String? feedbackText,
     List<String> endorsedCourseUnitIds = const [],
   }) async {
