@@ -79,7 +79,10 @@ class TutorRail extends ConsumerWidget {
             // Nothing at all while it loads. A rail-shaped hole that fills in a
             // moment later is honest; a spinner over the top of the home screen
             // would stall a dashboard whose other contents are already true.
-            null => const LoadingView(message: 'Loading tutors'),
+            null => const LoadingView(
+              message: 'Loading tutors',
+              variant: LoadingViewVariant.cards,
+            ),
           },
         },
       ],

@@ -60,7 +60,14 @@ class SessionDetailScreen extends ConsumerWidget {
         );
       }
       return const Scaffold(
-        body: SafeArea(child: Center(child: LoadingView())),
+        body: SafeArea(
+          child: Center(
+            child: LoadingView(
+              message: 'Loading session',
+              variant: LoadingViewVariant.detail,
+            ),
+          ),
+        ),
       );
     }
 

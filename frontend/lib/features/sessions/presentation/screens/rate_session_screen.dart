@@ -51,7 +51,14 @@ class RateSessionScreen extends ConsumerWidget {
         );
       }
       return const Scaffold(
-        body: SafeArea(child: Center(child: LoadingView())),
+        body: SafeArea(
+          child: Center(
+            child: LoadingView(
+              message: 'Loading feedback',
+              variant: LoadingViewVariant.detail,
+            ),
+          ),
+        ),
       );
     }
 

@@ -34,7 +34,9 @@ class CertificateScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final eligibility = ref.watch(certificateEligibilityProvider);
-    final failure = eligibility.hasError ? failureFor(eligibility.error!) : null;
+    final failure = eligibility.hasError
+        ? failureFor(eligibility.error!)
+        : null;
 
     return Scaffold(
       appBar: AppBar(title: const Text('My certificate')),
@@ -52,9 +54,13 @@ class CertificateScreen extends ConsumerWidget {
                 // refresh is the same action as the retry button, so both have to
                 // be the one `invalidate` and cannot drift into two reloads that
                 // mean slightly different things.
-                onRefresh: () => ref.refresh(certificateEligibilityProvider.future),
+                onRefresh: () =>
+                    ref.refresh(certificateEligibilityProvider.future),
               ),
-              _ => const LoadingView(message: 'Checking your progress'),
+              _ => const LoadingView(
+                message: 'Checking your progress',
+                variant: LoadingViewVariant.detail,
+              ),
             },
           ),
         ),
