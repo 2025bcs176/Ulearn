@@ -95,7 +95,7 @@ abstract interface class SessionsRepository {
   Future<RatingModel> rateSession({
     required String sessionId,
     required int score,
-    bool comprehensionHelped = false,
+    required bool comprehensionHelped,
     String? feedbackText,
     List<String> endorsedCourseUnitIds = const [],
   });

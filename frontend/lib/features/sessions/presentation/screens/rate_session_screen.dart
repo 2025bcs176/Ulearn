@@ -132,10 +132,11 @@ class _Form extends ConsumerWidget {
             selected: form.comprehensionHelped == null
                 ? <bool>{}
                 : <bool>{form.comprehensionHelped!},
+            emptySelectionAllowed: true,
             onSelectionChanged: form.submitting
                 ? null
                 : (selection) =>
-                    controller.chooseComprehension(helped: selection.first),
+                      controller.chooseComprehension(helped: selection.first),
           ),
           const SizedBox(height: AppDimens.lg),
           Text('Add a note (optional)', style: theme.textTheme.titleSmall),
@@ -196,7 +197,7 @@ class _Form extends ConsumerWidget {
           ],
           const SizedBox(height: AppDimens.lg),
           FilledButton(
-            onPressed: form.canSubmit
+            onPressed: !alreadySubmitted && form.canSubmit
                 ? () => _submit(context, ref, session)
                 : null,
             child: form.submitting

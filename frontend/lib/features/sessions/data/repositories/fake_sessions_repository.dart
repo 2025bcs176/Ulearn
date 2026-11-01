@@ -266,7 +266,7 @@ class FakeSessionsRepository implements SessionsRepository {
   Future<RatingModel> rateSession({
     required String sessionId,
     required int score,
-    bool comprehensionHelped = false,
+    required bool comprehensionHelped,
     String? feedbackText,
     List<String> endorsedCourseUnitIds = const [],
   }) async {

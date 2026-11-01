@@ -150,7 +150,7 @@ class RemoteSessionsDatasource {
   Future<Map<String, dynamic>> submitRating(
     String sessionId, {
     required int score,
-    bool comprehensionHelped = false,
+    required bool comprehensionHelped,
     String? feedbackText,
     List<String> endorsedCourseUnitIds = const [],
   }) async {
