@@ -25,10 +25,11 @@ class LoadingView extends StatelessWidget {
     return Center(
       child: Semantics(
         label: message ?? 'Loading',
+        excludeSemantics: true,
         liveRegion: true,
         child: ListView(
           shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
+          physics: const ClampingScrollPhysics(),
           padding: const EdgeInsets.all(AppDimens.xl),
           children: [
             ..._placeholders(),

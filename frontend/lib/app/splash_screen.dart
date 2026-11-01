@@ -48,7 +48,6 @@ class SplashScreen extends ConsumerWidget {
                       const SizedBox(height: AppDimens.lg),
                       Semantics(
                         liveRegion: true,
-                        label: 'Checking your session',
                         child: Column(
                           children: [
                             SizedBox(

@@ -371,7 +371,6 @@ class _ReferenceDataLoading extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       liveRegion: true,
-      label: label,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: AppDimens.md),
         child: Row(
@@ -382,10 +381,12 @@ class _ReferenceDataLoading extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
             const SizedBox(width: AppDimens.sm),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+            Expanded(
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
             ),
           ],

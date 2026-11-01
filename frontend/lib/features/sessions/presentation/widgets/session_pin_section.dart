@@ -266,7 +266,6 @@ class _SessionPinSectionState extends ConsumerState<SessionPinSection> {
             Semantics(
               liveRegion: true,
               container: true,
-              label: state.actionFailure!.message,
               child: Text(
                 state.actionFailure!.message,
                 style: theme.textTheme.bodySmall?.copyWith(
