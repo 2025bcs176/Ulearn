@@ -124,7 +124,7 @@ async def request_completion_pin(
     session_id: uuid.UUID,
     caller: CurrentUser,
     db: DatabaseSession,
-) -> SessionPinResponse:
+) -> SessionResponse:
     """Ask the tutee to reveal a one-time completion code."""
     return await session_service.request_completion_pin(db, caller.user, session_id)
 
