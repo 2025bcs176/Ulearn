@@ -5,6 +5,7 @@ import 'package:peerpass_admin/core/models/admin_tutor_standing.dart';
 import 'package:peerpass_admin/core/models/admin_user.dart';
 import 'package:peerpass_admin/core/models/audit_event.dart';
 import 'package:peerpass_admin/core/models/competency_status.dart';
+import 'package:peerpass_admin/core/models/topic_heatmap.dart';
 
 /// Thrown when an account authenticates but is not provisioned for the console.
 ///
@@ -44,6 +45,8 @@ abstract class AdminRepository {
   Future<AdminPage<AdminTutorStanding>> tutorStandings(
     AdminPageRequest request,
   );
+
+  Future<TopicHeatmap> topicHeatmap();
 
   /// Records an operator's decision on a competency.
   ///
