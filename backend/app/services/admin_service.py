@@ -274,7 +274,10 @@ async def list_session_reports(
 ) -> AdminSessionReportPage:
     query = (
         select(SessionReport)
-        .options(selectinload(SessionReport.reporter))
+        .options(
+            selectinload(SessionReport.reporter),
+            selectinload(SessionReport.session),
+        )
         .order_by(SessionReport.created_at.asc(), SessionReport.id.asc())
     )
     total = await db.scalar(select(func.count()).select_from(query.subquery())) or 0
