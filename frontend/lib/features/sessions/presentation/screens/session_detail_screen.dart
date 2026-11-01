@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:peerpass/app/router.dart';
@@ -208,9 +209,10 @@ class _Action extends StatelessWidget {
       // The handshake in `SessionPinSection` is the action for a scheduled
       // session, and it renders nothing for a reader who is neither party.
       TutoringSessionStatus.scheduled => const SizedBox.shrink(),
-      TutoringSessionStatus.inProgress => _EndSession(
+      TutoringSessionStatus.inProgress => _CompletionHandshake(
         session: session,
         state: state,
+        viewerId: viewerId,
       ),
       TutoringSessionStatus.completed =>
         _isTutee(viewerId)
@@ -234,56 +236,115 @@ class _Action extends StatelessWidget {
       viewerId != null && session.isTutee(viewerId);
 }
 
-/// Ending a live session.
-///
-/// Confirmed before it is sent. A completed session is terminal in the API's
-/// transition table, so the button is the only moment at which a student can see
-/// what they are about to give up -- the ability to correct a session that ended
-/// early, and the hours that were recorded against it.
-class _EndSession extends ConsumerWidget {
-  const _EndSession({required this.session, required this.state});
+class _CompletionHandshake extends ConsumerStatefulWidget {
+  const _CompletionHandshake({
+    required this.session,
+    required this.state,
+    required this.viewerId,
+  });
 
   final SessionModel session;
   final SessionDetailState state;
+  final String? viewerId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return FilledButton(
-      onPressed: state.submitting ? null : () => _confirm(context, ref),
-      child: state.submitting
-          ? const SizedBox(
-              height: 20,
-              width: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : const Text('End session'),
-    );
+  ConsumerState<_CompletionHandshake> createState() =>
+      _CompletionHandshakeState();
+}
+
+class _CompletionHandshakeState extends ConsumerState<_CompletionHandshake> {
+  final _code = TextEditingController();
+
+  @override
+  void dispose() {
+    _code.dispose();
+    super.dispose();
   }
 
-  Future<void> _confirm(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('End this session?'),
-        content: const Text(
-          'The time so far is recorded against this session and it cannot be '
-          'reopened.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Keep going'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('End session'),
-          ),
-        ],
-      ),
+  @override
+  Widget build(BuildContext context) {
+    final controller = ref.read(
+      sessionDetailProvider(widget.session.id).notifier,
     );
-    if (confirmed != true) return;
+    final isTutor = widget.viewerId == widget.session.tutorId;
+    final requested = widget.session.completionRequestedAt != null;
 
-    await ref.read(sessionDetailProvider(session.id).notifier).endSession();
+    if (!isTutor && !requested) {
+      return const Text('Waiting for the tutor to request completion.');
+    }
+    if (!isTutor) {
+      final code = widget.state.completionCode;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Confirm the session ended, then show this code to the tutor.',
+          ),
+          const SizedBox(height: AppDimens.md),
+          if (code == null)
+            FilledButton.tonal(
+              onPressed: widget.state.submitting
+                  ? null
+                  : controller.revealCompletionCode,
+              child: const Text('Show completion code'),
+            )
+          else
+            SelectableText(
+              code.sessionPin,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+        ],
+      );
+    }
+    if (!requested) {
+      return FilledButton(
+        onPressed: widget.state.submitting ? null : controller.endSession,
+        child: widget.state.submitting
+            ? const SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Text('Request completion'),
+      );
+    }
+    final ready = _code.text.length == 6 && !widget.state.submitting;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text('Enter the six-digit code shown by the student.'),
+        const SizedBox(height: AppDimens.sm),
+        TextField(
+          controller: _code,
+          enabled: !widget.state.submitting,
+          keyboardType: TextInputType.number,
+          maxLength: 6,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(6),
+          ],
+          decoration: const InputDecoration(
+            labelText: 'Completion code',
+            counterText: '',
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: AppDimens.sm),
+        FilledButton(
+          onPressed: ready
+              ? () => controller.verifyCompletionCode(_code.text)
+              : null,
+          child: widget.state.submitting
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Complete session'),
+        ),
+      ],
+    );
   }
 }
 

@@ -43,7 +43,7 @@ SessionModel session({
     'is_rated': false,
     'created_at': '2026-03-01T08:00:00Z',
     'scheduled_start': '2026-03-04T09:00:00Z',
-    'session_pin': '42',
+    'session_pin': '654321',
   });
 }
 
@@ -123,7 +123,11 @@ void main() {
         FakeSessionsRepository(
           sessions: [
             session(id: 'next-1', topic: 'Upcoming'),
-            session(id: 'live-1', topic: 'Happening now', status: 'in_progress'),
+            session(
+              id: 'live-1',
+              topic: 'Happening now',
+              status: 'in_progress',
+            ),
           ],
         ),
       ),
@@ -142,7 +146,9 @@ void main() {
       tester,
       _container(
         FakeSessionsRepository(
-          sessions: [session(id: 'done-1', topic: 'Finished', status: 'completed')],
+          sessions: [
+            session(id: 'done-1', topic: 'Finished', status: 'completed'),
+          ],
         ),
       ),
     );

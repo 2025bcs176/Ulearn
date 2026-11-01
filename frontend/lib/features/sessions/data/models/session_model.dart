@@ -223,7 +223,7 @@ class SessionModel {
 
   final int durationMinutes;
 
-  /// The two-digit handshake pin the API generated.
+  /// The six-digit handshake pin the API generated.
   ///
   /// Shown to the tutee and never to the tutor. The API sends it to both parties
   /// because they share one response shape, which means the pin is not a secret
@@ -306,6 +306,7 @@ class SessionModel {
   SessionModel copyWith({
     String? statusWire,
     TutoringSessionStatus? status,
+    DateTime? completionRequestedAt,
     int? durationMinutes,
     String? meetingLink,
     String? meetingVenue,
@@ -328,6 +329,8 @@ class SessionModel {
       scheduledStart: scheduledStart,
       startedAt: startedAt,
       endedAt: endedAt,
+      completionRequestedAt:
+          completionRequestedAt ?? this.completionRequestedAt,
       durationMinutes: durationMinutes ?? this.durationMinutes,
       meetingLink: meetingLink ?? this.meetingLink,
       meetingVenue: meetingVenue ?? this.meetingVenue,
@@ -351,6 +354,7 @@ class SessionModel {
           other.scheduledStart == scheduledStart &&
           other.startedAt == startedAt &&
           other.endedAt == endedAt &&
+          other.completionRequestedAt == completionRequestedAt &&
           other.durationMinutes == durationMinutes &&
           other.meetingLink == meetingLink &&
           other.meetingVenue == meetingVenue &&
@@ -370,6 +374,7 @@ class SessionModel {
     scheduledStart,
     startedAt,
     endedAt,
+    completionRequestedAt,
     durationMinutes,
     meetingLink,
     meetingVenue,

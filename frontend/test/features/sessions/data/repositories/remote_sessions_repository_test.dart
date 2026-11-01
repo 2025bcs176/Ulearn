@@ -94,7 +94,7 @@ Map<String, dynamic> _session({
     'is_rated': false,
     'created_at': '2026-03-01T08:00:00Z',
     'scheduled_start': '2026-03-04T09:00:00Z',
-    'session_pin': '42',
+    'session_pin': '654321',
     'meeting_link': null,
   };
 }
@@ -213,12 +213,12 @@ void main() {
 
         final session = await repository.verifyPin(
           sessionId: 'session-1',
-          pin: '42',
+          pin: '654321',
         );
 
         expect(server.calls.single.method, 'POST');
         expect(server.calls.single.path, '/v1/sessions/session-1/verify-pin');
-        expect(server.calls.single.body, {'pin': '42'});
+        expect(server.calls.single.body, {'pin': '654321'});
         expect(session.status, TutoringSessionStatus.inProgress);
       },
     );

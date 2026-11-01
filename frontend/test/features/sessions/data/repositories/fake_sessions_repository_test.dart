@@ -28,17 +28,20 @@ void main() {
   }
 
   group('confirming a request', () {
-    test('records what was sent, so a screen test can check the real call', () async {
-      final fake = repository();
+    test(
+      'records what was sent, so a screen test can check the real call',
+      () async {
+        final fake = repository();
 
-      await confirm(fake, durationMinutes: 75);
+        await confirm(fake, durationMinutes: 75);
 
-      expect(fake.confirmations, hasLength(1));
-      expect(fake.confirmations.single.requestId, 'request-1');
-      expect(fake.confirmations.single.courseUnitId, 'unit-1');
-      expect(fake.confirmations.single.topic, 'eigenvalues');
-      expect(fake.confirmations.single.durationMinutes, 75);
-    });
+        expect(fake.confirmations, hasLength(1));
+        expect(fake.confirmations.single.requestId, 'request-1');
+        expect(fake.confirmations.single.courseUnitId, 'unit-1');
+        expect(fake.confirmations.single.topic, 'eigenvalues');
+        expect(fake.confirmations.single.durationMinutes, 75);
+      },
+    );
 
     test('returns a scheduled session belonging to the student who asked', () async {
       final fake = repository();
@@ -54,7 +57,7 @@ void main() {
       // the way the API does -- through `revealPin`, tutor-only -- so a screen
       // test cannot pass by reading the pin off a payload a tutee could also read.
       final pin = await fake.revealPin(sessionId: created.id);
-      expect(pin.sessionPin, hasLength(2));
+      expect(pin.sessionPin, hasLength(6));
       expect(pin.attemptsRemaining, FakeSessionsRepository.maxPinAttempts);
     });
 
@@ -96,7 +99,10 @@ void main() {
     test('a refusal is still recorded, so a test can prove it was attempted', () async {
       final fake = repository();
 
-      await expectLater(confirm(fake, durationMinutes: 0), throwsA(isA<Failure>()));
+      await expectLater(
+        confirm(fake, durationMinutes: 0),
+        throwsA(isA<Failure>()),
+      );
 
       // Recorded before the refusal. A fake that only recorded successes would let
       // a screen test pass while the real request was never sent -- which is the

@@ -213,7 +213,7 @@ class Session(Base, TimestampMixin):
         DateTime(timezone=True), nullable=True
     )
 
-    #: Consecutive wrong PINs. The pin is two digits, so there are 100 candidates
+    #: Consecutive wrong PINs. Codes are six digits and rate-limited server-side.
     #: and no attempt ceiling is the same as no handshake at all.
     #:
     #: Stored on the row rather than in memory because an in-process counter is

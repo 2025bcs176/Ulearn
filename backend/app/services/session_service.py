@@ -334,7 +334,7 @@ async def reveal_session_pin(
     The tutee is refused here. That refusal is the whole point of the handshake:
     if a tutee could read their own PIN, there would be nothing to prove, and the
     tutor would have no way to tell an in-person student from someone guessing
-    two digits on a stolen account.
+    a guessed code on a stolen account.
     """
     session = await _load_session_for_user(db, user, session_id)
     if session.tutor_id != user.id:

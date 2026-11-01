@@ -54,13 +54,10 @@ class SessionListNotifier extends AsyncNotifier<List<SessionModel>> {
 /// The automatic retry is off here for the same reason as on [sessionListProvider]:
 /// this provider fails whenever the list does, so leaving it on would give the home
 /// card its own invisible retry loop behind a message that already offers a button.
-final activeSessionProvider = FutureProvider<SessionModel?>(
-  (ref) async {
-    final sessions = await ref.watch(sessionListProvider.future);
-    return activeSessionFrom(sessions);
-  },
-  retry: (retryCount, error) => null,
-);
+final activeSessionProvider = FutureProvider<SessionModel?>((ref) async {
+  final sessions = await ref.watch(sessionListProvider.future);
+  return activeSessionFrom(sessions);
+}, retry: (retryCount, error) => null);
 
 /// Picks the session the home card shows out of [sessions].
 ///
@@ -83,7 +80,7 @@ SessionModel? activeSessionFrom(List<SessionModel> sessions) {
 /// whether the *last action* on it worked. A wrong PIN has to appear under the
 /// input that caused it with the session still on screen, so the two cannot share
 /// one value -- an [AsyncError] would throw the session away to report a rejected
-/// two-digit guess.
+/// six-digit guess.
 ///
 /// The rating is held here rather than re-read because there is no endpoint that
 /// returns it: `GET /v1/ratings/me/recent` is ratings *received* by a tutor, and
@@ -98,6 +95,7 @@ class SessionDetailState {
     this.submitting = false,
     this.actionFailure,
     this.ratingGiven,
+    this.completionCode,
   });
 
   final SessionModel? session;
@@ -118,6 +116,7 @@ class SessionDetailState {
 
   /// The rating this client submitted for this session, when it submitted one.
   final RatingModel? ratingGiven;
+  final SessionPinModel? completionCode;
 
   /// Whether the last refusal was about the handshake pin.
   ///
@@ -136,6 +135,7 @@ class SessionDetailState {
     bool? submitting,
     Failure? actionFailure,
     RatingModel? ratingGiven,
+    SessionPinModel? completionCode,
     bool clearLoadFailure = false,
     bool clearActionFailure = false,
   }) {
@@ -150,6 +150,7 @@ class SessionDetailState {
           ? null
           : (actionFailure ?? this.actionFailure),
       ratingGiven: ratingGiven ?? this.ratingGiven,
+      completionCode: completionCode ?? this.completionCode,
     );
   }
 
@@ -162,7 +163,8 @@ class SessionDetailState {
           other.loadFailure == loadFailure &&
           other.submitting == submitting &&
           other.actionFailure == actionFailure &&
-          other.ratingGiven == ratingGiven;
+          other.ratingGiven == ratingGiven &&
+          other.completionCode == completionCode;
 
   @override
   int get hashCode => Object.hash(
@@ -172,6 +174,7 @@ class SessionDetailState {
     submitting,
     actionFailure,
     ratingGiven,
+    completionCode,
   );
 }
 
@@ -186,9 +189,11 @@ class SessionDetailState {
 // ignore.
 // ignore: specify_nonobvious_property_types
 final sessionDetailProvider =
-    NotifierProvider.family<SessionDetailController, SessionDetailState, String>(
-      SessionDetailController.new,
-    );
+    NotifierProvider.family<
+      SessionDetailController,
+      SessionDetailState,
+      String
+    >(SessionDetailController.new);
 
 class SessionDetailController extends Notifier<SessionDetailState> {
   SessionDetailController(this.sessionId);
@@ -247,7 +252,48 @@ class SessionDetailController extends Notifier<SessionDetailState> {
     state = state.copyWith(submitting: true, clearActionFailure: true);
 
     try {
-      final completed = await _repository.endSession(sessionId);
+      final completed = await _repository.requestCompletion(
+        sessionId: sessionId,
+      );
+      if (!ref.mounted) return false;
+      _adopt(completed);
+      return true;
+    } on Object catch (error) {
+      if (!ref.mounted) return false;
+      state = state.copyWith(
+        submitting: false,
+        actionFailure: failureFor(error),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> revealCompletionCode() async {
+    if (state.submitting) return false;
+    state = state.copyWith(submitting: true, clearActionFailure: true);
+    try {
+      final code = await _repository.revealCompletionCode(sessionId: sessionId);
+      if (!ref.mounted) return false;
+      state = state.copyWith(submitting: false, completionCode: code);
+      return true;
+    } on Object catch (error) {
+      if (!ref.mounted) return false;
+      state = state.copyWith(
+        submitting: false,
+        actionFailure: failureFor(error),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> verifyCompletionCode(String code) async {
+    if (state.submitting) return false;
+    state = state.copyWith(submitting: true, clearActionFailure: true);
+    try {
+      final completed = await _repository.verifyCompletionCode(
+        sessionId: sessionId,
+        code: code,
+      );
       if (!ref.mounted) return false;
       _adopt(completed);
       return true;
@@ -462,9 +508,7 @@ class RatingFormController extends Notifier<RatingFormState> {
       if (!ref.mounted) return rating;
       // Handed to the detail screen so it can show the score back, then the list
       // is resettled so a completed session stops offering a rating.
-      ref
-          .read(sessionDetailProvider(sessionId).notifier)
-          .recordRating(rating);
+      ref.read(sessionDetailProvider(sessionId).notifier).recordRating(rating);
       state = state.copyWith(submitting: false);
       return rating;
     } on Object catch (error) {
@@ -555,9 +599,11 @@ class ConfirmRequestState {
 // them as a concrete type for the declaration itself.
 // ignore: specify_nonobvious_property_types
 final confirmRequestProvider =
-    NotifierProvider.family<ConfirmRequestController, ConfirmRequestState, String>(
-      ConfirmRequestController.new,
-    );
+    NotifierProvider.family<
+      ConfirmRequestController,
+      ConfirmRequestState,
+      String
+    >(ConfirmRequestController.new);
 
 class ConfirmRequestController extends Notifier<ConfirmRequestState> {
   ConfirmRequestController(this.requestId);
