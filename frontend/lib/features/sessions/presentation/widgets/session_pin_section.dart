@@ -57,6 +57,7 @@ class _SessionPinSectionState extends ConsumerState<SessionPinSection> {
   /// Set when the pin could not be fetched, so the panel can say so rather than
   /// offering a reveal that silently does nothing.
   bool _revealFailed = false;
+  bool _fetchingPin = false;
 
   @override
   void dispose() {
@@ -73,7 +74,10 @@ class _SessionPinSectionState extends ConsumerState<SessionPinSection> {
       TutoringSessionStatus.scheduled => switch (widget.viewerId) {
         // Reversed from the original: the tutor reveals, the tutee enters.
         final viewerId? when session.isTutor(viewerId) => _reveal(context),
-        final viewerId? when session.isTutee(viewerId) => _enter(context, state),
+        final viewerId? when session.isTutee(viewerId) => _enter(
+          context,
+          state,
+        ),
         _ => null,
       },
       // Once the session is live the handshake has done its job, and the pin is
@@ -119,9 +123,15 @@ class _SessionPinSectionState extends ConsumerState<SessionPinSection> {
         trailing: Align(
           alignment: Alignment.centerLeft,
           child: OutlinedButton.icon(
-            onPressed: _fetchPin,
-            icon: const Icon(Icons.download_outlined),
-            label: const Text('Show PIN'),
+            onPressed: _fetchingPin ? null : _fetchPin,
+            icon: _fetchingPin
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.visibility_outlined),
+            label: Text(_fetchingPin ? 'Loading PIN…' : 'Show PIN'),
           ),
         ),
       );
@@ -174,6 +184,11 @@ class _SessionPinSectionState extends ConsumerState<SessionPinSection> {
   }
 
   Future<void> _fetchPin() async {
+    if (_fetchingPin) return;
+    setState(() {
+      _fetchingPin = true;
+      _revealFailed = false;
+    });
     final repo = ref.read(sessionsRepositoryProvider);
     try {
       final pin = await repo.revealPin(sessionId: widget.session.id);
@@ -181,12 +196,16 @@ class _SessionPinSectionState extends ConsumerState<SessionPinSection> {
       setState(() {
         _pin_ = pin;
         _revealFailed = false;
+        _fetchingPin = false;
       });
     } on Failure {
       // Deliberately not showing the API's text: a failed reveal is a transport
       // problem, and the retry is the same either way.
       if (!mounted) return;
-      setState(() => _revealFailed = true);
+      setState(() {
+        _revealFailed = true;
+        _fetchingPin = false;
+      });
     }
   }
 
@@ -309,9 +328,7 @@ class _Panel extends StatelessWidget {
           children: [
             Icon(icon, color: theme.colorScheme.onSurfaceVariant),
             const SizedBox(width: AppDimens.sm),
-            Expanded(
-              child: Text(title, style: theme.textTheme.titleMedium),
-            ),
+            Expanded(child: Text(title, style: theme.textTheme.titleMedium)),
           ],
         ),
         const SizedBox(height: AppDimens.xs),

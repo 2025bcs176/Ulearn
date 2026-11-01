@@ -9,6 +9,7 @@ import 'package:peerpass/core/widgets/empty_view.dart';
 import 'package:peerpass/features/auth/presentation/providers/auth_providers.dart';
 import 'package:peerpass/features/auth/presentation/providers/onboarding_providers.dart';
 import 'package:peerpass/features/auth/presentation/widgets/selection_check.dart';
+
 /// The three steps a new account has to complete before it can be used.
 ///
 /// The wizard is a wizard and not one long form because the parts save
@@ -272,7 +273,8 @@ class _AcademicContextStep extends ConsumerWidget {
         ref
             .watch(universitiesProvider)
             .when(
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () =>
+                  const _ReferenceDataLoading(label: 'Loading universities'),
               error: (error, _) => _ReferenceDataUnavailable(
                 message: 'Could not load universities. Check your connection and try again.',
                 onRetry: () => ref.invalidate(universitiesProvider),
@@ -309,7 +311,7 @@ class _FacultySection extends ConsumerWidget {
     final faculties = ref.watch(facultiesProvider(universityId));
 
     return faculties.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const _ReferenceDataLoading(label: 'Loading faculties'),
       error: (error, _) => _ReferenceDataUnavailable(
         message:
             'Could not load faculties. Check your connection and try again.',
@@ -356,6 +358,39 @@ class _ReferenceDataUnavailable extends StatelessWidget {
         const SizedBox(height: AppDimens.sm),
         TextButton(onPressed: onRetry, child: const Text('Retry')),
       ],
+    );
+  }
+}
+
+class _ReferenceDataLoading extends StatelessWidget {
+  const _ReferenceDataLoading({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      liveRegion: true,
+      label: label,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppDimens.md),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: AppDimens.sm),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -580,7 +615,8 @@ class _PrimaryModulesStep extends ConsumerWidget {
               )),
             )
             .when(
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () =>
+                  const _ReferenceDataLoading(label: 'Loading course units'),
               error: (error, stackTrace) => Text(
                 'Could not load course units. Check your connection and try again.',
                 style: theme.textTheme.bodyMedium?.copyWith(
