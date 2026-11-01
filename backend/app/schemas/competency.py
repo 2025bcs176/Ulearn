@@ -9,8 +9,10 @@ fix it, and will simply not try again.
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from typing import Self
+from urllib.parse import urlparse
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from app.models.enums import CompetencyStatus, VerificationSource
 from app.schemas.base import OrmSchema, RequestSchema
@@ -44,6 +46,18 @@ class CompetencyCreate(RequestSchema):
         ),
     )
     notes: str | None = Field(default=None, max_length=MAX_NOTES_LENGTH)
+
+    @model_validator(mode="after")
+    def evidence_matches_source(self) -> Self:
+        if self.source is VerificationSource.PORTFOLIO:
+            if not (self.evidence_reference and self.evidence_reference.strip()):
+                raise ValueError(
+                    "evidence_reference is required for portfolio evidence"
+                )
+            parsed = urlparse(self.evidence_reference or "")
+            if parsed.scheme != "https" or not parsed.netloc:
+                raise ValueError("portfolio evidence must be an HTTPS URL")
+        return self
 
 
 class CompetencyResponse(OrmSchema):
