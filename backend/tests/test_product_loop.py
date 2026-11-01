@@ -140,11 +140,21 @@ async def test_the_full_tutoring_loop_records_everything_it_promises(
     assert started.status_code == 200, started.text
     assert started.json()["status"] == "in_progress"
 
-    # --- it ends, and the minutes bank -----------------------------------
-    completed = await client.post(
-        f"/v1/sessions/{session_id}/transition",
+    # --- the completion handshake closes the session ----------------------
+    requested = await client.post(
+        f"/v1/sessions/{session_id}/request-completion",
+        headers=bearer(tutor),
+    )
+    assert requested.status_code == 200, requested.text
+    completion = await client.post(
+        f"/v1/sessions/{session_id}/reveal-completion",
         headers=bearer(student),
-        json={"status": "completed"},
+    )
+    assert completion.status_code == 200, completion.text
+    completed = await client.post(
+        f"/v1/sessions/{session_id}/verify-completion",
+        headers=bearer(tutor),
+        json={"pin": completion.json()["session_pin"]},
     )
     assert completed.status_code == 200, completed.text
 
@@ -152,7 +162,11 @@ async def test_the_full_tutoring_loop_records_everything_it_promises(
     rating = await client.post(
         f"/v1/ratings/{session_id}",
         headers=bearer(student),
-        json={"score": 5, "feedback_text": "Explained it clearly."},
+        json={
+            "comprehension_helped": True,
+            "score": 5,
+            "feedback_text": "Explained it clearly.",
+        },
     )
     assert rating.status_code == 201, rating.text
 
