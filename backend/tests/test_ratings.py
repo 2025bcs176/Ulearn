@@ -83,7 +83,7 @@ async def test_submit_rating_promotes_a_tutor_to_verified(db_session):
         db_session,
         student,
         session.public_id,
-        RatingCreate(score=5, feedback_text="Great session"),
+        RatingCreate(comprehension_helped=True, score=5, feedback_text="Great session"),
     )
 
     assert rating.score == 5
@@ -118,9 +118,9 @@ async def test_submit_rating_reduces_standing_when_average_falls_below_bar(db_se
     profile = TutorProfile(
         user=tutor,
         standing=TutorStanding.VERIFIED,
-        completed_sessions=3,
-        rating_total=Decimal("12.00"),
-        rating_count=3,
+        completed_sessions=5,
+        rating_total=Decimal("17.00"),
+        rating_count=5,
     )
     session = Session(
         tutee_id=student.id,
@@ -140,11 +140,11 @@ async def test_submit_rating_reduces_standing_when_average_falls_below_bar(db_se
         db_session,
         student,
         session.public_id,
-        RatingCreate(score=3),
+        RatingCreate(comprehension_helped=True, score=3),
     )
 
     assert profile.standing is TutorStanding.REDUCED
-    assert profile.average_rating == Decimal("3.75")
+    assert profile.average_rating == Decimal("3.333333333333333333333333333")
 
 
 async def test_rating_submission_rejects_non_completed_sessions(db_session):
@@ -184,7 +184,7 @@ async def test_rating_submission_rejects_non_completed_sessions(db_session):
             db_session,
             student,
             session.public_id,
-            RatingCreate(score=4),
+            RatingCreate(comprehension_helped=True, score=4),
         )
 
 
@@ -279,7 +279,11 @@ async def test_rating_through_the_router_promotes_and_serialises(
 
     response = await client.post(
         f"/v1/ratings/{session.public_id}",
-        json={"score": 5, "feedback_text": "Explained quick sort clearly"},
+        json={
+            "comprehension_helped": True,
+            "score": 5,
+            "feedback_text": "Explained quick sort clearly",
+        },
         headers=_bearer(student_body),
     )
 
@@ -302,7 +306,10 @@ async def test_rating_through_the_router_requires_authentication(
 ) -> None:
     _student, _tutor, session, _profile = await _seed_session(db_session)
 
-    response = await client.post(f"/v1/ratings/{session.public_id}", json={"score": 5})
+    response = await client.post(
+        f"/v1/ratings/{session.public_id}",
+        json={"comprehension_helped": True, "score": 5},
+    )
 
     assert response.status_code == 401, response.text
 
@@ -316,7 +323,7 @@ async def test_rating_through_the_router_rejects_a_non_participant(
 
     response = await client.post(
         f"/v1/ratings/{session.public_id}",
-        json={"score": 1},
+        json={"comprehension_helped": True, "score": 1},
         headers=_bearer(outsider),
     )
 
@@ -329,17 +336,17 @@ async def test_rating_an_unknown_session_is_a_404(client, db_session) -> None:
 
     response = await client.post(
         "/v1/ratings/00000000-0000-0000-0000-000000000000",
-        json={"score": 5},
+        json={"comprehension_helped": True, "score": 5},
         headers=_bearer(body),
     )
 
     assert response.status_code == 404, response.text
 
 
-async def test_rating_twice_updates_rather_than_double_counts(
+async def test_rating_twice_is_rejected_without_mutating_feedback(
     client, db_session
 ) -> None:
-    """The second rating replaces the first and the total moves by the delta."""
+    """Feedback is immutable once the mandatory post-session form is submitted."""
     _student, _tutor, session, profile = await _seed_session(db_session)
     body = await _register(client, "twice@mak.ac.ug")
     # Adopt the registered account as the session's tutee so the token in
@@ -353,26 +360,23 @@ async def test_rating_twice_updates_rather_than_double_counts(
 
     first = await client.post(
         f"/v1/ratings/{session.public_id}",
-        json={"score": 5},
+        json={"comprehension_helped": True, "score": 5},
         headers=_bearer(body),
     )
     assert first.status_code == 201, first.text
 
     second = await client.post(
         f"/v1/ratings/{session.public_id}",
-        json={"score": 1, "feedback_text": "reconsidered"},
+        json={
+            "comprehension_helped": True,
+            "score": 1,
+            "feedback_text": "reconsidered",
+        },
         headers=_bearer(body),
     )
-    assert second.status_code == 201, second.text
-
-    assert second.json()["score"] == 1
-    assert second.json()["feedback_text"] == "reconsidered"
-    # One rating from this rater, counted once, at its latest value. The seeded
-    # total is 12.30: +5 for the first submission, then -5 +1 when it is
-    # replaced, so the total settles at 13.30 rather than 8.30.
+    assert second.status_code == 409, second.text
     assert profile.rating_count == 4
-    assert profile.rating_total == Decimal("13.30")
-    assert profile.standing is TutorStanding.REDUCED
+    assert profile.rating_total == Decimal("17.30")
 
 
 async def test_rating_summary_through_the_router(client, db_session) -> None:
@@ -433,7 +437,7 @@ async def test_the_session_scoped_rating_alias_is_gone(client, db_session) -> No
 
     response = await client.post(
         f"/v1/sessions/{session.public_id}/ratings",
-        json={"score": 5},
+        json={"comprehension_helped": True, "score": 5},
         headers=_bearer(body),
     )
 
@@ -446,7 +450,7 @@ async def test_the_nested_rating_alias_is_gone(client, db_session) -> None:
 
     response = await client.post(
         f"/v1/ratings/{session.public_id}/ratings",
-        json={"score": 5},
+        json={"comprehension_helped": True, "score": 5},
         headers=_bearer(body),
     )
 

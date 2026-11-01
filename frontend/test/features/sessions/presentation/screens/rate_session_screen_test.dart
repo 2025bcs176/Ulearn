@@ -56,7 +56,7 @@ SessionModel completed({bool isRated = false}) {
     'created_at': '2026-03-01T08:00:00Z',
     'scheduled_start': '2026-03-04T09:00:00Z',
     'ended_at': '2026-03-04T10:00:00Z',
-    'session_pin': '42',
+    'session_pin': '654321',
   });
 }
 
@@ -125,6 +125,17 @@ Future<void> _settle(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> _chooseHelped(WidgetTester tester) async {
+  await tester.tap(find.text('Yes'));
+  await _settle(tester);
+}
+
+Future<void> _submit(WidgetTester tester) async {
+  await tester.ensureVisible(find.byType(FilledButton));
+  await tester.tap(find.byType(FilledButton));
+  await _settle(tester);
+}
+
 /// A repository that refuses the rating, the way an out-of-range score or a
 /// session the API will not accept is refused.
 class _RefusingSessionsRepository extends FakeSessionsRepository {
@@ -134,6 +145,7 @@ class _RefusingSessionsRepository extends FakeSessionsRepository {
   Future<RatingModel> rateSession({
     required String sessionId,
     required int score,
+    bool comprehensionHelped = false,
     String? feedbackText,
     List<String> endorsedCourseUnitIds = const [],
   }) async {
@@ -145,11 +157,10 @@ class _RefusingSessionsRepository extends FakeSessionsRepository {
 }
 
 void main() {
-  testWidgets('a score is required, and nothing else is', (tester) async {
+  testWidgets('both feedback answers are required', (tester) async {
     final sessions = await _pumpRate(tester, _tutee);
 
-    // The one field that cannot be left out, so the button stays disabled rather
-    // than failing on tap.
+    // Neither mandatory answer can be omitted.
     final submit = tester.widget<FilledButton>(find.byType(FilledButton));
     expect(submit.onPressed, isNull);
 
@@ -157,11 +168,11 @@ void main() {
     await _settle(tester);
     expect(
       tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
-      isNotNull,
+      isNull,
     );
 
-    await tester.tap(find.byType(FilledButton));
-    await _settle(tester);
+    await _chooseHelped(tester);
+    await _submit(tester);
 
     expect(sessions.submittedRatings.single.score, 4);
   });
@@ -173,10 +184,10 @@ void main() {
 
     await tester.tap(find.bySemanticsLabel('5 of 5'));
     await _settle(tester);
+    await _chooseHelped(tester);
     await tester.enterText(find.byType(TextField), 'Explained it twice. ');
     await _settle(tester);
-    await tester.tap(find.byType(FilledButton));
-    await _settle(tester);
+    await _submit(tester);
 
     // Trimmed on the way out. The surrounding whitespace is the phone keyboard's,
     // not something the student meant to say.
@@ -189,8 +200,8 @@ void main() {
     await _pumpRate(tester, _tutee, repository: second);
     await tester.tap(find.bySemanticsLabel('3 of 5'));
     await _settle(tester);
-    await tester.tap(find.byType(FilledButton));
-    await _settle(tester);
+    await _chooseHelped(tester);
+    await _submit(tester);
 
     // A blank note is the absence of a note. Sending `''` would assert that the
     // field is empty, which is a different claim and would clear a stored one on
@@ -211,8 +222,8 @@ void main() {
 
       await tester.tap(find.bySemanticsLabel('5 of 5'));
       await _settle(tester);
-      await tester.tap(find.byType(FilledButton));
-      await _settle(tester);
+      await _chooseHelped(tester);
+      await _submit(tester);
 
       // A student who wants to leave a mark and go is not made to assert a claim
       // about a tutor's coverage to get past a form. That is the failure the API
@@ -227,8 +238,8 @@ void main() {
       await _settle(tester);
       await tester.tap(find.bySemanticsLabel('5 of 5'));
       await _settle(tester);
-      await tester.tap(find.byType(FilledButton));
-      await _settle(tester);
+      await _chooseHelped(tester);
+      await _submit(tester);
 
       // Exactly the unit the session was booked for. The API's service refuses any
       // other unit, so a list of units to pick from would be a list where every
@@ -257,10 +268,10 @@ void main() {
 
     await tester.tap(find.bySemanticsLabel('5 of 5'));
     await _settle(tester);
+    await _chooseHelped(tester);
     await tester.enterText(find.byType(TextField), 'Worth saying.');
     await _settle(tester);
-    await tester.tap(find.byType(FilledButton));
-    await _settle(tester);
+    await _submit(tester);
 
     // The screen stays open and the note survives, so fixing the problem does not
     // mean retyping. The failure's own message, never the exception.
@@ -271,7 +282,7 @@ void main() {
     expect(find.text('Worth saying.'), findsOneWidget);
   });
 
-  testWidgets('a session with a rating already offers to replace it', (
+  testWidgets('a session with a rating already blocks a second submission', (
     tester,
   ) async {
     await _pumpRate(
@@ -280,34 +291,36 @@ void main() {
       repository: FakeSessionsRepository(sessions: [completed(isRated: true)]),
     );
 
-    // `POST /v1/ratings/{session_id}` updates in place rather than adding a second
-    // rating, so the screen says what sending will do instead of implying there is
-    // a second score to give.
-    expect(find.text('Submit rating'), findsNothing);
-    expect(find.text('Update rating'), findsOneWidget);
+    expect(
+      find.text('Feedback has already been submitted for this session.'),
+      findsOneWidget,
+    );
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNull,
+    );
   });
 
-  testWidgets('correcting a rating warns that an untouched box withdraws', (
+  testWidgets('a submitted rating cannot withdraw its recommendation', (
     tester,
   ) async {
-    // The API replaces `endorsed_course_unit_ids` on every submission, and an
-    // empty list withdraws what the rater endorsed before. `RatingResponse` does
-    // not echo a rater's own endorsements, so the client cannot start the box out
-    // ticked to match -- the user is told instead of losing the claim quietly.
     await _pumpRate(
       tester,
       _tutee,
       repository: FakeSessionsRepository(sessions: [completed(isRated: true)]),
     );
 
-    expect(find.textContaining('withdraws the recommendation'), findsOneWidget);
+    expect(
+      find.text('Feedback has already been submitted for this session.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('a first rating cannot be dismissed', (tester) async {
     await _pumpRate(tester, _tutee);
 
     expect(
-      find.text('A rating is required to finish this session review.'),
+      find.text('Both answers are required to finish this session review.'),
       findsOneWidget,
     );
     expect(find.text('Not now'), findsNothing);

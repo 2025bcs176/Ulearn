@@ -17,6 +17,8 @@ from app.models.enums import (
     SESSION_TRANSITIONS,
     CompetencyStatus,
     HelpRequestStatus,
+    ReportCategory,
+    ReportStatus,
     SessionStatus,
     TutorStanding,
     UserRole,
@@ -25,6 +27,7 @@ from app.models.enums import (
 from app.models.grading_scale import Grade, GradingScale
 from app.models.rate_limit import RateLimitCounter
 from app.models.rating import MAX_RATING, MIN_RATING, Rating
+from app.models.report import SessionReport
 from app.models.session import HelpRequest, Session
 from app.models.tutor_profile import TutorProfile
 from app.models.user import (
@@ -54,7 +57,10 @@ __all__ = [
     "RateLimitCounter",
     "Rating",
     "RefreshToken",
+    "ReportCategory",
+    "ReportStatus",
     "Session",
+    "SessionReport",
     "SessionStatus",
     "Subject",
     "TimestampMixin",

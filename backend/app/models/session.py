@@ -7,7 +7,8 @@ tutor session exists for a request that never found one, and every query about
 tutor workload would have to filter those rows out.
 """
 
-import random
+import hashlib
+import secrets
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -133,10 +134,6 @@ class Session(Base, TimestampMixin):
         UniqueConstraint("help_request_id", name="session_per_request"),
         CheckConstraint("duration_minutes >= 0", name="duration_non_negative"),
         CheckConstraint("tutee_id <> tutor_id", name="session_parties_differ"),
-        CheckConstraint(
-            "session_pin IS NULL OR length(session_pin) = 2",
-            name="session_pin_length",
-        ),
         # The throttle increments on its error path, so a negative count would
         # mean a lockout counter that runs backwards.
         CheckConstraint(
@@ -204,9 +201,19 @@ class Session(Base, TimestampMixin):
     )
 
     duration_minutes: Mapped[int] = mapped_column(nullable=False, default=0)
-    session_pin: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    session_pin_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    session_pin_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completion_pin_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    completion_pin_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completion_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
-    #: Consecutive wrong PINs. The pin is two digits, so there are 100 candidates
+    #: Consecutive wrong PINs. Codes are six digits and rate-limited server-side.
     #: and no attempt ceiling is the same as no handshake at all.
     #:
     #: Stored on the row rather than in memory because an in-process counter is
@@ -222,8 +229,16 @@ class Session(Base, TimestampMixin):
     pin_locked_until: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    completion_pin_failed_attempts: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    completion_pin_locked_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     meeting_link: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    meeting_venue: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    meeting_venue_detail: Mapped[str | None] = mapped_column(String(160), nullable=True)
 
     cancelled_by_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -244,14 +259,14 @@ class Session(Base, TimestampMixin):
     )
 
     @staticmethod
-    def generate_session_pin() -> str:
-        """A two-digit handshake pin the backend verifies.
+    def generate_session_pin() -> tuple[str, str]:
+        """Create a six-digit one-time code and its stored SHA-256 digest."""
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        return code, hashlib.sha256(code.encode()).hexdigest()
 
-        The platform owns the value rather than the client: a student can reveal
-        the pin to a tutor, but neither party can generate or mutate it on their
-        own when they accept or start the session.
-        """
-        return f"{random.randint(0, 99):02d}"
+    @staticmethod
+    def hash_session_pin(code: str) -> str:
+        return hashlib.sha256(code.encode()).hexdigest()
 
     async def is_rated(self, db: AsyncSession) -> bool:
         """Whether anyone has rated this session yet.

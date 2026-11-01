@@ -7,7 +7,9 @@ import 'package:peerpass/core/models/course_unit_option.dart';
 import 'package:peerpass/core/models/subject.dart';
 import 'package:peerpass/core/models/university_option.dart';
 import 'package:peerpass/core/state/session.dart';
+import 'package:peerpass/core/storage/session_cache.dart';
 import 'package:peerpass/features/auth/data/repositories/auth_repository.dart';
+
 /// The auth operations, as calls the screens can make.
 ///
 /// Performs authentication against the repository and records the outcome in
@@ -34,9 +36,12 @@ class AuthController {
   SessionController get _session =>
       _ref.read(sessionControllerProvider.notifier);
 
+  SessionCache? get _cache => _ref.read(sessionCacheProvider);
+
   /// Signs in and adopts the account the API returns.
   Future<void> signIn({required String email, required String password}) async {
     final profile = await _repository.signIn(email: email, password: password);
+    _cache?.activateAccount(profile.publicId);
     _session.signedIn(profile);
   }
 
@@ -53,6 +58,7 @@ class AuthController {
       email: email,
       password: password,
     );
+    _cache?.activateAccount(profile.publicId);
     _session.signedIn(profile);
   }
 
@@ -73,12 +79,15 @@ class AuthController {
       academicDataConsented: academicDataConsented,
       primaryCourseUnitIds: primaryCourseUnitIds,
     );
+    _cache?.activateAccount(profile.publicId);
     _session.signedIn(profile);
   }
 
   /// Ends the session and returns to the signed-out state.
   Future<void> signOut() async {
     await _repository.signOut();
+    await _cache?.clear();
+    _cache?.deactivateAccount();
     _session.signedOut();
   }
 
@@ -100,8 +109,10 @@ class AuthController {
     try {
       final profile = await _repository.restoreSession();
       if (profile == null) {
+        _cache?.deactivateAccount();
         _session.signedOut();
       } else {
+        _cache?.activateAccount(profile.publicId);
         _session.signedIn(profile);
       }
     } on NetworkFailure catch (failure) {
@@ -109,6 +120,7 @@ class AuthController {
     } on Failure {
       // Anything else means the stored session is not usable, which is the
       // definition of signed out.
+      _cache?.deactivateAccount();
       _session.signedOut();
     }
   }

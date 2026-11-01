@@ -14,6 +14,7 @@ class RatingModel {
     required this.raterId,
     required this.rateeId,
     required this.score,
+    required this.comprehensionHelped,
     required this.createdAt,
     this.feedbackText,
   });
@@ -34,6 +35,7 @@ class RatingModel {
     final raterId = json['rater_id'];
     final rateeId = json['ratee_id'];
     final score = json['score'];
+    final comprehensionHelped = json['comprehension_helped'] ?? false;
     final createdAt = json['created_at'];
 
     if (id is! String ||
@@ -41,6 +43,7 @@ class RatingModel {
         raterId is! String ||
         rateeId is! String ||
         score is! num ||
+        comprehensionHelped is! bool ||
         createdAt is! String) {
       throw const FormatException('rating response was missing a required field');
     }
@@ -52,6 +55,7 @@ class RatingModel {
       raterId: raterId,
       rateeId: rateeId,
       score: score.toInt(),
+      comprehensionHelped: comprehensionHelped,
       feedbackText: feedback is String && feedback.isNotEmpty ? feedback : null,
       createdAt: DateTime.parse(createdAt),
     );
@@ -67,6 +71,8 @@ class RatingModel {
 
   /// The whole-number score, which the API bounds to 1..5.
   final int score;
+
+  final bool comprehensionHelped;
 
   final String? feedbackText;
 
@@ -84,6 +90,7 @@ class RatingModel {
           other.raterId == raterId &&
           other.rateeId == rateeId &&
           other.score == score &&
+          other.comprehensionHelped == comprehensionHelped &&
           other.feedbackText == feedbackText &&
           other.createdAt == createdAt;
 
@@ -94,6 +101,7 @@ class RatingModel {
     raterId,
     rateeId,
     score,
+    comprehensionHelped,
     feedbackText,
     createdAt,
   );

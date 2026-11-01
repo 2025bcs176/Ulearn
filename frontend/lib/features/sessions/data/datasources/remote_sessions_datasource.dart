@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:peerpass/core/storage/session_cache.dart';
 
 /// Talks to the `/v1/sessions` and `/v1/ratings` endpoints the screens use.
 ///
@@ -9,9 +10,10 @@ import 'package:dio/dio.dart';
 /// the repository is where the wire shape becomes a model, so there is one place
 /// to look when the two disagree.
 class RemoteSessionsDatasource {
-  const RemoteSessionsDatasource(this._dio);
+  const RemoteSessionsDatasource(this._dio, {this.cache});
 
   final Dio _dio;
+  final SessionCache? cache;
 
   /// Every session the signed-in user is part of, newest first.
   ///
@@ -20,9 +22,30 @@ class RemoteSessionsDatasource {
   /// comes back. Asking the server to pre-sort or pre-filter would be a second
   /// place where "active" is defined.
   Future<List<Map<String, dynamic>>> sessionsForMe() async {
-    final response = await _dio.get<List<dynamic>>('/v1/sessions/me');
-    return (response.data ?? const <dynamic>[]).whereType<Map<String, dynamic>>().toList();
+    try {
+      final response = await _dio.get<List<dynamic>>('/v1/sessions/me');
+      final sessions = (response.data ?? const <dynamic>[])
+          .whereType<Map<String, dynamic>>()
+          .toList();
+      await cache?.writeSessions(sessions);
+      return sessions;
+    } on DioException catch (error) {
+      if (!_canUseCache(error)) rethrow;
+      final cached = await cache?.readSessions();
+      if (cached != null) {
+        return [
+          for (final row in cached) {...row, '_offline_cached': true},
+        ];
+      }
+      rethrow;
+    }
   }
+
+  bool _canUseCache(DioException error) =>
+      error.type == DioExceptionType.connectionError ||
+      error.type == DioExceptionType.connectionTimeout ||
+      error.type == DioExceptionType.sendTimeout ||
+      error.type == DioExceptionType.receiveTimeout;
 
   /// One session, re-read by public id.
   Future<Map<String, dynamic>> session(String sessionId) async {
@@ -79,7 +102,7 @@ class RemoteSessionsDatasource {
     return response.data!;
   }
 
-  /// Reads the two-digit handshake pin the tutor has to read aloud.
+  /// Reads the six-digit handshake code the tutor shares with the tutee.
   ///
   /// Tutor-only, and it is a separate call rather than a field on the session:
   /// the pin lives in a payload both parties could otherwise fetch, which would
@@ -91,20 +114,42 @@ class RemoteSessionsDatasource {
     return response.data!;
   }
 
-  /// Submits the two-digit handshake pin for a session.
+  /// Submits the six-digit handshake code for a session.
   ///
   /// The dedicated route rather than a transition carrying the pin, because it is
   /// the only move whose precondition is a secret and it deserves a path that says
   /// so. The API answers a wrong pin with a 422 naming the `pin` field, and leaves
   /// the session scheduled. A 429 means the attempts are spent and the API, not
   /// this client, decides when trying again is allowed.
-  Future<Map<String, dynamic>> verifyPin(
-    String sessionId,
-    String pin,
-  ) async {
+  Future<Map<String, dynamic>> verifyPin(String sessionId, String pin) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/v1/sessions/$sessionId/verify-pin',
       data: <String, dynamic>{'pin': pin},
+    );
+    return response.data!;
+  }
+
+  Future<Map<String, dynamic>> requestCompletion(String sessionId) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/v1/sessions/$sessionId/request-completion',
+    );
+    return response.data!;
+  }
+
+  Future<Map<String, dynamic>> revealCompletionCode(String sessionId) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/v1/sessions/$sessionId/reveal-completion',
+    );
+    return response.data!;
+  }
+
+  Future<Map<String, dynamic>> verifyCompletionCode(
+    String sessionId,
+    String code,
+  ) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/v1/sessions/$sessionId/verify-completion',
+      data: <String, dynamic>{'pin': code},
     );
     return response.data!;
   }
@@ -116,10 +161,14 @@ class RemoteSessionsDatasource {
   Future<Map<String, dynamic>> submitRating(
     String sessionId, {
     required int score,
+    required bool comprehensionHelped,
     String? feedbackText,
     List<String> endorsedCourseUnitIds = const [],
   }) async {
-    final data = <String, dynamic>{'score': score};
+    final data = <String, dynamic>{
+      'score': score,
+      'comprehension_helped': comprehensionHelped,
+    };
     // Only sent when there is something to say. A null `feedback_text` would be
     // read as "clear whatever was stored", which is not what an untouched field
     // on a re-submit means.

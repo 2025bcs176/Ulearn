@@ -62,6 +62,9 @@ class RatingCreate(RequestSchema):
         le=MAX_RATING,
         description=f"Whole score from {MIN_RATING} to {MAX_RATING}.",
     )
+    comprehension_helped: bool = Field(
+        description="Whether the session helped the tutee understand the topic."
+    )
     feedback_text: Trimmed | None = Field(default=None, max_length=MAX_FEEDBACK_LENGTH)
     endorsed_course_unit_ids: list[uuid.UUID] = Field(
         default_factory=list,
@@ -102,6 +105,7 @@ class RatingResponse(OrmSchema):
     rater_id: uuid.UUID = Field(validation_alias="rater_public_id")
     ratee_id: uuid.UUID = Field(validation_alias="ratee_public_id")
     score: int
+    comprehension_helped: bool
     feedback_text: str | None = None
     created_at: datetime
 

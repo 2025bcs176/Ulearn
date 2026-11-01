@@ -28,7 +28,7 @@ abstract interface class SessionsRepository {
   /// The tutor's half only. The tutee asking for this is refused by the API, and
   /// it must stay that way: a tutee who could read their own pin would have
   /// nothing to prove, and the tutor no way to tell an in-person student from
-  /// someone guessing two digits on a borrowed account.
+  /// someone guessing a code on a borrowed account.
   Future<SessionPinModel> revealPin({required String sessionId});
 
   /// Supplies the handshake pin, and returns the session as it now stands.
@@ -37,7 +37,19 @@ abstract interface class SessionsRepository {
   /// untouched. Throttling is the API's concern: the client counts no attempts
   /// and locks nobody out, because a lock-out enforced on a device is one a
   /// student clears by reinstalling the app.
-  Future<SessionModel> verifyPin({required String sessionId, required String pin});
+  Future<SessionModel> verifyPin({
+    required String sessionId,
+    required String pin,
+  });
+
+  Future<SessionModel> requestCompletion({required String sessionId});
+
+  Future<SessionPinModel> revealCompletionCode({required String sessionId});
+
+  Future<SessionModel> verifyCompletionCode({
+    required String sessionId,
+    required String code,
+  });
 
   /// Confirms a help request the student named this tutor on, and returns the
   /// session that confirmation created.
@@ -83,6 +95,7 @@ abstract interface class SessionsRepository {
   Future<RatingModel> rateSession({
     required String sessionId,
     required int score,
+    required bool comprehensionHelped,
     String? feedbackText,
     List<String> endorsedCourseUnitIds = const [],
   });

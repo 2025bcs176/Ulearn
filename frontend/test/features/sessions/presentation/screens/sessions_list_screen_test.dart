@@ -34,7 +34,7 @@ SessionModel session({
   required String id,
   String topic = 'Second order ODEs',
   String status = 'scheduled',
-  String? sessionPin = '42',
+  String? sessionPin = '654321',
   bool isRated = false,
   int durationMinutes = 60,
   String? meetingLink,

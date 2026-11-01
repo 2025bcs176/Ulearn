@@ -35,7 +35,6 @@ from app.models.enums import SessionStatus, TutorStanding
 from app.models.session import Session
 from app.models.tutor_profile import TutorProfile
 from app.models.user import User
-from app.schemas.session import SessionTransitionRequest
 from app.services import incentive_service, rating_service, session_service
 
 GOOD_PASSWORD = "correct horse battery staple"
@@ -497,11 +496,17 @@ async def test_the_session_lifecycle_is_what_banks_the_minutes(client, db_sessio
         started_at=datetime.now(UTC) - timedelta(minutes=90),
     )
 
-    completed = await session_service.transition_session(
+    tutee = await db_session.scalar(select(User).where(User.id == session.tutee_id))
+    assert tutee is not None
+    await session_service.request_completion_pin(db_session, tutor, session.public_id)
+    completion = await session_service.reveal_completion_pin(
+        db_session, tutee, session.public_id
+    )
+    completed = await session_service.verify_completion_pin(
         db_session,
         tutor,
         session.public_id,
-        SessionTransitionRequest(status=SessionStatus.COMPLETED),
+        completion.session_pin,
     )
     assert completed.duration_minutes == 90
 

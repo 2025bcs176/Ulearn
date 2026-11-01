@@ -7,7 +7,7 @@ import 'package:peerpass/features/sessions/data/models/session_model.dart';
 import 'package:peerpass/features/sessions/data/repositories/sessions_repository.dart';
 import 'package:peerpass/features/sessions/presentation/providers/session_providers.dart';
 
-/// The two-digit handshake that starts a session in person.
+/// The six-digit handshake that starts a session in person.
 ///
 /// The tutor reveals the digits and the tutee enters them. It was the other way
 /// round, which made the handshake prove nothing: the student held the answer on
@@ -73,7 +73,10 @@ class _SessionPinSectionState extends ConsumerState<SessionPinSection> {
       TutoringSessionStatus.scheduled => switch (widget.viewerId) {
         // Reversed from the original: the tutor reveals, the tutee enters.
         final viewerId? when session.isTutor(viewerId) => _reveal(context),
-        final viewerId? when session.isTutee(viewerId) => _enter(context, state),
+        final viewerId? when session.isTutee(viewerId) => _enter(
+          context,
+          state,
+        ),
         _ => null,
       },
       // Once the session is live the handshake has done its job, and the pin is
@@ -114,7 +117,7 @@ class _SessionPinSectionState extends ConsumerState<SessionPinSection> {
         icon: Icons.visibility_outlined,
         title: 'Your handshake PIN',
         body:
-            'Read these two digits to your student. They enter them on their '
+            'Read these six digits to your student. They enter them on their '
             'side and the session starts.',
         trailing: Align(
           alignment: Alignment.centerLeft,
@@ -131,7 +134,7 @@ class _SessionPinSectionState extends ConsumerState<SessionPinSection> {
       icon: Icons.pin_outlined,
       title: 'Your handshake PIN',
       body:
-          'Read these two digits to your student. They enter them on their side '
+          'Read these six digits to your student. They enter them on their side '
           'and the session starts.',
       trailing: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -139,7 +142,7 @@ class _SessionPinSectionState extends ConsumerState<SessionPinSection> {
           SelectableText(
             pin.sessionPin,
             style: theme.textTheme.headlineMedium?.copyWith(
-              // Tabular figures so two digits do not shift as they are read
+              // Tabular figures keep the code stable as it is read aloud.
               // aloud, which is the one thing this value is for.
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
@@ -195,17 +198,17 @@ class _SessionPinSectionState extends ConsumerState<SessionPinSection> {
     final theme = Theme.of(context);
     final submitting = state.submitting;
 
-    // Two digits is the shape the API documents, so the input refuses anything
+    // Six digits is the shape the API documents, so the input refuses anything
     // else before a request is made. This is not the handshake rule -- whether
     // the digits are *right* is still the API's call -- only the shape of the
     // field.
-    final readyToSubmit = _pin.text.length == 2 && !submitting;
+    final readyToSubmit = _pin.text.length == 6 && !submitting;
 
     return _Panel(
       icon: Icons.dialpad_outlined,
       title: 'Enter the handshake PIN',
       body:
-          'Your tutor is reading you two digits. Enter them here and the session '
+          'Your tutor is reading you six digits. Enter them here and the session '
           'starts.',
       trailing: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -215,16 +218,16 @@ class _SessionPinSectionState extends ConsumerState<SessionPinSection> {
             enabled: !submitting,
             keyboardType: TextInputType.number,
             textInputAction: TextInputAction.done,
-            maxLength: 2,
+            maxLength: 6,
             // Not a const list: `digitsOnly` is a static field rather than a
             // constructor, and the length limiter carries a value.
             inputFormatters: [
               FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(2),
+              LengthLimitingTextInputFormatter(6),
             ],
             decoration: InputDecoration(
               labelText: 'PIN',
-              hintText: 'e.g. 42',
+              hintText: 'e.g. 123456',
               counterText: '',
               errorText: state.pinRejected ? _wrongPin : null,
             ),
@@ -309,9 +312,7 @@ class _Panel extends StatelessWidget {
           children: [
             Icon(icon, color: theme.colorScheme.onSurfaceVariant),
             const SizedBox(width: AppDimens.sm),
-            Expanded(
-              child: Text(title, style: theme.textTheme.titleMedium),
-            ),
+            Expanded(child: Text(title, style: theme.textTheme.titleMedium)),
           ],
         ),
         const SizedBox(height: AppDimens.xs),

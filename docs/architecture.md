@@ -370,8 +370,9 @@ matching. This prevents a degree name such as Medicine and Surgery from being
 mistaken for a matchable course unit.
 
 **Help_Requests** | `tutee_id`, `course_unit_id`, `topic`, `status`                | What was asked for, before a tutor was matched                                          |
-| **Sessions**      | `tutee_id`, `tutor_id`, `course_unit_id`, `status`, `duration_minutes`, `session_pin`, `meeting_link` | A session that happened; the source for tutor hours and certificates. Holds the handshake PIN and copyable meeting link; the PIN is tutor-revealed and tutee-entered, so it is never in a shared response |
-| **Ratings**       | `session_id`, `rater_id`, `ratee_id`, `score`, `feedback_text` | Post-session feedback; low ratings reduce matching priority. `rater_id` and `ratee_id` are both set, because either party may rate a completed session, but only the session's **tutor** has a `Tutor_Profile` to update — see 8.2 |
+| **Sessions**      | `tutee_id`, `tutor_id`, `course_unit_id`, `status`, `duration_minutes`, handshake hashes/expiry, `meeting_link`, `meeting_venue`, `meeting_venue_detail` | A session that happened; the source for tutor hours and certificates. Start and completion codes are six-digit, one-time values stored only as hashes and never appear in shared session responses |
+| **Ratings**       | `session_id`, `rater_id`, `ratee_id`, `score`, `comprehension_helped`, `feedback_text` | Immutable post-session tutee feedback; low ratings reduce matching priority. Tutor-to-tutee ratings are not accepted |
+| **Session_Reports** | `session_id`, `reporter_id`, `category`, `description`, `status` | Safeguarding reports routed to operators without exposing them to the other participant |
 | **Unit_Endorsements** | `session_id`, `rater_id`, `ratee_id`, `course_unit_id` | "This tutor knows this unit", scoped to the session's own course unit. Separate from `ratings` so subject coverage never moves promotion. Unique on `(session_id, rater_id, course_unit_id)` so a corrected submission replaces rather than accumulates |
 
 ### 5.3 Detailed Table Definitions
@@ -583,10 +584,13 @@ A peer-to-peer system is only useful if tutors are competent. PeerPass enforces 
 ### Tier 3 — Probationary Feedback Loop (Community Gate)
 
 - New tutors start at standing `probationary`.
-- Every completed session requires a rating from the tutee.
-- High average rating → standing `verified` + leadership credits.
-- Low average rating → standing `reduced` (lower matching priority) or
-  `suspended` (revoked for that unit).
+- Every completed session requires immutable rating and comprehension feedback
+  from the tutee.
+- After 3 rated sessions with an average of at least **4.10**, standing becomes
+  `verified`.
+- After 5 rated sessions, an average below **3.50** becomes `reduced` and an
+  average below **3.00** becomes `suspended`; a verified tutor keeps their
+  standing until one of those explicit demotion bars is crossed.
 
 Standing lives in `tutor_profiles.standing`, not in the user's role. The role says
 what a person may do; the standing says how much they are trusted. Collapsing the
@@ -848,7 +852,7 @@ Tutor confirms → POST /v1/sessions
 Session Scheduled (in-app)
       │
       ▼
-PIN Handshake: tutor reveals a 2-digit PIN, tutee submits it
+PIN Handshake: tutor shares a six-digit one-time code, tutee submits it
       │   (a missing PIN fails closed — never treated as a match)
       ▼
 Session Completed  (status assigned first, then the accrual —
@@ -863,7 +867,7 @@ IncentiveService logs hours → certificate eligibility
 
 ### 8.1 The PIN handshake is attendance evidence
 
-A two-digit PIN is weak as a secret and is not one. It exists to make attendance
+A six-digit one-time code is not an authentication credential. It exists to make attendance
 a *mutual* claim rather than the tutee's word alone: the tutor shows a code
 generated at acceptance, the tutee types it in to confirm they met. A tutee who
 fabricates attendance needs the tutor's code, not just a `completed` transition.
