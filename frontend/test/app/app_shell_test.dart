@@ -119,9 +119,7 @@ void main() {
   testWidgets('lands on home when a stored session restores', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          authRepositoryProvider.overrideWithValue(_signedIn()),
-        ],
+        overrides: [authRepositoryProvider.overrideWithValue(_signedIn())],
         child: const PeerPassApp(),
       ),
     );
@@ -146,6 +144,7 @@ void main() {
     // The restore has not returned, so the app must still be on splash rather
     // than flashing sign-in at a returning user.
     expect(find.byType(SplashScreen), findsOneWidget);
+    expect(find.text('Checking your session…'), findsOneWidget);
 
     repository.release();
     await _settle(tester);
@@ -199,9 +198,7 @@ void main() {
     tester,
   ) async {
     final container = ProviderContainer(
-      overrides: [
-        authRepositoryProvider.overrideWithValue(_signedIn()),
-      ],
+      overrides: [authRepositoryProvider.overrideWithValue(_signedIn())],
     );
     addTearDown(container.dispose);
 
@@ -234,15 +231,15 @@ void main() {
     );
     await _settle(tester);
 
-    GoRouter.of(
-      tester.element(find.byType(Scaffold).first),
-    ).go(AppRoutes.home);
+    GoRouter.of(tester.element(find.byType(Scaffold).first)).go(AppRoutes.home);
     await _settle(tester);
 
     expect(find.text(_signedOutText), findsOneWidget);
   });
 
-  testWidgets('the sign-in screen can reach the sign-up screen', (tester) async {
+  testWidgets('the sign-in screen can reach the sign-up screen', (
+    tester,
+  ) async {
     // Regression. The redirect guard exempted only /sign-in while signed out, so
     // tapping "Create one" navigated to /sign-up and was immediately redirected
     // back. The button therefore did nothing at all.
@@ -272,9 +269,11 @@ void main() {
       reason: 'the guard bounced the student back to sign-in',
     );
     expect(
-      Router.of(
-        tester.element(find.byType(SignUpScreen)),
-      ).routeInformationProvider!.value.uri.path,
+      Router.of(tester.element(find.byType(SignUpScreen)))
+          .routeInformationProvider!
+          .value
+          .uri
+          .path,
       AppRoutes.signUp,
     );
   });
@@ -294,9 +293,8 @@ void main() {
     );
     await _settle(tester);
 
-    GoRouter.of(
-      tester.element(find.byType(Scaffold).first),
-    ).go(AppRoutes.signUp);
+    GoRouter.of(tester.element(find.byType(Scaffold).first))
+        .go(AppRoutes.signUp);
     await _settle(tester);
 
     expect(find.byType(SignUpScreen), findsOneWidget);
@@ -317,9 +315,8 @@ void main() {
     );
     await _settle(tester);
 
-    GoRouter.of(
-      tester.element(find.byType(Scaffold).first),
-    ).go(AppRoutes.onboarding);
+    GoRouter.of(tester.element(find.byType(Scaffold).first))
+        .go(AppRoutes.onboarding);
     await _settle(tester);
 
     expect(find.text(_signedOutText), findsOneWidget);
@@ -376,8 +373,12 @@ void main() {
       ProviderScope(
         overrides: [
           authRepositoryProvider.overrideWithValue(_signedIn(profile: _tutor)),
-          matchingRepositoryProvider.overrideWithValue(FakeMatchingRepository()),
-          sessionsRepositoryProvider.overrideWithValue(FakeSessionsRepository()),
+          matchingRepositoryProvider.overrideWithValue(
+            FakeMatchingRepository(),
+          ),
+          sessionsRepositoryProvider.overrideWithValue(
+            FakeSessionsRepository(),
+          ),
         ],
         child: const PeerPassApp(),
       ),

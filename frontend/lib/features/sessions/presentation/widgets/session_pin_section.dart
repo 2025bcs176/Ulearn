@@ -57,6 +57,7 @@ class _SessionPinSectionState extends ConsumerState<SessionPinSection> {
   /// Set when the pin could not be fetched, so the panel can say so rather than
   /// offering a reveal that silently does nothing.
   bool _revealFailed = false;
+  bool _fetchingPin = false;
 
   @override
   void dispose() {
@@ -122,9 +123,15 @@ class _SessionPinSectionState extends ConsumerState<SessionPinSection> {
         trailing: Align(
           alignment: Alignment.centerLeft,
           child: OutlinedButton.icon(
-            onPressed: _fetchPin,
-            icon: const Icon(Icons.download_outlined),
-            label: const Text('Show PIN'),
+            onPressed: _fetchingPin ? null : _fetchPin,
+            icon: _fetchingPin
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.visibility_outlined),
+            label: Text(_fetchingPin ? 'Loading PIN…' : 'Show PIN'),
           ),
         ),
       );
@@ -177,6 +184,11 @@ class _SessionPinSectionState extends ConsumerState<SessionPinSection> {
   }
 
   Future<void> _fetchPin() async {
+    if (_fetchingPin) return;
+    setState(() {
+      _fetchingPin = true;
+      _revealFailed = false;
+    });
     final repo = ref.read(sessionsRepositoryProvider);
     try {
       final pin = await repo.revealPin(sessionId: widget.session.id);
@@ -184,12 +196,16 @@ class _SessionPinSectionState extends ConsumerState<SessionPinSection> {
       setState(() {
         _pin_ = pin;
         _revealFailed = false;
+        _fetchingPin = false;
       });
     } on Failure {
       // Deliberately not showing the API's text: a failed reveal is a transport
       // problem, and the retry is the same either way.
       if (!mounted) return;
-      setState(() => _revealFailed = true);
+      setState(() {
+        _revealFailed = true;
+        _fetchingPin = false;
+      });
     }
   }
 
@@ -247,10 +263,14 @@ class _SessionPinSectionState extends ConsumerState<SessionPinSection> {
           ),
           if (state.actionFailure != null && !state.pinRejected) ...[
             const SizedBox(height: AppDimens.md),
-            Text(
-              state.actionFailure!.message,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.error,
+            Semantics(
+              liveRegion: true,
+              container: true,
+              child: Text(
+                state.actionFailure!.message,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
               ),
             ),
           ],

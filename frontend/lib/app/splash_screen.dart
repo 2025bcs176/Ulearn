@@ -36,10 +36,7 @@ class SplashScreen extends ConsumerWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      'PeerPass',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
+                    const _BrandMark(),
                     const SizedBox(height: AppDimens.xl),
                     if (failure == null) ...[
                       _PeerPassAnimation(
@@ -49,7 +46,32 @@ class SplashScreen extends ConsumerWidget {
                         maxHeight: constraints.maxHeight,
                       ),
                       const SizedBox(height: AppDimens.lg),
-                      const CircularProgressIndicator.adaptive(),
+                      Semantics(
+                        liveRegion: true,
+                        child: Column(
+                          children: [
+                            SizedBox(
+                              width: 180,
+                              child: LinearProgressIndicator(
+                                minHeight: 4,
+                                borderRadius: BorderRadius.circular(
+                                  AppDimens.radiusSm,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: AppDimens.md),
+                            Text(
+                              'Checking your session…',
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ] else ...[
                       const Icon(Icons.cloud_off_outlined, size: 44),
                       const SizedBox(height: AppDimens.lg),
@@ -71,6 +93,48 @@ class SplashScreen extends ConsumerWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _BrandMark extends StatelessWidget {
+  const _BrandMark();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      header: true,
+      label: 'PeerPass',
+      child: Column(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: scheme.primary,
+              borderRadius: BorderRadius.circular(AppDimens.radiusLg),
+            ),
+            child: Icon(
+              Icons.school_rounded,
+              color: scheme.onPrimary,
+              size: 34,
+            ),
+          ),
+          const SizedBox(height: AppDimens.md),
+          Text(
+            'PeerPass',
+            style: Theme.of(context).textTheme.headlineSmall
+                ?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: AppDimens.xs),
+          Text(
+            'Learn together. Grow together.',
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: scheme.onSurfaceVariant),
+          ),
+        ],
       ),
     );
   }
