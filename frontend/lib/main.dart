@@ -29,8 +29,17 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final config = AppConfig.fromEnvironment();
   final tokenStore = SecureTokenStore();
-  final sessionCache = SessionCache();
-  await sessionCache.open();
+  SessionCache? sessionCache;
+  try {
+    final cache = SessionCache();
+    await cache.open();
+    sessionCache = cache;
+  } on Exception {
+    // History is an optional enhancement. A corrupt encrypted cache must not
+    // prevent the online sign-in flow from rendering; the next successful
+    // session can recreate it through the normal cache path.
+    sessionCache = null;
+  }
 
   // The refresh callback and the repository refer to each other: the
   // interceptor needs to be able to refresh, and refreshing is a repository
@@ -91,6 +100,7 @@ Future<void> main() async {
       // the failure is immediate and names the missing override.
       overrides: [
         authRepositoryProvider.overrideWithValue(repository),
+        sessionCacheProvider.overrideWithValue(sessionCache),
         sessionsRepositoryProvider.overrideWithValue(sessionsRepository),
         tutorsRepositoryProvider.overrideWithValue(tutorsRepository),
         matchingRepositoryProvider.overrideWithValue(matchingRepository),

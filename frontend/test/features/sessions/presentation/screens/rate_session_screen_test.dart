@@ -56,7 +56,7 @@ SessionModel completed({bool isRated = false}) {
     'created_at': '2026-03-01T08:00:00Z',
     'scheduled_start': '2026-03-04T09:00:00Z',
     'ended_at': '2026-03-04T10:00:00Z',
-    'session_pin': '42',
+    'session_pin': '654321',
   });
 }
 

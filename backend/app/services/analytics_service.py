@@ -20,6 +20,7 @@ async def topic_heatmap(db: AsyncSession) -> TopicHeatmapResponse:
         .join(CourseUnit, CourseUnit.id == HelpRequest.course_unit_id)
         .group_by(CourseUnit.code, CourseUnit.name, HelpRequest.topic)
         .having(func.count(HelpRequest.id) >= MINIMUM_COHORT_SIZE)
+        .having(func.count(func.distinct(HelpRequest.tutee_id)) >= MINIMUM_COHORT_SIZE)
         .order_by(func.count(HelpRequest.id).desc(), HelpRequest.topic.asc())
     )
     return TopicHeatmapResponse(

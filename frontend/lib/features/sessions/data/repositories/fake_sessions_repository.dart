@@ -24,7 +24,7 @@ class FakeSessionsRepository implements SessionsRepository {
     // Otherwise a tutor-side screen test would fail on "no PIN" for a reason that
     // has nothing to do with what it is testing.
     for (final session in _sessions) {
-      _pins.putIfAbsent(session.id, () => '42');
+      _pins.putIfAbsent(session.id, () => '654321');
     }
   }
 
@@ -142,7 +142,7 @@ class FakeSessionsRepository implements SessionsRepository {
       'help_request_id': requestId,
     });
     _sessions.add(created);
-    _pins[created.id] = '42';
+    _pins[created.id] = '654321';
     return created;
   }
 
@@ -218,8 +218,12 @@ class FakeSessionsRepository implements SessionsRepository {
   }
 
   @override
-  Future<SessionModel> requestCompletion({required String sessionId}) async =>
-      _require(sessionId);
+  Future<SessionModel> requestCompletion({required String sessionId}) async {
+    return _replace(
+      _require(sessionId)
+          .copyWith(completionRequestedAt: DateTime.utc(2026, 3, 4, 10)),
+    );
+  }
 
   @override
   Future<SessionPinModel> revealCompletionCode({

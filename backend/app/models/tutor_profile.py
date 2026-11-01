@@ -95,6 +95,9 @@ class TutorProfile(Base, TimestampMixin):
     #: Set when the tutor was suspended, with the reason. Kept so a suspension
     #: is explainable to the tutor and auditable later.
     suspended_reason: Mapped[str | None] = mapped_column(nullable=True)
+    operator_suspended: Mapped[bool] = mapped_column(
+        nullable=False, default=False, server_default="false"
+    )
 
     user: Mapped[User] = relationship(back_populates="tutor_profile")
 

@@ -3,7 +3,7 @@
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Text
+from sqlalchemy import ForeignKey, Index, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -18,6 +18,16 @@ if TYPE_CHECKING:
 
 class SessionReport(Base, TimestampMixin):
     __tablename__ = "session_reports"
+    __table_args__ = (
+        Index(
+            "uq_session_reports_open_reporter",
+            "session_id",
+            "reporter_id",
+            unique=True,
+            postgresql_where=text("status <> 'resolved'"),
+            sqlite_where=text("status <> 'resolved'"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid7)
     public_id: Mapped[uuid.UUID] = public_id_column()

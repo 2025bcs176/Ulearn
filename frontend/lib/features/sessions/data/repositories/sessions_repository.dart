@@ -28,7 +28,7 @@ abstract interface class SessionsRepository {
   /// The tutor's half only. The tutee asking for this is refused by the API, and
   /// it must stay that way: a tutee who could read their own pin would have
   /// nothing to prove, and the tutor no way to tell an in-person student from
-  /// someone guessing two digits on a borrowed account.
+  /// someone guessing a code on a borrowed account.
   Future<SessionPinModel> revealPin({required String sessionId});
 
   /// Supplies the handshake pin, and returns the session as it now stands.

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:peerpass/core/error/failures.dart';
 import 'package:peerpass/core/state/session.dart';
+import 'package:peerpass/core/storage/session_cache.dart';
 import 'package:peerpass/features/auth/data/repositories/auth_repository.dart';
 
 /// Deletes the signed-in account, from anywhere in the app.
@@ -10,8 +11,9 @@ import 'package:peerpass/features/auth/data/repositories/auth_repository.dart';
 /// account and can be undone by signing in; deleting it cannot, and the wording,
 /// the confirmation and the button colour all have to say so. One function with a
 /// flag would push that distinction back into every call site.
-final deleteAccountControllerProvider =
-    Provider<Future<void> Function()>((ref) {
+final deleteAccountControllerProvider = Provider<Future<void> Function()>((
+  ref,
+) {
   return () async {
     final failure = await _run(ref);
     // The session ends only when the account is actually gone. A failure means
@@ -20,6 +22,8 @@ final deleteAccountControllerProvider =
     // happened and would leave the user signed out of an account they had every
     // reason to expect to be erased.
     if (failure == null) {
+      await ref.read(sessionCacheProvider)?.clear();
+      ref.read(sessionCacheProvider)?.deactivateAccount();
       ref.read(sessionControllerProvider.notifier).signedOut();
       return;
     }

@@ -48,6 +48,11 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.add_column("sessions", sa.Column("session_pin", sa.String(2)))
+    op.create_check_constraint(
+        op.f("ck_sessions_session_pin_length"),
+        "sessions",
+        "session_pin IS NULL OR length(session_pin) = 2",
+    )
     op.drop_column("sessions", "completion_pin_locked_until")
     op.drop_column("sessions", "completion_pin_failed_attempts")
     op.drop_column("sessions", "completion_requested_at")

@@ -339,6 +339,7 @@ async def update_session_report(
             )
         profile.standing = TutorStanding.SUSPENDED
         profile.suspended_reason = payload.suspension_reason
+        profile.operator_suspended = True
     await record_audit(
         db,
         actor_id=actor_id,

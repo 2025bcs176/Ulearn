@@ -30,6 +30,9 @@ MIN_DURATION_MINUTES = 1
 MAX_DURATION_MINUTES = 480
 MAX_VENUE_LENGTH = 160
 ON_CAMPUS_CUSTOM_VENUE = "Other on-campus"
+APPROVED_ON_CAMPUS_VENUES = frozenset(
+    {"FCI Lab 1", "FCI Lab 2", "University Library", "Canteen", ON_CAMPUS_CUSTOM_VENUE}
+)
 
 
 class HelpRequestCreate(RequestSchema):
@@ -151,6 +154,8 @@ class SessionCreate(RequestSchema):
             raise ValueError(
                 "meeting_venue_detail is required for an 'Other on-campus' venue"
             )
+        if self.meeting_venue and self.meeting_venue not in APPROVED_ON_CAMPUS_VENUES:
+            raise ValueError("meeting_venue must be an approved on-campus venue")
         if self.meeting_venue_detail and not self.meeting_venue:
             raise ValueError(
                 "meeting_venue is required when meeting_venue_detail is provided"
@@ -233,6 +238,7 @@ class SessionResponse(OrmSchema):
     scheduled_start: datetime | None = None
     started_at: datetime | None = None
     ended_at: datetime | None = None
+    completion_requested_at: datetime | None = None
     duration_minutes: int = Field(ge=0)
     meeting_link: str | None = Field(
         default=None, description="Shared meeting link for the session."

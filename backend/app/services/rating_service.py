@@ -389,6 +389,9 @@ async def _get_or_create_tutor_profile(
 
 
 async def _recompute_standing(db: AsyncSession, profile: TutorProfile) -> None:
+    if profile.operator_suspended:
+        profile.standing = TutorStanding.SUSPENDED
+        return
     if profile.rating_count < PROMOTION_MIN_SESSIONS or profile.average_rating is None:
         profile.standing = TutorStanding.PROBATIONARY
         return
