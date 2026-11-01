@@ -1014,6 +1014,18 @@ participant.
 Declared after the literal `/me` routes above because FastAPI matches in
 declaration order.
 
+### `GET /v1/admin/session-reports`
+
+Returns the paginated safeguarding queue for an authenticated admin. Reports
+include public ids, category, description, status, and creation time without
+copying academic evidence into the operator list.
+
+### `PATCH /v1/admin/session-reports/{report_id}`
+
+Updates a report to `reviewing` or `resolved`. An operator may additionally set
+`suspend_tutor=true` with a required `suspension_reason`; this sets the reported
+tutor's standing to `suspended` and records the action in the admin audit log.
+
 ## Incentives
 
 ### `GET /v1/incentives/certificate`
