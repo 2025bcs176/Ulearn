@@ -245,10 +245,13 @@ class _SubmitClaimScreenState extends ConsumerState<SubmitClaimScreen> {
                     onPressed: canSubmit ? _submit : null,
                     icon: const Icon(Icons.send_outlined),
                     label: _submitting
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                        ? Semantics(
+                            label: 'Submitting tutor proof',
+                            child: const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
                           )
                         : const Text('Submit proof'),
                   ),

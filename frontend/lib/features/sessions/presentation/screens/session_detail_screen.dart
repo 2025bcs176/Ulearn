@@ -148,10 +148,15 @@ class _Body extends ConsumerWidget {
         SessionPinSection(session: session, viewerId: viewerId),
         if (state.actionFailure != null && !state.pinRejected) ...[
           const SizedBox(height: AppDimens.md),
-          Text(
-            state.actionFailure!.message,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.error,
+          Semantics(
+            liveRegion: true,
+            container: true,
+            label: state.actionFailure!.message,
+            child: Text(
+              state.actionFailure!.message,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.error,
+              ),
             ),
           ),
         ],
@@ -252,10 +257,13 @@ class _EndSession extends ConsumerWidget {
     return FilledButton(
       onPressed: state.submitting ? null : () => _confirm(context, ref),
       child: state.submitting
-          ? const SizedBox(
-              height: 20,
-              width: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
+          ? Semantics(
+              label: 'Ending session',
+              child: const SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
             )
           : const Text('End session'),
     );

@@ -195,10 +195,15 @@ class _Form extends ConsumerWidget {
           ],
           if (form.failure != null) ...[
             const SizedBox(height: AppDimens.md),
-            Text(
-              form.failure!.message,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.error,
+            Semantics(
+              liveRegion: true,
+              container: true,
+              label: form.failure!.message,
+              child: Text(
+                form.failure!.message,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
               ),
             ),
           ],
@@ -208,10 +213,13 @@ class _Form extends ConsumerWidget {
                 ? () => _submit(context, ref, session)
                 : null,
             child: form.submitting
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                ? Semantics(
+                    label: 'Submitting feedback',
+                    child: const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
                   )
                 : const Text('Submit feedback'),
           ),

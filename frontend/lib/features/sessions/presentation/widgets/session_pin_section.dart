@@ -263,10 +263,15 @@ class _SessionPinSectionState extends ConsumerState<SessionPinSection> {
           ),
           if (state.actionFailure != null && !state.pinRejected) ...[
             const SizedBox(height: AppDimens.md),
-            Text(
-              state.actionFailure!.message,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.error,
+            Semantics(
+              liveRegion: true,
+              container: true,
+              label: state.actionFailure!.message,
+              child: Text(
+                state.actionFailure!.message,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
               ),
             ),
           ],
