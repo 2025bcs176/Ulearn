@@ -370,7 +370,7 @@ matching. This prevents a degree name such as Medicine and Surgery from being
 mistaken for a matchable course unit.
 
 **Help_Requests** | `tutee_id`, `course_unit_id`, `topic`, `status`                | What was asked for, before a tutor was matched                                          |
-| **Sessions**      | `tutee_id`, `tutor_id`, `course_unit_id`, `status`, `duration_minutes`, handshake hashes/expiry, `meeting_link` | A session that happened; the source for tutor hours and certificates. Start and completion codes are six-digit, one-time values stored only as hashes and never appear in shared session responses |
+| **Sessions**      | `tutee_id`, `tutor_id`, `course_unit_id`, `status`, `duration_minutes`, handshake hashes/expiry, `meeting_link`, `meeting_venue`, `meeting_venue_detail` | A session that happened; the source for tutor hours and certificates. Start and completion codes are six-digit, one-time values stored only as hashes and never appear in shared session responses |
 | **Ratings**       | `session_id`, `rater_id`, `ratee_id`, `score`, `comprehension_helped`, `feedback_text` | Immutable post-session tutee feedback; low ratings reduce matching priority. Tutor-to-tutee ratings are not accepted |
 | **Session_Reports** | `session_id`, `reporter_id`, `category`, `description`, `status` | Safeguarding reports routed to operators without exposing them to the other participant |
 | **Unit_Endorsements** | `session_id`, `rater_id`, `ratee_id`, `course_unit_id` | "This tutor knows this unit", scoped to the session's own course unit. Separate from `ratings` so subject coverage never moves promotion. Unique on `(session_id, rater_id, course_unit_id)` so a corrected submission replaces rather than accumulates |

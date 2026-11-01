@@ -28,6 +28,8 @@ MAX_CANCELLATION_REASON_LENGTH = 500
 
 MIN_DURATION_MINUTES = 1
 MAX_DURATION_MINUTES = 480
+MAX_VENUE_LENGTH = 160
+ON_CAMPUS_CUSTOM_VENUE = "Other on-campus"
 
 
 class HelpRequestCreate(RequestSchema):
@@ -109,6 +111,22 @@ class SessionCreate(RequestSchema):
         max_length=500,
         description="Optional Google Meet / Zoom link the tutor shares.",
     )
+    meeting_venue: Trimmed | None = Field(
+        default=None,
+        max_length=MAX_VENUE_LENGTH,
+        description=(
+            "Default on-campus venue, for example FCI Lab 1, University Library, "
+            "or Canteen."
+        ),
+    )
+    meeting_venue_detail: Trimmed | None = Field(
+        default=None,
+        max_length=MAX_VENUE_LENGTH,
+        description=(
+            "Room-level detail for campus locations. Required when "
+            "meeting_venue is 'Other on-campus'."
+        ),
+    )
 
     @model_validator(mode="after")
     def start_is_in_the_future(self) -> Self:
@@ -127,6 +145,16 @@ class SessionCreate(RequestSchema):
                 <= datetime.now(self.scheduled_start.tzinfo).timestamp()
             ):
                 raise ValueError("scheduled_start must be in the future")
+        if self.meeting_venue == ON_CAMPUS_CUSTOM_VENUE and not (
+            self.meeting_venue_detail and self.meeting_venue_detail.strip()
+        ):
+            raise ValueError(
+                "meeting_venue_detail is required for an 'Other on-campus' venue"
+            )
+        if self.meeting_venue_detail and not self.meeting_venue:
+            raise ValueError(
+                "meeting_venue is required when meeting_venue_detail is provided"
+            )
         return self
 
 
@@ -208,6 +236,14 @@ class SessionResponse(OrmSchema):
     duration_minutes: int = Field(ge=0)
     meeting_link: str | None = Field(
         default=None, description="Shared meeting link for the session."
+    )
+    meeting_venue: str | None = Field(
+        default=None,
+        description="On-campus venue label selected for the session.",
+    )
+    meeting_venue_detail: str | None = Field(
+        default=None,
+        description="Room-level on-campus venue detail.",
     )
     is_rated: bool = Field(
         description=(

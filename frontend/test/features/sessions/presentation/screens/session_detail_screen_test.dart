@@ -41,6 +41,8 @@ SessionModel session({
   String status = 'scheduled',
   bool isRated = false,
   String? meetingLink,
+  String? meetingVenue,
+  String? meetingVenueDetail,
   String? endedAt,
 }) {
   return SessionModel.fromJson({
@@ -61,6 +63,8 @@ SessionModel session({
     'started_at': '2026-03-04T09:05:00Z',
     'ended_at': endedAt,
     'meeting_link': meetingLink,
+    'meeting_venue': meetingVenue,
+    'meeting_venue_detail': meetingVenueDetail,
   });
 }
 
@@ -180,6 +184,21 @@ void main() {
 
       expect(find.byTooltip('Copy meeting link'), findsOneWidget);
       expect(find.text('https://meet.peerpass.test/abc'), findsOneWidget);
+    });
+
+    testWidgets('the selected on-campus venue is shown', (tester) async {
+      await _pumpDetail(
+        tester,
+        FakeSessionsRepository(
+          sessions: [
+            session(meetingVenue: 'FCI Lab 1', meetingVenueDetail: 'Desk 3'),
+          ],
+        ),
+        _tutee,
+      );
+
+      expect(find.text('Venue'), findsOneWidget);
+      expect(find.text('FCI Lab 1 · Desk 3'), findsOneWidget);
     });
 
     testWidgets('a session that is not there says so and offers another try', (
@@ -365,7 +384,6 @@ void main() {
       expect(find.text('Handshake complete'), findsOneWidget);
     });
   });
-
 
   group('ending a live session', () {
     testWidgets('the confirmation is what sends it', (tester) async {

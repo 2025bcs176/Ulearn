@@ -128,6 +128,8 @@ async def create_session(
         session_pin_hash=session_pin_hash,
         session_pin_expires_at=_utc(datetime.now(UTC) + PIN_LIFETIME),
         meeting_link=(payload.meeting_link or "").strip() or None,
+        meeting_venue=(payload.meeting_venue or "").strip() or None,
+        meeting_venue_detail=(payload.meeting_venue_detail or "").strip() or None,
         status=SessionStatus.SCHEDULED,
     )
     db.add(session)
@@ -527,6 +529,8 @@ async def _session_response(db: AsyncSession, session: Session) -> SessionRespon
         ended_at=session.ended_at,
         duration_minutes=session.duration_minutes,
         meeting_link=session.meeting_link,
+        meeting_venue=session.meeting_venue,
+        meeting_venue_detail=session.meeting_venue_detail,
         is_rated=await session.is_rated(db),
         created_at=session.created_at,
     )

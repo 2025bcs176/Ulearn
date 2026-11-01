@@ -85,6 +85,8 @@ class SessionModel {
     this.endedAt,
     this.durationMinutes = 0,
     this.meetingLink,
+    this.meetingVenue,
+    this.meetingVenueDetail,
     this.isRated = false,
   });
 
@@ -152,6 +154,8 @@ class SessionModel {
       endedAt: _readDateTime(json, 'ended_at'),
       durationMinutes: (json['duration_minutes'] as num?)?.toInt() ?? 0,
       meetingLink: _readString(json, 'meeting_link'),
+      meetingVenue: _readString(json, 'meeting_venue'),
+      meetingVenueDetail: _readString(json, 'meeting_venue_detail'),
       isRated: switch (json['is_rated']) {
         final bool rated => rated,
         // Not a boolean. The field has one obvious neutral reading, and refusing
@@ -227,6 +231,17 @@ class SessionModel {
   /// dependency, and the agreed substitute for in-app chat is a value the student
   /// can hand to a browser.
   final String? meetingLink;
+  final String? meetingVenue;
+  final String? meetingVenueDetail;
+
+  String? get venueLabel {
+    final venue = meetingVenue;
+    final detail = meetingVenueDetail;
+    if (venue == null && detail == null) return null;
+    if (venue == null) return detail;
+    if (detail == null || detail.isEmpty) return venue;
+    return '$venue · $detail';
+  }
 
   /// Whether a rating exists for this session yet.
   ///
@@ -285,6 +300,8 @@ class SessionModel {
     TutoringSessionStatus? status,
     int? durationMinutes,
     String? meetingLink,
+    String? meetingVenue,
+    String? meetingVenueDetail,
     bool? isRated,
   }) {
     return SessionModel(
@@ -305,6 +322,8 @@ class SessionModel {
       endedAt: endedAt,
       durationMinutes: durationMinutes ?? this.durationMinutes,
       meetingLink: meetingLink ?? this.meetingLink,
+      meetingVenue: meetingVenue ?? this.meetingVenue,
+      meetingVenueDetail: meetingVenueDetail ?? this.meetingVenueDetail,
       isRated: isRated ?? this.isRated,
       createdAt: createdAt,
     );
@@ -326,6 +345,8 @@ class SessionModel {
           other.endedAt == endedAt &&
           other.durationMinutes == durationMinutes &&
           other.meetingLink == meetingLink &&
+          other.meetingVenue == meetingVenue &&
+          other.meetingVenueDetail == meetingVenueDetail &&
           other.isRated == isRated &&
           other.createdAt == createdAt;
 
@@ -343,6 +364,8 @@ class SessionModel {
     endedAt,
     durationMinutes,
     meetingLink,
+    meetingVenue,
+    meetingVenueDetail,
     isRated,
     createdAt,
   );

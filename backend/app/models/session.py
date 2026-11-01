@@ -237,6 +237,8 @@ class Session(Base, TimestampMixin):
     )
 
     meeting_link: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    meeting_venue: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    meeting_venue_detail: Mapped[str | None] = mapped_column(String(160), nullable=True)
 
     cancelled_by_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True

@@ -50,8 +50,9 @@ class SessionDetailScreen extends ConsumerWidget {
               child: ContentWidthLimiter(
                 child: FailureView(
                   failure: failure,
-                  onRetry: () =>
-                      ref.read(sessionDetailProvider(sessionId).notifier).reload(),
+                  onRetry: () => ref
+                      .read(sessionDetailProvider(sessionId).notifier)
+                      .reload(),
                 ),
               ),
             ),
@@ -96,6 +97,7 @@ class _Body extends ConsumerWidget {
     // names both parties and the API has already refused anyone who is neither.
     final viewerId = ref.watch(sessionControllerProvider).profile?.publicId;
     final link = session.meetingLink;
+    final venue = session.venueLabel;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -122,7 +124,11 @@ class _Body extends ConsumerWidget {
           label: _otherPartyLabel(session, viewerId),
           value: _otherParty(session, viewerId),
         ),
-        _FactRow(label: 'Length', value: durationLabel(session.durationMinutes)),
+        _FactRow(
+          label: 'Length',
+          value: durationLabel(session.durationMinutes),
+        ),
+        if (venue != null) _FactRow(label: 'Venue', value: venue),
         if (session.startedAt case final startedAt?)
           _FactRow(label: 'Started', value: momentLabel(startedAt)),
         if (session.endedAt case final endedAt?)
@@ -202,7 +208,10 @@ class _Action extends StatelessWidget {
       // The handshake in `SessionPinSection` is the action for a scheduled
       // session, and it renders nothing for a reader who is neither party.
       TutoringSessionStatus.scheduled => const SizedBox.shrink(),
-      TutoringSessionStatus.inProgress => _EndSession(session: session, state: state),
+      TutoringSessionStatus.inProgress => _EndSession(
+        session: session,
+        state: state,
+      ),
       TutoringSessionStatus.completed => _RateThisSession(session: session),
       // Nothing to offer for a session that did not happen. A no-show is the
       // case where a rating might be tempting and must not be: the API refuses it,
@@ -212,9 +221,8 @@ class _Action extends StatelessWidget {
       TutoringSessionStatus.noShow ||
       null => Text(
         'This session did not take place, so there is nothing to do here.',
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        ),
+        style: Theme.of(context).textTheme.bodyMedium
+            ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
       ),
     };
   }
