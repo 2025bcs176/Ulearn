@@ -68,7 +68,7 @@ Future<void> main() async {
   // its own idea of whether the user is signed in.
   final tutorsRepository = RemoteTutorsRepository(RemoteTutorsDatasource(dio));
   final matchingRepository = RemoteMatchingRepository(
-    RemoteMatchingDatasource(dio),
+    RemoteMatchingDatasource(dio, cache: sessionCache),
   );
   final incentivesRepository = RemoteIncentivesRepository(
     RemoteIncentivesDatasource(dio),

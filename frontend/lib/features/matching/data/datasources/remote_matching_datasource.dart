@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:peerpass/core/models/course_unit.dart';
+import 'package:peerpass/core/storage/session_cache.dart';
 
 /// Talks to `/v1/matching` and reads the course-unit catalogue the picker offers.
 ///
@@ -16,9 +17,10 @@ import 'package:peerpass/core/models/course_unit.dart';
 /// so a socket error and an RFC 9457 problem document are translated by the same
 /// code whichever endpoint produced them.
 class RemoteMatchingDatasource {
-  const RemoteMatchingDatasource(this._dio);
+  const RemoteMatchingDatasource(this._dio, {this.cache});
 
   final Dio _dio;
+  final SessionCache? cache;
 
   /// The course units a student can pick, for their own university.
   ///
@@ -86,13 +88,25 @@ class RemoteMatchingDatasource {
   /// confirmed" after the API had recorded a decline would be telling a student
   /// something false about the one thing they asked.
   Future<List<Map<String, dynamic>>> myHelpRequests() async {
-    final response = await _dio.get<List<dynamic>>(
-      '/v1/matching/help-requests/me',
-    );
-    return [
-      for (final row in response.data ?? const <dynamic>[])
-        if (row is Map<String, dynamic>) row,
-    ];
+    try {
+      final response = await _dio.get<List<dynamic>>(
+        '/v1/matching/help-requests/me',
+      );
+      final requests = [
+        for (final row in response.data ?? const <dynamic>[])
+          if (row is Map<String, dynamic>) row,
+      ];
+      await cache?.writeHelpRequests(requests, awaitingTutor: false);
+      return requests;
+    } on DioException {
+      final cached = await cache?.readHelpRequests(awaitingTutor: false);
+      if (cached != null) {
+        return [
+          for (final row in cached) {...row, '_offline_cached': true},
+        ];
+      }
+      rethrow;
+    }
   }
 
   /// Asks for help with a course unit, naming the specific question.
@@ -149,13 +163,25 @@ class RemoteMatchingDatasource {
   /// returns what is outstanding, and because a client that fetched "the one"
   /// would have to invent which one that is.
   Future<List<Map<String, dynamic>>> requestsAwaitingMe() async {
-    final response = await _dio.get<List<dynamic>>(
-      '/v1/matching/help-requests/awaiting-me',
-    );
-    return [
-      for (final row in response.data ?? const <dynamic>[])
-        if (row is Map<String, dynamic>) row,
-    ];
+    try {
+      final response = await _dio.get<List<dynamic>>(
+        '/v1/matching/help-requests/awaiting-me',
+      );
+      final requests = [
+        for (final row in response.data ?? const <dynamic>[])
+          if (row is Map<String, dynamic>) row,
+      ];
+      await cache?.writeHelpRequests(requests, awaitingTutor: true);
+      return requests;
+    } on DioException {
+      final cached = await cache?.readHelpRequests(awaitingTutor: true);
+      if (cached != null) {
+        return [
+          for (final row in cached) {...row, '_offline_cached': true},
+        ];
+      }
+      rethrow;
+    }
   }
 
   /// Turns down a request that is waiting on the signed-in tutor.

@@ -154,6 +154,10 @@ class _TutorRequestCard extends ConsumerWidget {
                 ),
               ),
             ],
+            if (request.isOfflineCached) ...[
+              const SizedBox(height: AppDimens.md),
+              const Text('Offline snapshot: reconnect before taking action.'),
+            ],
             const SizedBox(height: AppDimens.md),
             Text(
               'Asked ${_when(request.createdAt)}. No time is set, and an '
@@ -189,7 +193,7 @@ class _TutorRequestCard extends ConsumerWidget {
               children: [
                 Expanded(
                   child: FilledButton(
-                    onPressed: decision.submitting
+                    onPressed: request.isOfflineCached || decision.submitting
                         ? null
                         : () => context.push(
                             AppRoutes.confirmRequestPath(
@@ -204,7 +208,7 @@ class _TutorRequestCard extends ConsumerWidget {
                 const SizedBox(width: AppDimens.md),
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: decision.submitting
+                    onPressed: request.isOfflineCached || decision.submitting
                         ? null
                         : () => ref
                               .read(tutorDecisionProvider(request.id).notifier)
