@@ -212,7 +212,10 @@ class _Action extends StatelessWidget {
         session: session,
         state: state,
       ),
-      TutoringSessionStatus.completed => _RateThisSession(session: session),
+      TutoringSessionStatus.completed =>
+        _isTutee(viewerId)
+            ? _RateThisSession(session: session)
+            : const _RatedBySomeoneElse(),
       // Nothing to offer for a session that did not happen. A no-show is the
       // case where a rating might be tempting and must not be: the API refuses it,
       // and the tutor attending a session the student missed is not something a
@@ -226,6 +229,9 @@ class _Action extends StatelessWidget {
       ),
     };
   }
+
+  bool _isTutee(String? viewerId) =>
+      viewerId != null && session.isTutee(viewerId);
 }
 
 /// Ending a live session.

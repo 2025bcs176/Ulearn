@@ -98,7 +98,8 @@ class RemoteMatchingDatasource {
       ];
       await cache?.writeHelpRequests(requests, awaitingTutor: false);
       return requests;
-    } on DioException {
+    } on DioException catch (error) {
+      if (!_canUseCache(error)) rethrow;
       final cached = await cache?.readHelpRequests(awaitingTutor: false);
       if (cached != null) {
         return [
@@ -173,16 +174,24 @@ class RemoteMatchingDatasource {
       ];
       await cache?.writeHelpRequests(requests, awaitingTutor: true);
       return requests;
-    } on DioException {
+    } on DioException catch (error) {
+      if (!_canUseCache(error)) rethrow;
       final cached = await cache?.readHelpRequests(awaitingTutor: true);
       if (cached != null) {
         return [
           for (final row in cached) {...row, '_offline_cached': true},
         ];
       }
+
       rethrow;
     }
   }
+
+  bool _canUseCache(DioException error) =>
+      error.type == DioExceptionType.connectionError ||
+      error.type == DioExceptionType.connectionTimeout ||
+      error.type == DioExceptionType.sendTimeout ||
+      error.type == DioExceptionType.receiveTimeout;
 
   /// Turns down a request that is waiting on the signed-in tutor.
   ///

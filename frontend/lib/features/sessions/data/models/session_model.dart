@@ -83,11 +83,13 @@ class SessionModel {
     this.scheduledStart,
     this.startedAt,
     this.endedAt,
+    this.completionRequestedAt,
     this.durationMinutes = 0,
     this.meetingLink,
     this.meetingVenue,
     this.meetingVenueDetail,
     this.isRated = false,
+    this.isOfflineSnapshot = false,
   });
 
   /// Reads the wire form.
@@ -152,6 +154,7 @@ class SessionModel {
       scheduledStart: _readDateTime(json, 'scheduled_start'),
       startedAt: _readDateTime(json, 'started_at'),
       endedAt: _readDateTime(json, 'ended_at'),
+      completionRequestedAt: _readDateTime(json, 'completion_requested_at'),
       durationMinutes: (json['duration_minutes'] as num?)?.toInt() ?? 0,
       meetingLink: _readString(json, 'meeting_link'),
       meetingVenue: _readString(json, 'meeting_venue'),
@@ -162,6 +165,7 @@ class SessionModel {
         // the whole session over it would be worse than reading it as unrated.
         _ => false,
       },
+      isOfflineSnapshot: json['_offline_cached'] == true,
     );
   }
 
@@ -215,6 +219,8 @@ class SessionModel {
 
   final DateTime? endedAt;
 
+  final DateTime? completionRequestedAt;
+
   final int durationMinutes;
 
   /// The two-digit handshake pin the API generated.
@@ -251,6 +257,8 @@ class SessionModel {
   /// to the client that just submitted it, and is held on the detail screen for
   /// as long as that screen is open.
   final bool isRated;
+
+  final bool isOfflineSnapshot;
 
   final DateTime createdAt;
 
@@ -293,7 +301,7 @@ class SessionModel {
   ///
   /// False for a status this client does not recognise: an unfamiliar state must
   /// not be presented as something to act on.
-  bool get isActive => status?.isActive ?? false;
+  bool get isActive => !isOfflineSnapshot && (status?.isActive ?? false);
 
   SessionModel copyWith({
     String? statusWire,

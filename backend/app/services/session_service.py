@@ -34,19 +34,13 @@ from app.services import rating_service
 
 #: Wrong entries before the tutee is put on a cooldown.
 #:
-#: Low, deliberately. The pin is two digits, so the whole search space is 100 and
-#: a generous limit is barely a limit: at 5, a full sweep of the space costs a
-#: minute of waiting. The handshake proves the tutee was in the room; it is not a
-#: security control, so a handful of tries suits it and the tutor has to be
-#: standing there.
+#: A small retry budget prevents guessing while leaving room for a genuine typo.
 MAX_PIN_ATTEMPTS = 5
 
 #: How long a tutee is locked out once they have used them all.
 #:
 #: A cooldown rather than a permanent lock, because the session still has to be
-#: startable and both parties are physically present. Fifteen minutes is long
-#: enough that brute-forcing 100 candidates is pointless and short enough that a
-#: genuine typo is not a dead session.
+#: startable and both parties are physically present.
 PIN_LOCKOUT = timedelta(minutes=15)
 PIN_LIFETIME = timedelta(minutes=20)
 
@@ -527,6 +521,7 @@ async def _session_response(db: AsyncSession, session: Session) -> SessionRespon
         scheduled_start=session.scheduled_start,
         started_at=session.started_at,
         ended_at=session.ended_at,
+        completion_requested_at=session.completion_requested_at,
         duration_minutes=session.duration_minutes,
         meeting_link=session.meeting_link,
         meeting_venue=session.meeting_venue,

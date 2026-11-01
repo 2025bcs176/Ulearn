@@ -29,12 +29,23 @@ class RemoteSessionsDatasource {
           .toList();
       await cache?.writeSessions(sessions);
       return sessions;
-    } on DioException {
+    } on DioException catch (error) {
+      if (!_canUseCache(error)) rethrow;
       final cached = await cache?.readSessions();
-      if (cached != null) return cached;
+      if (cached != null) {
+        return [
+          for (final row in cached) {...row, '_offline_cached': true},
+        ];
+      }
       rethrow;
     }
   }
+
+  bool _canUseCache(DioException error) =>
+      error.type == DioExceptionType.connectionError ||
+      error.type == DioExceptionType.connectionTimeout ||
+      error.type == DioExceptionType.sendTimeout ||
+      error.type == DioExceptionType.receiveTimeout;
 
   /// One session, re-read by public id.
   Future<Map<String, dynamic>> session(String sessionId) async {
