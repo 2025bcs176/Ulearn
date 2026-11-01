@@ -4,6 +4,7 @@ import 'package:peerpass_admin/core/models/admin_session.dart';
 import 'package:peerpass_admin/core/providers/admin_providers.dart';
 import 'package:peerpass_admin/features/admin/presentation/screens/audit_log_screen.dart';
 import 'package:peerpass_admin/features/admin/presentation/screens/competencies_screen.dart';
+import 'package:peerpass_admin/features/admin/presentation/screens/session_reports_screen.dart';
 import 'package:peerpass_admin/features/admin/presentation/screens/topic_heatmap_screen.dart';
 import 'package:peerpass_admin/features/admin/presentation/screens/tutor_standings_screen.dart';
 import 'package:peerpass_admin/features/admin/presentation/screens/users_screen.dart';
@@ -53,6 +54,11 @@ const _destinations = <_ShellDestination>[
     selectedIcon: Icon(Icons.insights),
     label: 'Analytics',
   ),
+  _ShellDestination(
+    icon: Icon(Icons.report_outlined),
+    selectedIcon: Icon(Icons.report),
+    label: 'Reports',
+  ),
 ];
 
 /// The screens the rail and the bar are built from, in destination order.
@@ -62,6 +68,7 @@ const _screens = <Widget>[
   TutorStandingsScreen(),
   AuditLogScreen(),
   TopicHeatmapScreen(),
+  SessionReportsScreen(),
 ];
 
 /// The console's navigation destinations, in the order the screens appear.

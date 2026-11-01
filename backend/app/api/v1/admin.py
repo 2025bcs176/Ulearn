@@ -12,6 +12,9 @@ from app.schemas.admin import (
     AdminCompetencyPageParams,
     AdminCompetencyResponse,
     AdminCompetencyReviewRequest,
+    AdminSessionReportPage,
+    AdminSessionReportResponse,
+    AdminSessionReportUpdate,
     AdminTutorStandingPage,
     AdminUserPage,
 )
@@ -88,3 +91,31 @@ async def list_tutor_standings(
     page = await admin_service.list_tutor_standings(db, caller.user.id, params)
     await db.commit()
     return page
+
+
+@router.get("/session-reports", response_model=AdminSessionReportPage)
+async def list_session_reports(
+    caller: AdminUser,
+    db: DatabaseSession,
+    params: AdminPageParams,
+) -> AdminSessionReportPage:
+    page = await admin_service.list_session_reports(db, caller.user.id, params)
+    await db.commit()
+    return page
+
+
+@router.patch(
+    "/session-reports/{report_id}",
+    response_model=AdminSessionReportResponse,
+)
+async def update_session_report(
+    report_id: uuid.UUID,
+    payload: AdminSessionReportUpdate,
+    caller: AdminUser,
+    db: DatabaseSession,
+) -> AdminSessionReportResponse:
+    response = await admin_service.update_session_report(
+        db, caller.user.id, report_id, payload
+    )
+    await db.commit()
+    return response
