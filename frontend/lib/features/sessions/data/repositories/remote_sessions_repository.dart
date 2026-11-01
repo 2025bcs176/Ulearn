@@ -31,12 +31,15 @@ class RemoteSessionsRepository implements SessionsRepository {
   }
 
   @override
-  Future<SessionModel> session(String sessionId) =>
-      _guard(() async => SessionModel.fromJson(await _remote.session(sessionId)));
+  Future<SessionModel> session(String sessionId) => _guard(
+    () async => SessionModel.fromJson(await _remote.session(sessionId)),
+  );
 
   @override
   Future<SessionPinModel> revealPin({required String sessionId}) {
-    return _guard(() async => SessionPinModel.fromJson(await _remote.revealPin(sessionId)));
+    return _guard(
+      () async => SessionPinModel.fromJson(await _remote.revealPin(sessionId)),
+    );
   }
 
   @override
@@ -51,10 +54,18 @@ class RemoteSessionsRepository implements SessionsRepository {
   }
 
   @override
-  Future<SessionPinModel> requestCompletionCode({required String sessionId}) {
+  Future<SessionModel> requestCompletion({required String sessionId}) {
+    return _guard(
+      () async =>
+          SessionModel.fromJson(await _remote.requestCompletion(sessionId)),
+    );
+  }
+
+  @override
+  Future<SessionPinModel> revealCompletionCode({required String sessionId}) {
     return _guard(
       () async => SessionPinModel.fromJson(
-        await _remote.requestCompletionCode(sessionId),
+        await _remote.revealCompletionCode(sessionId),
       ),
     );
   }

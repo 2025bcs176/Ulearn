@@ -956,11 +956,17 @@ ceiling cannot be circumvented.
 ### `POST /v1/sessions/{session_id}/request-completion`
 
 The tutor requests a second six-digit one-time code after the session has
-started. The code expires after 20 minutes and is shared with the tutee.
+started. This marks the session as waiting for completion confirmation; it does
+not reveal a code.
+
+### `POST /v1/sessions/{session_id}/reveal-completion`
+
+The tutee reveals a fresh six-digit code after the tutor requests completion.
+The code expires after 20 minutes and is shown only in the tutee response.
 
 ### `POST /v1/sessions/{session_id}/verify-completion`
 
-The tutor submits the second code. A successful verification records the end
+The tutor submits the second code revealed by the tutee. A successful verification records the end
 timestamp, calculates session minutes, and moves the session to `completed`.
 Direct `completed` transitions are rejected. An expired or exhausted code leaves
 the session in progress for operator review.

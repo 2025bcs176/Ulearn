@@ -29,12 +29,6 @@ MAX_CANCELLATION_REASON_LENGTH = 500
 MIN_DURATION_MINUTES = 1
 MAX_DURATION_MINUTES = 480
 
-#: The handshake pin is exactly two digits, matching `sessions.session_pin`'s
-#: `String(2)` and its `session_pin_length` check constraint. Bounded here so an
-#: oversized candidate is a validation error naming the field rather than a wrong
-#: PIN the tutee is told to try again with.
-MAX_PIN_LENGTH = 2
-
 
 class HelpRequestCreate(RequestSchema):
     """A student asking for help with a course unit.
@@ -226,17 +220,16 @@ class SessionResponse(OrmSchema):
 
 
 class SessionPinResponse(OrmSchema):
-    """The handshake pin, for the tutor who has to read it aloud.
+    """The handshake pin, for the tutee to reveal to the tutor.
 
     Split out from `SessionResponse` rather than added there as an optional field
-    because the pin belongs to one party. In the shared response it was readable
-    by the tutee as well, which made the handshake something the tutee could
-    simply skip: there was no secret left to prove knowledge of.
+    because the code belongs to one party. The tutee reveals it and the tutor
+    submits it, proving both participants are present.
     """
 
     session_id: uuid.UUID
     session_pin: str = Field(
-        description="The two digits the tutor reads out for the tutee to enter."
+        description="The six-digit code the tutee reads out for the tutor to enter."
     )
     attempts_remaining: int = Field(
         ge=0,
@@ -249,7 +242,7 @@ class SessionPinResponse(OrmSchema):
 
 
 class VerifyPinRequest(RequestSchema):
-    """The digits the tutee is entering.
+    """The digits the tutor is entering.
 
     A schema rather than the `dict[str, str]` the route used to accept: an
     untyped body means a missing `pin` arrives as `""` and fails later as an

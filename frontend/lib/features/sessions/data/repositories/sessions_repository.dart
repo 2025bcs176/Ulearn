@@ -37,9 +37,14 @@ abstract interface class SessionsRepository {
   /// untouched. Throttling is the API's concern: the client counts no attempts
   /// and locks nobody out, because a lock-out enforced on a device is one a
   /// student clears by reinstalling the app.
-  Future<SessionModel> verifyPin({required String sessionId, required String pin});
+  Future<SessionModel> verifyPin({
+    required String sessionId,
+    required String pin,
+  });
 
-  Future<SessionPinModel> requestCompletionCode({required String sessionId});
+  Future<SessionModel> requestCompletion({required String sessionId});
+
+  Future<SessionPinModel> revealCompletionCode({required String sessionId});
 
   Future<SessionModel> verifyCompletionCode({
     required String sessionId,

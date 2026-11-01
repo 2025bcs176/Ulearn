@@ -110,10 +110,7 @@ class RemoteSessionsDatasource {
   /// so. The API answers a wrong pin with a 422 naming the `pin` field, and leaves
   /// the session scheduled. A 429 means the attempts are spent and the API, not
   /// this client, decides when trying again is allowed.
-  Future<Map<String, dynamic>> verifyPin(
-    String sessionId,
-    String pin,
-  ) async {
+  Future<Map<String, dynamic>> verifyPin(String sessionId, String pin) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/v1/sessions/$sessionId/verify-pin',
       data: <String, dynamic>{'pin': pin},
@@ -121,9 +118,16 @@ class RemoteSessionsDatasource {
     return response.data!;
   }
 
-  Future<Map<String, dynamic>> requestCompletionCode(String sessionId) async {
+  Future<Map<String, dynamic>> requestCompletion(String sessionId) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/v1/sessions/$sessionId/request-completion',
+    );
+    return response.data!;
+  }
+
+  Future<Map<String, dynamic>> revealCompletionCode(String sessionId) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/v1/sessions/$sessionId/reveal-completion',
     );
     return response.data!;
   }

@@ -218,7 +218,11 @@ class FakeSessionsRepository implements SessionsRepository {
   }
 
   @override
-  Future<SessionPinModel> requestCompletionCode({
+  Future<SessionModel> requestCompletion({required String sessionId}) async =>
+      _require(sessionId);
+
+  @override
+  Future<SessionPinModel> revealCompletionCode({
     required String sessionId,
   }) async {
     return SessionPinModel(

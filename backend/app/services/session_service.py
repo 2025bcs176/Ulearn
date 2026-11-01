@@ -239,17 +239,33 @@ async def transition_session(
 
 async def request_completion_pin(
     db: AsyncSession, user: User, session_id: uuid.UUID
-) -> SessionPinResponse:
-    """Create the one-time code used to confirm a completed session."""
+) -> SessionResponse:
+    """Mark that the tutor is ready for the tutee to confirm completion."""
     session = await _load_session_for_user(db, user, session_id)
     if session.tutor_id != user.id:
         raise AuthorizationProblem("Only the tutor can request completion.")
     if session.status is not SessionStatus.IN_PROGRESS:
         raise ConflictProblem("Only an in-progress session can be completed.")
 
+    session.completion_requested_at = _utc(datetime.now(UTC))
+    await db.commit()
+    return await _session_response(db, session)
+
+
+async def reveal_completion_pin(
+    db: AsyncSession, user: User, session_id: uuid.UUID
+) -> SessionPinResponse:
+    """Create and reveal the completion code to the tutee only."""
+    session = await _load_session_for_user(db, user, session_id)
+    if session.tutee_id != user.id:
+        raise AuthorizationProblem("Only the tutee can reveal completion.")
+    if session.status is not SessionStatus.IN_PROGRESS:
+        raise ConflictProblem("This session is not waiting for completion.")
+    if session.completion_requested_at is None:
+        raise ConflictProblem("The tutor has not requested completion.")
+
     code, session.completion_pin_hash = Session.generate_session_pin()
     session.completion_pin_expires_at = _utc(datetime.now(UTC) + PIN_LIFETIME)
-    session.completion_requested_at = _utc(datetime.now(UTC))
     session.completion_pin_failed_attempts = 0
     session.completion_pin_locked_until = None
     await db.commit()
@@ -263,7 +279,7 @@ async def request_completion_pin(
 async def verify_completion_pin(
     db: AsyncSession, user: User, session_id: uuid.UUID, pin: str
 ) -> SessionResponse:
-    """Confirm completion with the code requested by the tutor."""
+    """Confirm completion with the code revealed by the tutee."""
     session = await _load_session_for_user(db, user, session_id)
     if session.tutor_id != user.id:
         raise AuthorizationProblem("Only the tutor can confirm completion.")

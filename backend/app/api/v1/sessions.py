@@ -117,7 +117,7 @@ async def reveal_session_pin(
 
 @router.post(
     "/{session_id}/request-completion",
-    response_model=SessionPinResponse,
+    response_model=SessionResponse,
     summary="Request a completion confirmation code",
 )
 async def request_completion_pin(
@@ -125,8 +125,21 @@ async def request_completion_pin(
     caller: CurrentUser,
     db: DatabaseSession,
 ) -> SessionPinResponse:
-    """Generate a one-time completion code for the tutor to share."""
+    """Ask the tutee to reveal a one-time completion code."""
     return await session_service.request_completion_pin(db, caller.user, session_id)
+
+
+@router.post(
+    "/{session_id}/reveal-completion",
+    response_model=SessionPinResponse,
+    summary="Reveal the completion confirmation code to the tutee",
+)
+async def reveal_completion_pin(
+    session_id: uuid.UUID,
+    caller: CurrentUser,
+    db: DatabaseSession,
+) -> SessionPinResponse:
+    return await session_service.reveal_completion_pin(db, caller.user, session_id)
 
 
 @router.post(
