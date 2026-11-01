@@ -87,6 +87,13 @@ class _OfflineAuthRepository extends FakeAuthRepository {
   }
 }
 
+class _DeletedAccountAuthRepository extends FakeAuthRepository {
+  @override
+  Future<UserProfile?> restoreSession() async {
+    throw const NotFoundFailure('That user could not be found.');
+  }
+}
+
 FakeAuthRepository _signedIn({UserProfile? profile}) {
   return FakeAuthRepository(
     session: profile ?? _enrolled,
@@ -145,6 +152,8 @@ void main() {
     // than flashing sign-in at a returning user.
     expect(find.byType(SplashScreen), findsOneWidget);
     expect(find.text('Checking your session…'), findsOneWidget);
+    expect(find.text('PeerPass'), findsNothing);
+    expect(find.byIcon(Icons.school_rounded), findsNothing);
 
     repository.release();
     await _settle(tester);
@@ -192,6 +201,25 @@ void main() {
     // offers a retry, because a student on a train is not signed out.
     expect(find.byType(SplashScreen), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
+  });
+
+  testWidgets('a deleted account leaves splash and returns to sign-in', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(
+            _DeletedAccountAuthRepository(),
+          ),
+        ],
+        child: const PeerPassApp(),
+      ),
+    );
+    await _settle(tester);
+
+    expect(find.byType(SplashScreen), findsNothing);
+    expect(find.text(_signedOutText), findsOneWidget);
   });
 
   testWidgets('an auth change redirects without the screen asking', (

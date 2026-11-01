@@ -11,8 +11,8 @@ import 'package:peerpass/core/state/session.dart';
 import 'package:peerpass/core/theme/app_theme.dart';
 import 'package:peerpass/features/auth/data/repositories/auth_repository.dart';
 import 'package:peerpass/features/auth/data/repositories/fake_auth_repository.dart';
+import 'package:peerpass/features/competencies/data/repositories/competencies_repository.dart';
 import 'package:peerpass/features/competencies/data/repositories/fake_competencies_repository.dart';
-import 'package:peerpass/features/competencies/presentation/providers/competency_providers.dart';
 import 'package:peerpass/features/competencies/presentation/screens/submit_claim_screen.dart';
 
 const UserProfile _student = UserProfile(

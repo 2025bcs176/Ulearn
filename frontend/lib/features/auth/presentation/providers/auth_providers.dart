@@ -151,6 +151,15 @@ final facultiesProvider = FutureProvider.family<List<Subject>, String>((
     final faculties = await ref
         .read(authRepositoryProvider)
         .faculties(universityId: universityId);
+    if (faculties.isNotEmpty) return faculties;
+
+    final universities = await ref.read(universitiesProvider.future);
+    for (final university in universities) {
+      if (university.publicId == universityId &&
+          university.name == mustFallbackUniversityName) {
+        return mustFallbackFaculties;
+      }
+    }
     return faculties;
   } on Failure {
     rethrow;

@@ -388,21 +388,25 @@ Read-only, administrator-loaded reference data. No create, update, or delete: a
 student who could invent a course unit their own transcript never mentioned could
 manufacture a match for it.
 
+For the current MUST pilot, the seed contains only the Faculty of Computing and
+Informatics and its undergraduate Computer Science, Information Technology, and
+Software Engineering programmes. Postgraduate and non-FCI entries are excluded.
+
 **All three are unauthenticated.** The sign-up form shows a student where they
 study before they have an account, and a published faculty list leaks nothing a
 prospectus does not.
 
 ### `GET /v1/academics/universities`
 
-Every institution, alphabetically. `grading_scale_id` is nullable: a tutor cannot
-be matched until their university has a scale, and the matching service reports
-that rather than assuming one.
+The MUST pilot institution, alphabetically. `grading_scale_id` is nullable: a
+tutor cannot be matched until their university has a scale, and the matching
+service reports that rather than assuming one.
 
 ```json
 [
   {
     "id": "8e2c…",
-    "name": "Makerere University",
+    "name": "Mbarara University of Science and Technology",
     "grading_scale_id": "1f4a…"
   }
 ]
@@ -422,16 +426,14 @@ IDs from different universities.
 
 ### `GET /v1/academics/programs?university_id=<uuid>`
 
-Every degree or postgraduate offering seeded for the selected university,
-ordered by faculty and name. Programs are reference information and are
-separate from course units, which remain the records used by matching.
+Every undergraduate offering seeded for the selected university, ordered by
+faculty and name. Programs are reference information and are separate from
+course units, which remain the records used by matching.
 
 ### `GET /v1/academics/course-units`
 
 **Requires authentication.** Returns only the course units inside the caller's own
-university **and** their own faculty. Ordered by university, then by code — a
-student scanning for `BIT 221` is looking for a code, not for alphabetical
-position.
+university **and** their own faculty. Ordered by university, then by code.
 
 | Query        | Type | Notes                                                     |
 | ------------ | ---- | --------------------------------------------------------- |

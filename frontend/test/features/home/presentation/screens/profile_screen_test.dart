@@ -12,7 +12,11 @@ import 'package:peerpass/core/state/session.dart';
 import 'package:peerpass/core/theme/app_theme.dart';
 import 'package:peerpass/features/auth/data/repositories/auth_repository.dart';
 import 'package:peerpass/features/auth/data/repositories/fake_auth_repository.dart';
+import 'package:peerpass/features/competencies/data/models/tutor_claim.dart';
+import 'package:peerpass/features/competencies/data/repositories/competencies_repository.dart';
+import 'package:peerpass/features/competencies/data/repositories/fake_competencies_repository.dart';
 import 'package:peerpass/features/home/presentation/screens/profile_screen.dart';
+
 const _profile = UserProfile(
   publicId: 'user-1',
   email: 'student@must.ac.ug',
@@ -29,6 +33,7 @@ Future<ProviderContainer> _pumpProfile(
   WidgetTester tester,
   AuthRepository repository, {
   UserProfile? profile,
+  CompetenciesRepository? competenciesRepository,
 }) async {
   // Seed both. The container's controller is what the screen reads, and the
   // repository's own copy is what it merges an update into and returns -- a fake
@@ -37,7 +42,13 @@ Future<ProviderContainer> _pumpProfile(
   final signedIn = profile ?? _profile;
   if (repository is FakeAuthRepository) repository.session = signedIn;
   final container = ProviderContainer(
-    overrides: [authRepositoryProvider.overrideWithValue(repository)],
+    overrides: [
+      authRepositoryProvider.overrideWithValue(repository),
+      if (competenciesRepository != null)
+        competenciesRepositoryProvider.overrideWithValue(
+          competenciesRepository,
+        ),
+    ],
   );
   addTearDown(container.dispose);
   container.read(sessionControllerProvider.notifier).signedIn(signedIn);
@@ -206,18 +217,15 @@ void main() {
     expect(repository.profileUpdates, isEmpty);
   });
 
-  testWidgets('the applications row is offered to a student who never applied', (
+  testWidgets('the applications row is hidden before the first application', (
     tester,
   ) async {
-    // Deliberately not gated on the tutor role. The applications screen is how a
-    // student finds out they have not applied yet, so hiding the row until the
-    // API has already made them a tutor would make it unreachable.
     await _pumpProfile(tester, _repositoryWithFaculties());
 
-    expect(find.text('Tutor applications'), findsOneWidget);
+    expect(find.text('Tutor applications'), findsNothing);
   });
 
-  testWidgets('tapping the applications row goes to the applications screen', (
+  testWidgets('a submitted application opens its status screen', (
     tester,
   ) async {
     final router = GoRouter(
@@ -233,8 +241,29 @@ void main() {
     addTearDown(router.dispose);
 
     final repository = _repositoryWithFaculties()..session = _profile;
+    final claims = FakeCompetenciesRepository(
+      claims: [
+        TutorClaim(
+          id: 'claim-1',
+          courseUnitId: 'unit-1',
+          courseUnitCode: 'CSC2101',
+          courseUnitName: 'Operating Systems',
+          gradeId: 'grade-1',
+          gradeLabel: 'A',
+          statusWire: 'pending',
+          status: TutorClaimStatus.pending,
+          gradePoints: 5,
+          meetsThreshold: true,
+          createdAt: DateTime.utc(2026, 11),
+          evidenceReference: 'Transcript',
+        ),
+      ],
+    );
     final container = ProviderContainer(
-      overrides: [authRepositoryProvider.overrideWithValue(repository)],
+      overrides: [
+        authRepositoryProvider.overrideWithValue(repository),
+        competenciesRepositoryProvider.overrideWithValue(claims),
+      ],
     );
     addTearDown(container.dispose);
     container.read(sessionControllerProvider.notifier).signedIn(_profile);

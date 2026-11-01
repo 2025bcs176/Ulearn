@@ -163,6 +163,28 @@ void main() {
   });
 
   group('signing in', () {
+    test(
+      'does not send a previous account token to the login request',
+      () async {
+        await store.write(
+          accessToken: 'old-access',
+          refreshToken: 'old-refresh',
+        );
+        String? tokenAtLogin;
+        server
+          ..onFetch = () async {
+            tokenAtLogin = await store.readAccessToken();
+          }
+          ..reply(200, _tokens());
+
+        await repository.signIn(
+          email: 'new@must.ac.ug',
+          password: 'correct-password',
+        );
+
+        expect(tokenAtLogin, isNull);
+      },
+    );
     test('posts to the login endpoint and adopts the account', () async {
       server.reply(200, _tokens());
 
@@ -342,6 +364,20 @@ void main() {
       });
 
       expect(await repository.restoreSession(), isNull);
+      expect(await store.readRefreshToken(), isNull);
+    });
+
+    test('a restored account that no longer exists clears the token', () async {
+      await store.write(accessToken: 'stale', refreshToken: 'refresh-1');
+      server
+        ..reply(200, _tokens(access: 'access-2', refresh: 'refresh-2'))
+        ..reply(404, {
+          'status': 404,
+          'detail': 'That user could not be found.',
+        });
+
+      expect(await repository.restoreSession(), isNull);
+      expect(await store.readAccessToken(), isNull);
       expect(await store.readRefreshToken(), isNull);
     });
 

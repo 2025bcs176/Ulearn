@@ -24,7 +24,7 @@ const double _cardWidth = 200;
 ///
 /// Tall enough for the name, the chip, the rating, the sessions and the
 /// endorsements without the text wrapping into a second line per field.
-const double _cardHeight = 148;
+const double _cardHeight = 172;
 
 /// The tutors to browse, as a rail of cards on the home screen.
 ///

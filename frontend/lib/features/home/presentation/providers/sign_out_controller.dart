@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:peerpass/core/state/session.dart';
+import 'package:peerpass/core/storage/session_cache.dart';
 import 'package:peerpass/features/auth/data/repositories/auth_repository.dart';
 
 /// Ends the session, from anywhere in the app.
@@ -17,6 +18,9 @@ import 'package:peerpass/features/auth/data/repositories/auth_repository.dart';
 final signOutControllerProvider = Provider<Future<void> Function()>((ref) {
   return () async {
     await ref.read(authRepositoryProvider).signOut();
+    final cache = ref.read(sessionCacheProvider);
+    await cache?.clear();
+    cache?.deactivateAccount();
     ref.read(sessionControllerProvider.notifier).signedOut();
   };
 });

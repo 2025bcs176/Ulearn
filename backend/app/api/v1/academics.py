@@ -32,6 +32,8 @@ from app.services import faculty_scope
 
 router = APIRouter(prefix="/academics", tags=["academics"])
 
+PILOT_UNIVERSITY_NAME = "Mbarara University of Science and Technology"
+
 
 @router.get(
     "/universities",
@@ -48,6 +50,7 @@ async def list_universities(db: DatabaseSession) -> list[UniversityResponse]:
     result = await db.execute(
         select(University)
         .options(selectinload(University.grading_scale))
+        .where(University.name == PILOT_UNIVERSITY_NAME)
         .order_by(University.name)
     )
     return [UniversityResponse.model_validate(row) for row in result.scalars()]

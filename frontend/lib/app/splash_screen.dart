@@ -36,8 +36,6 @@ class SplashScreen extends ConsumerWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const _BrandMark(),
-                    const SizedBox(height: AppDimens.xl),
                     if (failure == null) ...[
                       _PeerPassAnimation(
                         maxWidth:
@@ -98,48 +96,6 @@ class SplashScreen extends ConsumerWidget {
   }
 }
 
-class _BrandMark extends StatelessWidget {
-  const _BrandMark();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Semantics(
-      header: true,
-      label: 'PeerPass',
-      child: Column(
-        children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: scheme.primary,
-              borderRadius: BorderRadius.circular(AppDimens.radiusLg),
-            ),
-            child: Icon(
-              Icons.school_rounded,
-              color: scheme.onPrimary,
-              size: 34,
-            ),
-          ),
-          const SizedBox(height: AppDimens.md),
-          Text(
-            'PeerPass',
-            style: Theme.of(context).textTheme.headlineSmall
-                ?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: AppDimens.xs),
-          Text(
-            'Learn together. Grow together.',
-            style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: scheme.onSurfaceVariant),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// What to say, by cause.
 ///
 /// Deliberately says nothing about the exception behind the failure. The student
@@ -172,13 +128,17 @@ class _PeerPassAnimation extends StatelessWidget {
       AppDimens.splashAnimationMax,
     );
 
-    return SizedBox.square(
-      dimension: animationSize,
-      child: Lottie.asset(
-        'assets/lotties/PeerPass.json',
-        animate: !reducedMotion,
-        repeat: true,
-        fit: BoxFit.contain,
+    return Semantics(
+      label: 'PeerPass',
+      image: true,
+      child: SizedBox.square(
+        dimension: animationSize,
+        child: Lottie.asset(
+          'assets/lotties/PeerPass.json',
+          animate: !reducedMotion,
+          repeat: true,
+          fit: BoxFit.contain,
+        ),
       ),
     );
   }

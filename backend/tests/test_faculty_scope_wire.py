@@ -15,10 +15,11 @@ if the scope were wrong here the client would quietly offer another faculty's
 courses.
 """
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from app.models.course_unit import CourseUnit, Subject
+from app.models.course_unit import CourseUnit, Subject, University
 from tests.conftest import CommittedEnv
 from tests.support import (
     bearer,
@@ -33,9 +34,36 @@ from tests.support import (
 # unit-bearing one to prove the silo, and a third that is only ever used as
 # "somewhere else". Named in a test rather than derived so that a change to the
 # seed fails here instead of quietly narrowing what is proved.
-_UNIT_BEARING = "Faculty of Computing and Informatics Sciences"
+_UNIT_BEARING = "Faculty of Computing and Informatics"
 _OTHER_UNIT_BEARING = "Faculty of Science"
 _OTHER_FACULTY = "Faculty of Interdisciplinary Studies"
+
+
+@pytest.fixture(autouse=True)
+async def add_test_only_second_faculty(committed_env: CommittedEnv) -> None:
+    async with committed_env.session() as session:
+        university = await session.scalar(select(University))
+        assert university is not None
+        for name, code in (
+            (_OTHER_FACULTY, "IDS1101"),
+            (_OTHER_UNIT_BEARING, "SCI1101"),
+        ):
+            faculty = Subject(
+                name=name,
+                description="Test-only second faculty",
+                university_id=university.id,
+            )
+            session.add(faculty)
+            await session.flush()
+            session.add(
+                CourseUnit(
+                    code=code,
+                    name="Test Science Unit",
+                    university_id=university.id,
+                    subject_id=faculty.id,
+                )
+            )
+        await session.commit()
 
 
 async def _public_id(env: CommittedEnv, name: str) -> str:

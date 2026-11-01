@@ -120,12 +120,14 @@ class HomeScreen extends ConsumerWidget {
                 ),
               ],
               if (rail != null) ...[const SizedBox(height: AppDimens.xl), rail],
-              if (!(profile?.hasRole(UserRole.tutor) ?? false))
+              if (!(profile?.hasRole(UserRole.tutor) ?? false)) ...[
+                const SizedBox(height: AppDimens.xl),
                 FilledButton.icon(
                   onPressed: () => context.push(AppRoutes.tutorVerification),
                   icon: const Icon(Icons.verified_user_outlined),
                   label: const Text('Become a tutor'),
                 ),
+              ],
               const SizedBox(height: AppDimens.xxl),
               Text(
                 'Signed in as ${profile?.email ?? ''}',

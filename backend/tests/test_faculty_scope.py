@@ -41,9 +41,9 @@ from tests.support import bearer, register
 
 UNITS_URL = "/v1/academics/course-units"
 
-OWN_FACULTY = "Faculty of Computing and Informatics Sciences"
+OWN_FACULTY = "Faculty of Computing and Informatics"
 OTHER_FACULTY = "Faculty of Science"
-OWN_UNIT_CODE = "BIT 221"
+OWN_UNIT_CODE = "BIT1101"
 OTHER_UNIT_CODE = "SCH 211"
 
 
@@ -56,6 +56,24 @@ async def pilot(committed_env: CommittedEnv) -> dict:
     rather than as a fixture quietly working around it.
     """
     async with committed_env.session() as session:
+        university = await session.scalar(select(University))
+        assert university is not None
+        other = Subject(
+            name=OTHER_FACULTY,
+            description="Test-only second faculty",
+            university_id=university.id,
+        )
+        session.add(other)
+        await session.flush()
+        session.add(
+            CourseUnit(
+                code=OTHER_UNIT_CODE,
+                name="Test Science Unit",
+                university_id=university.id,
+                subject_id=other.id,
+            )
+        )
+        await session.commit()
         units = {
             unit.code: unit
             for unit in (
@@ -182,7 +200,7 @@ async def test_the_catalogue_offers_only_your_own_faculty(
 
     units = (await committed_env.client.get(UNITS_URL, headers=bearer(body))).json()
 
-    assert {unit["code"] for unit in units} == {"BIT 221", "BIT 223", "BIT 225"}
+    assert len(units) == 63
 
 
 async def test_a_faculty_with_no_course_units_is_offered_none(

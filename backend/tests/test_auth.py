@@ -26,7 +26,7 @@ from app.core.security import (
     decode_token,
     hash_opaque_token,
 )
-from app.db.seed import seed
+from app.db.seed import COURSE_UNITS, seed
 from app.models.course_unit import Subject, University
 from app.models.enums import UserRole
 from app.models.grading_scale import Grade, GradingScale
@@ -635,7 +635,7 @@ async def test_seeded_academic_catalogue_populates_onboarding_options(
     assert universities.json()[0]["name"] == (
         "Mbarara University of Science and Technology"
     )
-    assert "Faculty of Computing and Informatics Sciences" in {
+    assert "Faculty of Computing and Informatics" in {
         row["name"] for row in faculties.json()
     }
     programs = await client.get(
@@ -643,7 +643,11 @@ async def test_seeded_academic_catalogue_populates_onboarding_options(
         params={"university_id": university_id},
     )
     assert programs.status_code == 200
-    assert any(row["name"] == "Medicine and Surgery (MBChB)" for row in programs.json())
+    assert {row["name"] for row in programs.json()} == {
+        "Computer Science",
+        "Information Technology",
+        "Software Engineering",
+    }
 
 
 async def test_profile_update_sets_the_name(client: AsyncClient) -> None:
@@ -818,12 +822,7 @@ async def test_the_course_catalogue_needs_a_session(
 async def test_seed_exposes_only_the_provisional_pilot_course_units(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    """The catalogue, read one faculty at a time, because that is all a caller sees.
-
-    Asserted per faculty rather than as one flat list: the units are seeded under
-    two faculties and an account belongs to exactly one of them, so a single
-    assertion would need the unscoped listing this endpoint deliberately is not.
-    """
+    """The catalogue exposes the PR's FCI undergraduate course units."""
     await seed(db_session)
     university_id = (await client.get("/v1/academics/universities")).json()[0]["id"]
     faculties = (
@@ -834,37 +833,21 @@ async def test_seed_exposes_only_the_provisional_pilot_course_units(
     ).json()
     by_name = {faculty["name"]: faculty["id"] for faculty in faculties}
 
-    expected_by_faculty = {
-        "Faculty of Computing and Informatics Sciences": {
-            ("BIT 221", "Operating Systems"),
-            ("BIT 223", "Database Programming"),
-            ("BIT 225", "Computer Networks"),
-        },
-        "Faculty of Science": {
-            ("SCH 211", "Organic Chemistry"),
-            ("PHY 212", "Thermodynamics"),
-            ("MTH 213", "Linear Algebra"),
-        },
-    }
-
     student = await register(client, "catalogue@student.must.ac.ug")
-    listed: set[tuple[str, str]] = set()
-    for name, expected in expected_by_faculty.items():
-        chosen = await client.patch(
-            PROFILE_URL,
-            headers=bearer(student),
-            json={"university_id": university_id, "faculty_id": by_name[name]},
-        )
-        assert chosen.status_code == 200, chosen.text
-        units = (
-            await client.get("/v1/academics/course-units", headers=bearer(student))
-        ).json()
-        assert {(unit["code"], unit["name"]) for unit in units} == expected, name
-        listed |= {(unit["code"], unit["name"]) for unit in units}
-
-    assert not any(
-        name in {"Computer Science", "Information Technology"} for _code, name in listed
+    chosen = await client.patch(
+        PROFILE_URL,
+        headers=bearer(student),
+        json={
+            "university_id": university_id,
+            "faculty_id": by_name["Faculty of Computing and Informatics"],
+        },
     )
+    assert chosen.status_code == 200, chosen.text
+    units = (
+        await client.get("/v1/academics/course-units", headers=bearer(student))
+    ).json()
+    assert len(units) == 63
+    assert {unit["code"] for unit in units} == {unit[1] for unit in COURSE_UNITS}
 
 
 async def test_the_seeded_gate_admits_a_b_plus_and_refuses_a_b(

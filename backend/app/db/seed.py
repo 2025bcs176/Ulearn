@@ -63,202 +63,194 @@ GRADES: tuple[tuple[str, str], ...] = (
 
 FACULTIES: tuple[tuple[str, str], ...] = (
     (
-        "Faculty of Medicine",
-        "The founding and most prominent faculty, offering health sciences "
-        "undergraduate and postgraduate education.",
-    ),
-    (
-        "Faculty of Science",
-        "Focuses on basic and applied sciences, including biology, chemistry, "
-        "mathematics, and physics.",
-    ),
-    (
-        "Faculty of Computing and Informatics Sciences",
+        "Faculty of Computing and Informatics",
         "Drives technology education through computing, information technology, "
-        "computer engineering, and postgraduate information systems programs.",
-    ),
-    (
-        "Faculty of Applied Sciences and Technology",
-        "Offers engineering and industrial programs, including biomedical, "
-        "electrical and electronics, petroleum, and environmental programs.",
-    ),
-    (
-        "Faculty of Interdisciplinary Studies",
-        "Focuses on community development and applied interdisciplinary programs.",
-    ),
-    (
-        "Faculty of Business and Management Sciences",
-        "Provides business education tailored to science and technology sectors.",
+        "and software engineering undergraduate programs.",
     ),
 )
 
 PROGRAMS: tuple[tuple[str, str, str], ...] = (
-    ("Faculty of Medicine", "undergraduate", "Medicine and Surgery (MBChB)"),
-    ("Faculty of Medicine", "undergraduate", "Pharmacy"),
-    ("Faculty of Medicine", "undergraduate", "Nursing Science"),
-    ("Faculty of Medicine", "undergraduate", "Medical Laboratory Science"),
-    ("Faculty of Medicine", "undergraduate", "Physiotherapy"),
-    ("Faculty of Medicine", "postgraduate", "Master of Medicine (MMed)"),
-    ("Faculty of Science", "undergraduate", "Bachelor of Science with Education"),
-    ("Faculty of Science", "postgraduate", "MSc and PhD in Biology"),
-    ("Faculty of Science", "postgraduate", "MSc and PhD in Chemistry"),
-    ("Faculty of Science", "postgraduate", "MSc and PhD in Mathematics"),
-    ("Faculty of Science", "postgraduate", "MSc and PhD in Physics"),
+    ("Faculty of Computing and Informatics", "undergraduate", "Computer Science"),
     (
-        "Faculty of Computing and Informatics Sciences",
-        "undergraduate",
-        "Computer Science",
-    ),
-    (
-        "Faculty of Computing and Informatics Sciences",
+        "Faculty of Computing and Informatics",
         "undergraduate",
         "Information Technology",
     ),
     (
-        "Faculty of Computing and Informatics Sciences",
+        "Faculty of Computing and Informatics",
         "undergraduate",
-        "Computer Engineering",
-    ),
-    (
-        "Faculty of Computing and Informatics Sciences",
-        "postgraduate",
-        "Health Information Technology",
-    ),
-    (
-        "Faculty of Computing and Informatics Sciences",
-        "postgraduate",
-        "Information Systems",
-    ),
-    (
-        "Faculty of Applied Sciences and Technology",
-        "undergraduate",
-        "Biomedical Engineering",
-    ),
-    (
-        "Faculty of Applied Sciences and Technology",
-        "undergraduate",
-        "Electrical and Electronics Engineering",
-    ),
-    (
-        "Faculty of Applied Sciences and Technology",
-        "undergraduate",
-        "Petroleum Engineering",
-    ),
-    (
-        "Faculty of Applied Sciences and Technology",
-        "undergraduate",
-        "Environmental Management",
-    ),
-    (
-        "Faculty of Interdisciplinary Studies",
-        "undergraduate",
-        "Gender and Applied Women Health",
-    ),
-    (
-        "Faculty of Interdisciplinary Studies",
-        "undergraduate",
-        "Planning and Community Development",
-    ),
-    (
-        "Faculty of Interdisciplinary Studies",
-        "undergraduate",
-        "Agricultural Livelihoods",
-    ),
-    (
-        "Faculty of Business and Management Sciences",
-        "undergraduate",
-        "Business Administration",
-    ),
-    (
-        "Faculty of Business and Management Sciences",
-        "undergraduate",
-        "Accounting and Finance",
-    ),
-    (
-        "Faculty of Business and Management Sciences",
-        "undergraduate",
-        "Procurement and Supply Chain Management",
+        "Software Engineering",
     ),
 )
 
-#: The provisional MUST pilot catalogue: `(faculty, code, name)`.
+#: FCI undergraduate catalogue from PR #39: `(faculty, code, name)`.
 #:
-#: These are the only units currently eligible for the closed pilot. They are
-#: seed entries, not an institutional endorsement or a claim that MUST's full
-#: catalogue has been loaded. Do not derive more units from programme names:
-#: programmes and matchable course units are different records.
-#:
-#: Every faculty MUST publishes has at least one unit here. A faculty with an
-#: empty catalogue cannot be declared against, so a student in one could never
-#: apply to tutor -- the pilot would look like a broken feature rather than an
-#: empty one. `tests/test_cli.py` fails if a faculty is added without a unit.
-#:
-#: **The codes are provisional and are not MUST course codes.** MUST does not
-#: publish a course-unit catalogue: `must.ac.ug` programme pages carry faculty,
-#: course code, duration and entry requirements, but their "Course Modules" tab
-#: is empty, and no module list is published anywhere public. The names below
-#: are drawn from MUST's own academic units -- the departments listed on each
-#: faculty page -- because a department is a real, verifiable academic unit
-#: where a programme name is not, and its subject areas are what its first-year
-#: courses teach. Replace the whole table with the official catalogue when MUST
-#: supplies one; nothing else in the codebase encodes a code or a name.
-#:
-#: Sources, retrieved for this seed:
-#:
-#: * `must.ac.ug/university_unit/faculty-of-medicine` and its Biochemistry
-#:   department page, which states biochemistry is "a mandatory course for all
-#:   students in the faculty".
-#: * `must.ac.ug/university_unit/faculty-of-applied-sciences-and-technology`,
-#:   which lists the Department of Electrical and Electronic Engineering, and the
-#:   BEEE programme page, whose entry requirements name Technical Drawing.
-#: * `must.ac.ug/university_unit/faculty-of-business-and-management-sciences`,
-#:   which lists the Departments of Accounting and Finance and of Economics and
-#:   Entrepreneurship.
-#: * `must.ac.ug/university_unit/faculty-of-interdisciplinary-studies`, which
-#:   lists its four departments by name.
-#:
-#: Note that MUST's own site now calls this faculty "Faculty of Health Sciences"
-#: and lists a seventh faculty, Agriculture, Environment and Veterinary Sciences.
-#: The seed keeps the older names because renaming a seeded faculty would orphan
-#: every course unit, declared module and competency keyed to it.
+#: The pilot intentionally excludes postgraduate degrees and non-FCI faculties.
+#: Course units remain faculty-scoped in the current schema; the degree list is
+#: the authoritative undergraduate offering shown during onboarding.
 COURSE_UNITS: tuple[tuple[str, str, str], ...] = (
-    ("Faculty of Computing and Informatics Sciences", "BIT 221", "Operating Systems"),
+    ("Faculty of Computing and Informatics", "BIT1101", "Fundamentals of ICT"),
+    ("Faculty of Computing and Informatics", "BIT1103", "Principles of Programming: C"),
     (
-        "Faculty of Computing and Informatics Sciences",
-        "BIT 223",
-        "Database Programming",
-    ),
-    ("Faculty of Computing and Informatics Sciences", "BIT 225", "Computer Networks"),
-    ("Faculty of Science", "SCH 211", "Organic Chemistry"),
-    ("Faculty of Science", "PHY 212", "Thermodynamics"),
-    ("Faculty of Science", "MTH 213", "Linear Algebra"),
-    ("Faculty of Medicine", "MED 211", "Human Anatomy"),
-    ("Faculty of Medicine", "MED 212", "Human Physiology"),
-    ("Faculty of Medicine", "MED 213", "Medical Biochemistry"),
-    ("Faculty of Applied Sciences and Technology", "AST 211", "Electrical Circuits"),
-    ("Faculty of Applied Sciences and Technology", "AST 212", "Electronics"),
-    ("Faculty of Applied Sciences and Technology", "AST 213", "Engineering Drawing"),
-    ("Faculty of Business and Management Sciences", "BMS 211", "Financial Accounting"),
-    (
-        "Faculty of Business and Management Sciences",
-        "BMS 212",
-        "Principles of Economics",
+        "Faculty of Computing and Informatics",
+        "BIT1104",
+        "Fundamentals of Information Systems",
     ),
     (
-        "Faculty of Business and Management Sciences",
-        "BMS 213",
-        "Entrepreneurship",
-    ),
-    ("Faculty of Interdisciplinary Studies", "IDS 211", "Planning and Governance"),
-    (
-        "Faculty of Interdisciplinary Studies",
-        "IDS 212",
-        "Human Development and Relational Sciences",
+        "Faculty of Computing and Informatics",
+        "BIT1105",
+        "Mathematics for Information Technology",
     ),
     (
-        "Faculty of Interdisciplinary Studies",
-        "IDS 213",
-        "Community Engagement and Service Learning",
+        "Faculty of Computing and Informatics",
+        "BIT1106",
+        "Principals of Programming: Python",
+    ),
+    ("Faculty of Computing and Informatics", "BIT1206", "Advanced Python Programming"),
+    (
+        "Faculty of Computing and Informatics",
+        "BIT2101",
+        "Object Oriented Programming 2",
+    ),
+    ("Faculty of Computing and Informatics", "BIT2102", "Systems Security"),
+    ("Faculty of Computing and Informatics", "BIT2103", "Database Management Systems"),
+    ("Faculty of Computing and Informatics", "BIT2104", "Computer Networking"),
+    (
+        "Faculty of Computing and Informatics",
+        "BIT2105",
+        "Financial Management for IT professionals",
+    ),
+    ("Faculty of Computing and Informatics", "BIT2106", "Agile Project Management"),
+    ("Faculty of Computing and Informatics", "BIT2107", "Software Engineering"),
+    ("Faculty of Computing and Informatics", "BIT3101", "Human Computer Interaction"),
+    (
+        "Faculty of Computing and Informatics",
+        "BIT3103",
+        "Geographic Information Systems",
+    ),
+    ("Faculty of Computing and Informatics", "BIT3104", "Artificial Intelligence"),
+    (
+        "Faculty of Computing and Informatics",
+        "BIT3105",
+        "Mobile computing and Data communications",
+    ),
+    (
+        "Faculty of Computing and Informatics",
+        "BIT3106",
+        "Innovations and Entrepreneurship in IT",
+    ),
+    ("Faculty of Computing and Informatics", "BIT3107", "Sensor Technologies"),
+    (
+        "Faculty of Computing and Informatics",
+        "BIT3108",
+        "Organizational Management for IT professionals",
+    ),
+    ("Faculty of Computing and Informatics", "CSC1101", "Computer Skills"),
+    ("Faculty of Computing and Informatics", "CSC1102", "Principles of Programming"),
+    (
+        "Faculty of Computing and Informatics",
+        "CSC1103",
+        "Computer Organisation and Architecture",
+    ),
+    (
+        "Faculty of Computing and Informatics",
+        "CSC1104",
+        "Communication and Writing Skills for Computer Scientists",
+    ),
+    ("Faculty of Computing and Informatics", "CSC1114", "Communication Skills"),
+    ("Faculty of Computing and Informatics", "CSC1121", "Computer Skills"),
+    ("Faculty of Computing and Informatics", "CSC2101", "Operating Systems"),
+    (
+        "Faculty of Computing and Informatics",
+        "CSC2102",
+        "Object Oriented Programming- Java II",
+    ),
+    ("Faculty of Computing and Informatics", "CSC2104", "Database programming"),
+    ("Faculty of Computing and Informatics", "CSC2105", "Systems Analysis and Design"),
+    ("Faculty of Computing and Informatics", "CSC2106", "Scientific Thinking"),
+    ("Faculty of Computing and Informatics", "CSC3101", "Software Project Management"),
+    ("Faculty of Computing and Informatics", "CSC3102", "Artificial Intelligence"),
+    ("Faculty of Computing and Informatics", "CSC3103", "Embedded Systems"),
+    ("Faculty of Computing and Informatics", "CSC3104", "Computational Complexity"),
+    ("Faculty of Computing and Informatics", "CSC3105", "Multimedia Technology"),
+    (
+        "Faculty of Computing and Informatics",
+        "CSC3106",
+        "Wireless and Mobile Communications",
+    ),
+    (
+        "Faculty of Computing and Informatics",
+        "CSC3109",
+        "Mobile Applications Development",
+    ),
+    (
+        "Faculty of Computing and Informatics",
+        "CSC3111",
+        "Computer Vision & Image Processing",
+    ),
+    ("Faculty of Computing and Informatics", "DCS1101", "Computer Skils"),
+    ("Faculty of Computing and Informatics", "SWE1101", "DISCRETE MATHEMATICS"),
+    ("Faculty of Computing and Informatics", "SWE1103", "Linear Algebra"),
+    (
+        "Faculty of Computing and Informatics",
+        "SWE1104",
+        "Software Development Principles",
+    ),
+    ("Faculty of Computing and Informatics", "SWE1105", "COMMUNICATION SKILLS"),
+    ("Faculty of Computing and Informatics", "SWE2101", "Object Oriented Programming"),
+    ("Faculty of Computing and Informatics", "SWE2102", "Requirements Engineering"),
+    ("Faculty of Computing and Informatics", "SWE2103", "Probability and Statistics"),
+    (
+        "Faculty of Computing and Informatics",
+        "SWE2104",
+        "Data Structure and Algorithms",
+    ),
+    (
+        "Faculty of Computing and Informatics",
+        "SWE2105",
+        "Geographic Information Systems",
+    ),
+    (
+        "Faculty of Computing and Informatics",
+        "SWE2106",
+        "Internet Technology and Web Design",
+    ),
+    ("Faculty of Computing and Informatics", "SWE2107", "Systems Analysis And Design"),
+    ("Faculty of Computing and Informatics", "SWE3101", "Human Computer Interaction"),
+    (
+        "Faculty of Computing and Informatics",
+        "SWE3102",
+        "Software reliability and testing",
+    ),
+    ("Faculty of Computing and Informatics", "SWE3103", "Software Project Management"),
+    ("Faculty of Computing and Informatics", "SWE3104", "Modeling and Simulation"),
+    (
+        "Faculty of Computing and Informatics",
+        "SWE3105",
+        "Research Methods in Computing",
+    ),
+    (
+        "Faculty of Computing and Informatics",
+        "SWE3107",
+        "Mobile Networks and Computing",
+    ),
+    ("Faculty of Computing and Informatics", "SWE4101", "Computer Aided Design"),
+    (
+        "Faculty of Computing and Informatics",
+        "SWE4102",
+        "Computer Graphics Engineering",
+    ),
+    ("Faculty of Computing and Informatics", "SWE4103", "Formal methods"),
+    ("Faculty of Computing and Informatics", "SWE4104", "Software Design Patterns"),
+    (
+        "Faculty of Computing and Informatics",
+        "SWE4106",
+        "Software Engineering Industrial Mini Project II",
+    ),
+    (
+        "Faculty of Computing and Informatics",
+        "SWE4107",
+        "Client Server Programming for Applications",
     ),
 )
 
@@ -298,12 +290,21 @@ async def _seed_grading_scale(db: AsyncSession) -> GradingScale:
 
 async def _seed_subjects(db: AsyncSession) -> dict[str, Subject]:
     """The faculties, keyed by name, with any missing ones added."""
+    faculty_names = {name for name, _description in FACULTIES}
     subjects = {
         row.name: row
         for row in (
-            await db.execute(select(Subject).where(Subject.university_id.is_(None)))
+            await db.execute(select(Subject).where(Subject.name.in_(faculty_names)))
         ).scalars()
     }
+    legacy = await db.scalar(
+        select(Subject).where(
+            Subject.name == "Faculty of Computing and Informatics Sciences"
+        )
+    )
+    if legacy is not None:
+        legacy.name = "Faculty of Computing and Informatics"
+        subjects[legacy.name] = legacy
     for name, description in FACULTIES:
         subject = subjects.get(name)
         if subject is None:
@@ -324,6 +325,12 @@ async def _seed_university(db: AsyncSession, scale: GradingScale) -> University:
     university = await db.scalar(
         select(University).where(University.name == UNIVERSITY_NAME)
     )
+    if university is None:
+        university = await db.scalar(
+            select(University).where(University.name == "Makerere University")
+        )
+        if university is not None:
+            university.name = UNIVERSITY_NAME
     if university is None:
         university = University(name=UNIVERSITY_NAME, grading_scale_id=scale.id)
         db.add(university)

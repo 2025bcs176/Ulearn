@@ -10,8 +10,8 @@ import 'package:peerpass/features/auth/data/datasources/remote_auth_datasource.d
 import 'package:peerpass/features/auth/data/repositories/auth_repository.dart';
 import 'package:peerpass/features/auth/data/repositories/remote_auth_repository.dart';
 import 'package:peerpass/features/competencies/data/datasources/remote_competencies_datasource.dart';
+import 'package:peerpass/features/competencies/data/repositories/competencies_repository.dart';
 import 'package:peerpass/features/competencies/data/repositories/remote_competencies_repository.dart';
-import 'package:peerpass/features/competencies/presentation/providers/competency_providers.dart';
 import 'package:peerpass/features/incentives/data/datasources/remote_incentives_datasource.dart';
 import 'package:peerpass/features/incentives/data/repositories/incentives_repository.dart';
 import 'package:peerpass/features/incentives/data/repositories/remote_incentives_repository.dart';

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:peerpass/core/error/failures.dart';
+import 'package:peerpass/core/models/academic_fallback.dart';
 import 'package:peerpass/core/models/course_unit_option.dart';
 import 'package:peerpass/core/models/subject.dart';
 import 'package:peerpass/core/models/university_option.dart';
@@ -15,6 +16,7 @@ import 'package:peerpass/features/auth/presentation/providers/auth_providers.dar
 import 'package:peerpass/features/auth/presentation/providers/onboarding_providers.dart';
 import 'package:peerpass/features/auth/presentation/screens/onboarding_screen.dart';
 import 'package:peerpass/features/auth/presentation/widgets/selection_check.dart';
+
 /// A student who has signed up and filled in nothing yet.
 ///
 /// The state the router hands to the wizard, and the one the fake merges every
@@ -570,6 +572,60 @@ void main() {
     expect(find.text('University'), findsOneWidget);
     expect(_canAdvance(tester, 'Continue'), isFalse);
   });
+
+  testWidgets('the MUST fallback exposes the pilot computing faculty', (
+    tester,
+  ) async {
+    final harness = _harness(
+      FakeAuthRepository(session: _freshAccount, refreshToken: 'refresh'),
+    );
+    await _pumpWizard(tester, harness);
+    await _completeNameStep(tester, harness);
+
+    harness.container
+        .read(onboardingControllerProvider.notifier)
+        .setUniversity(mustFallbackUniversityId);
+    await _settle(tester);
+
+    await tester.tap(_facultyDropdown);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Faculty of Computing and Informatics'), findsOneWidget);
+    expect(
+      find.text('Faculty of Computing and Informatics Sciences'),
+      findsNothing,
+    );
+  });
+
+  testWidgets(
+    'an empty MUST faculty catalogue keeps the faculty picker usable',
+    (tester) async {
+      final harness = _harness(
+        FakeAuthRepository(
+          session: _freshAccount,
+          refreshToken: 'refresh',
+          universityOptions: const [
+            UniversityOption(
+              publicId: 'university-must',
+              name: mustFallbackUniversityName,
+            ),
+          ],
+        ),
+      );
+      await _pumpWizard(tester, harness);
+      await _completeNameStep(tester, harness);
+      harness.container
+          .read(onboardingControllerProvider.notifier)
+          .setUniversity('university-must');
+      await _settle(tester);
+
+      await tester.tap(_facultyDropdown);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Faculty of Computing and Informatics'), findsOneWidget);
+      expect(_canAdvance(tester, 'Continue'), isFalse);
+    },
+  );
 
   testWidgets('a faculty lookup failure is visible and retryable', (
     tester,

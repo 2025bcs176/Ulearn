@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:peerpass/core/error/failures.dart';
 import 'package:peerpass/features/competencies/data/models/tutor_claim.dart';
 
@@ -27,3 +28,16 @@ abstract interface class CompetenciesRepository {
     String? notes,
   });
 }
+
+/// The repository used by the tutor-proof flows and account status summary.
+final competenciesRepositoryProvider = Provider<CompetenciesRepository>(
+  (ref) => throw UnimplementedError(
+    'competenciesRepositoryProvider must be overridden in ProviderScope.',
+  ),
+);
+
+/// The signed-in user's submitted tutor applications.
+final myClaimsProvider = FutureProvider<List<TutorClaim>>(
+  (ref) => ref.read(competenciesRepositoryProvider).myClaims(),
+  retry: (retryCount, error) => null,
+);
