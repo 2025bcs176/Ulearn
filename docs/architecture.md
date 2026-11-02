@@ -848,19 +848,6 @@ Tutor confirms → POST /v1/sessions
 Session Scheduled (in-app)
       │
       ▼
-PIN Handshake: tutor reveals a 2-digit PIN, tutee submits it
-      │   (a missing PIN fails closed — never treated as a match)
-      ▼
-Session Completed  (status assigned first, then the accrual —
-                   so minutes bank exactly once)
-      │
-      ▼
-Rating Submitted → ValidationService updates tutor status
-      │
-      ▼
-IncentiveService logs hours → certificate eligibility
-```
-
 ### 8.1 The PIN handshake is attendance evidence
 
 A two-digit PIN is weak as a secret and is not one. It exists to make attendance

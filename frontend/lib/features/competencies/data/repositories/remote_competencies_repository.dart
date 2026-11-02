@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:peerpass/core/error/failures.dart';
 import 'package:peerpass/core/network/network_exceptions.dart';
 import 'package:peerpass/features/competencies/data/datasources/remote_competencies_datasource.dart';
@@ -36,6 +37,12 @@ class RemoteCompetenciesRepository implements CompetenciesRepository {
       notes: notes,
     ),
   );
+
+  @override
+  Future<TutorClaim> uploadEvidence({
+    required String competencyId,
+    required PlatformFile file,
+  }) => _guard(() => datasource.uploadEvidence(competencyId: competencyId, file: file));
 
   Future<T> _guard<T>(Future<T> Function() call) async {
     try {

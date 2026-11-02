@@ -24,6 +24,7 @@ dependencies:
   # auth header and token refresh are attached without touching call sites.
   dio: ^5.11.1
 
+  file_picker: ^13.3.0
   flutter:
     sdk: flutter
 

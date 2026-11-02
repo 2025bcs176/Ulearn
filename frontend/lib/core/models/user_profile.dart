@@ -17,7 +17,11 @@ class UserProfile {
     this.fullName,
     this.universityId,
     this.facultyId,
+    this.programId,
     this.yearOfStudy,
+    this.semester,
+    this.regNo,
+    this.tel,
     this.academicDataConsentedAt,
     this.primaryCourseUnitIds = const [],
   });
@@ -61,7 +65,11 @@ class UserProfile {
       roles: roles,
       universityId: json['university_id'] as String?,
       facultyId: json['faculty_id'] as String?,
+      programId: json['program_id'] as String?,
       yearOfStudy: (json['year_of_study'] as num?)?.toInt(),
+      semester: (json['semester'] as num?)?.toInt(),
+      regNo: json['reg_no'] as String?,
+      tel: json['tel'] as String?,
       academicDataConsentedAt: json['academic_data_consented_at'] == null
           ? null
           : DateTime.parse(json['academic_data_consented_at'] as String),
@@ -89,7 +97,15 @@ class UserProfile {
 
   final String? facultyId;
 
+  final String? programId;
+
   final int? yearOfStudy;
+
+  final int? semester;
+
+  final String? regNo;
+
+  final String? tel;
 
   /// When consent to process academic records was given.
   ///

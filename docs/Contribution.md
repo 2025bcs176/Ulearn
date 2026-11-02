@@ -253,44 +253,6 @@ flutter run
    - Flutter frontend (mobile-first, low-bandwidth optimized)
    - FastAPI backend (RESTful matching & routing logic)
    - PostgreSQL (users, course units, competencies, session logs)
-   - Review the [Project Structure](./project-structure.md) for repository layout and dependency direction.
-
-4. **Discuss Major Changes**  
-   For significant features or architectural changes, open an issue first and get feedback before implementing. This prevents wasted effort.
-
----
-
-## Development Workflow
-
-### Step 1: Make Changes
-
-- Keep changes focused on one concern
-- Follow the code standards below
-- Write clear, maintainable code with proper documentation
-
-### Step 2: Test Locally
-
-**Backend**
-
-```bash
-pytest
-# or specific tests
-pytest tests/test_matching.py
-```
-
-**Frontend**
-
-```bash
-flutter analyze
-flutter test
-flutter test test/modules/matching/   # module-specific
-flutter run                           # on emulator/device
-```
-
-### Step 3: Commit Changes
-
-```bash
-git add .
 git commit -m "feat: add competency verification endpoint
 
 Validates the minimum B+ grade for tutor eligibility, integrates with the
@@ -528,49 +490,6 @@ flutter test
 flutter test --coverage
 flutter test --name="matching"
 ```
-
-The PostgreSQL run drops and recreates the schema in the target database, so point
-it at a scratch database. It must never be given a URL holding real data.
-
----
-
-## Documentation Standards
-
-- Use clear hierarchical headings
-- Include a table of contents for longer documents
-- Provide concrete code examples for non-obvious behavior
-- Link related files with relative Markdown links
-- Keep lines reasonably short for readability
-- Document public APIs thoroughly (parameters, return values, exceptions, side effects)
-
----
-
-## Reporting Issues
-
-### Bug Report Template
-
-```markdown
-## Description
-
-Brief, clear description of the bug.
-
-## Steps to Reproduce
-
-1. ...
-2. ...
-3. Expected result vs actual result
-
-## Environment
-
-- Flutter version: ...
-- Python / FastAPI version: ...
-- OS: ...
-- Device / Emulator: ...
-
-## Logs / Stack Trace
-```
-
-### Feature Requests
 
 Open an issue describing the problem you want to solve, the proposed solution, and any alternatives you considered. Align requests with PeerPass’s core mission of verified, low-friction peer academic support.
 

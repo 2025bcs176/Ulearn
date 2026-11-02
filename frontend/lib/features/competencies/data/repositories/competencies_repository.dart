@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:peerpass/core/error/failures.dart';
 import 'package:peerpass/features/competencies/data/models/tutor_claim.dart';
 
@@ -25,5 +26,14 @@ abstract interface class CompetenciesRepository {
     required String source,
     String? evidenceReference,
     String? notes,
+  });
+
+  /// Uploads transcript/QR evidence for an already-submitted claim.
+  ///
+  /// Returns the updated claim, whose evidence reference now points at the
+  /// stored object key.
+  Future<TutorClaim> uploadEvidence({
+    required String competencyId,
+    required PlatformFile file,
   });
 }

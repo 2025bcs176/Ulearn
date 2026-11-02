@@ -75,14 +75,20 @@ podman run --name p2p-postgres \
 
 ```bash
 cd backend
-python3 -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
-pip install -r requirements.txt
 
-# Apply migrations and start the server
+# IMPORTANT: use the existing .venv (Python 3.14). Do NOT create a new venv
+# with `python3 -m venv venv` — the system python3 is 3.12 and the code
+# requires 3.14 (PEP 649 deferred annotations). The .venv already has all
+# dependencies installed.
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+python --version                   # should print Python 3.14.x
+
+# Apply migrations and seed reference data
 alembic upgrade head
 python -m app.db.seed
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+# Start the server
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 The seed command is idempotent and loads the v1 reference catalogue, including
@@ -95,6 +101,16 @@ The current six-unit MUST pilot candidate list is documented in
 provisional until MUST confirms the launch units and tutor cohort.
 
 > API documentation is available at [http://localhost:8000/docs](http://localhost:8000/docs)
+
+#### Running tests
+
+```bash
+cd backend
+source .venv/bin/activate
+python -m pytest -q                    # backend tests
+python -m ruff check .                 # lint
+python -m ruff format --check .        # format check
+```
 
 ### 3. Frontend (Flutter)
 
