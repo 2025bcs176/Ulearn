@@ -337,6 +337,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.widgetWithText(TextField, 'Full name'), findsOneWidget);
+    expect(find.text('Step 1 of 3'), findsOneWidget);
     expect(
       _canAdvance(tester, 'Continue'),
       isFalse,
@@ -356,6 +357,7 @@ void main() {
 
     expect(find.text('What is your name?'), findsNothing);
     expect(find.text('Where do you study?'), findsOneWidget);
+    expect(find.text('Step 2 of 3'), findsOneWidget);
     expect(find.text('Continue'), findsOneWidget);
     expect(find.text('Finish'), findsNothing);
     // The name is stored, and nothing else went with it: the API's profile

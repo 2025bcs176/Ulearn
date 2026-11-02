@@ -4,6 +4,8 @@ import 'package:peerpass/core/constants/app_dimens.dart';
 import 'package:peerpass/core/error/failures.dart';
 import 'package:peerpass/core/models/subject.dart';
 import 'package:peerpass/core/models/university_option.dart';
+import 'package:peerpass/core/theme/app_palette.dart';
+import 'package:peerpass/core/widgets/app_button.dart';
 import 'package:peerpass/core/widgets/content_width_limiter.dart';
 import 'package:peerpass/core/widgets/empty_view.dart';
 import 'package:peerpass/features/auth/presentation/providers/auth_providers.dart';
@@ -64,6 +66,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             : BackButton(
                 onPressed: ref.read(onboardingControllerProvider.notifier).back,
               ),
+        title: Text('Step ${state.step.index + 1} of 3'),
       ),
       body: SafeArea(
         child: Column(
@@ -74,7 +77,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 child: SingleChildScrollView(
                   child: ContentWidthLimiter(
                     child: Padding(
-                      padding: const EdgeInsets.all(AppDimens.xl),
+                      padding: const EdgeInsets.fromLTRB(
+                        AppDimens.screenPadding,
+                        AppDimens.md,
+                        AppDimens.screenPadding,
+                        AppDimens.xxl,
+                      ),
                       child: switch (state.step) {
                         OnboardingStep.name => const _NameStep(),
                         OnboardingStep.academicContext =>
@@ -87,41 +95,42 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 ),
               ),
             ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.all(AppDimens.xl),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (state.failure case final failure?)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AppDimens.md),
-                        child: Text(
-                          _messageFor(failure),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
-                          ),
+            // The action sits on its own white bar rather than floating on the
+            // page. It is the only thing a student must find to move on, and on
+            // a long academic step it would otherwise scroll away.
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: AppPalette.of(context).card,
+                border: Border(
+                  top: BorderSide(color: AppPalette.of(context).line),
+                ),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppDimens.screenPadding,
+                    AppDimens.md,
+                    AppDimens.screenPadding,
+                    AppDimens.md,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (state.failure case final failure?)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: AppDimens.md),
+                          child: _SaveFailure(message: _messageFor(failure)),
                         ),
+                      AppButton(
+                        label: state.step != OnboardingStep.primaryModules
+                            ? 'Continue'
+                            : 'Finish',
+                        isLoading: state.saving,
+                        onPressed: canAdvance ? _saveAndAdvance : null,
                       ),
-                    FilledButton(
-                      onPressed: canAdvance && !state.saving
-                          ? _saveAndAdvance
-                          : null,
-                      child: state.saving
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Text(
-                              state.step != OnboardingStep.primaryModules
-                                  ? 'Continue'
-                                  : 'Finish',
-                            ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -148,7 +157,60 @@ String _messageFor(Failure failure) => switch (failure) {
   _ => 'Could not save. Try again.',
 };
 
-/// Three pips, filled progressively.
+/// A refused save, said as a sentence the student can act on.
+///
+/// On a tinted bar rather than in bare red text: red body copy on cream is the
+/// least legible combination in the palette, and an error is the moment the
+/// copy most needs to be read.
+class _SaveFailure extends StatelessWidget {
+  const _SaveFailure({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    final theme = Theme.of(context);
+
+    return Semantics(
+      liveRegion: true,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: palette.coralTint,
+          borderRadius: BorderRadius.circular(AppDimens.radiusButton),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(AppDimens.md),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.error_outline_rounded,
+                size: 18,
+                color: palette.onCoralTint,
+              ),
+              const SizedBox(width: AppDimens.sm),
+              Expanded(
+                child: Text(
+                  message,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: palette.onCoralTint,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Three segments: done, current, still to come.
+///
+/// A segmented bar rather than three pips, because the segments are ordered and
+/// the bar shows how far through the wizard the student is without a number
+/// they have to interpret.
 class _Progress extends StatelessWidget {
   const _Progress({required this.step});
 
@@ -156,35 +218,36 @@ class _Progress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final done1 =
-        step == OnboardingStep.academicContext ||
-        step == OnboardingStep.primaryModules;
-    final done2 = step == OnboardingStep.primaryModules;
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.xl,
-        vertical: AppDimens.sm,
-      ),
-      child: Row(
-        children: [
-          Expanded(child: _pip(context, filled: true)),
-          const SizedBox(width: AppDimens.sm),
-          Expanded(child: _pip(context, filled: done1)),
-          const SizedBox(width: AppDimens.sm),
-          Expanded(child: _pip(context, filled: done2)),
-        ],
-      ),
-    );
-  }
+    final palette = AppPalette.of(context);
+    final current = step.index;
 
-  Widget _pip(BuildContext context, {required bool filled}) {
-    return Container(
-      height: 4,
-      decoration: BoxDecoration(
-        color: filled
-            ? Theme.of(context).colorScheme.primary
-            : Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(AppDimens.radiusSm),
+    return Semantics(
+      label: 'Step ${current + 1} of 3',
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppDimens.screenPadding,
+          vertical: AppDimens.sm,
+        ),
+        child: Row(
+          children: [
+            for (var index = 0; index < OnboardingStep.values.length; index++) ...[
+              if (index > 0) const SizedBox(width: AppDimens.sm),
+              Expanded(
+                child: Container(
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: switch (index.compareTo(current)) {
+                      < 0 => palette.mint,
+                      0 => palette.primary,
+                      _ => palette.line,
+                    },
+                    borderRadius: BorderRadius.circular(AppDimens.radiusPill),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -218,18 +281,17 @@ class _NameStepState extends ConsumerState<_NameStep> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final palette = AppPalette.of(context);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('What is your name?', style: theme.textTheme.headlineSmall),
+        Text('What is your name?', style: theme.textTheme.displaySmall),
         const SizedBox(height: AppDimens.sm),
         Text(
           'Tutors and other students will see this.',
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
+          style: theme.textTheme.bodyMedium?.copyWith(color: palette.muted),
         ),
         const SizedBox(height: AppDimens.xl),
         TextField(
@@ -256,18 +318,17 @@ class _AcademicContextStep extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final palette = AppPalette.of(context);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Where do you study?', style: theme.textTheme.headlineSmall),
+        Text('Where do you study?', style: theme.textTheme.displaySmall),
         const SizedBox(height: AppDimens.sm),
         Text(
           'Used to show you tutors and units that are relevant to you.',
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
+          style: theme.textTheme.bodyMedium?.copyWith(color: palette.muted),
         ),
         const SizedBox(height: AppDimens.xl),
         ref
@@ -545,28 +606,33 @@ class _ConsentBox extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final palette = AppPalette.of(context);
     final state = ref.watch(onboardingControllerProvider);
 
-    return InkWell(
-      onTap: () => ref
-          .read(onboardingControllerProvider.notifier)
-          .setConsent(value: !state.academicDataConsented),
-      borderRadius: BorderRadius.circular(AppDimens.radiusMd),
-      child: Padding(
-        padding: const EdgeInsets.all(AppDimens.md),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SelectionCheck(selected: state.academicDataConsented),
-            const SizedBox(width: AppDimens.md),
-            Expanded(
-              child: Text(
-                'I agree that PeerPass may store my name, university, '
-                'faculty and year to find me tutors and units.',
-                style: theme.textTheme.bodyMedium,
+    return Material(
+      color: palette.indigoTint,
+      borderRadius: BorderRadius.circular(AppDimens.radiusCard),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => ref
+            .read(onboardingControllerProvider.notifier)
+            .setConsent(value: !state.academicDataConsented),
+        child: Padding(
+          padding: const EdgeInsets.all(AppDimens.lg),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SelectionCheck(selected: state.academicDataConsented),
+              const SizedBox(width: AppDimens.md),
+              Expanded(
+                child: Text(
+                  'I agree that PeerPass may store my name, university, '
+                  'faculty and year to find me tutors and units.',
+                  style: theme.textTheme.bodyMedium,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -580,6 +646,7 @@ class _PrimaryModulesStep extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final palette = AppPalette.of(context);
     final state = ref.watch(onboardingControllerProvider);
     final universityId = state.universityId;
     final facultyId = state.facultyId;
@@ -598,14 +665,12 @@ class _PrimaryModulesStep extends ConsumerWidget {
       children: [
         Text(
           'Which units might you need help with?',
-          style: theme.textTheme.headlineSmall,
+          style: theme.textTheme.displaySmall,
         ),
         const SizedBox(height: AppDimens.sm),
         Text(
           'Choose at least one. You can change these later.',
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
+          style: theme.textTheme.bodyMedium?.copyWith(color: palette.muted),
         ),
         const SizedBox(height: AppDimens.xl),
         ref
@@ -643,14 +708,34 @@ class _PrimaryModulesStep extends ConsumerWidget {
                       runSpacing: AppDimens.sm,
                       children: [
                         for (final unit in units)
-                          FilterChip(
-                            label: Text('${unit.code} - ${unit.name}'),
-                            selected: state.primaryModuleIds.contains(
-                              unit.publicId,
-                            ),
-                            onSelected: (_) => ref
-                                .read(onboardingControllerProvider.notifier)
-                                .togglePrimaryModule(unit.publicId),
+                          Builder(
+                            builder: (context) {
+                              final selected = state.primaryModuleIds.contains(
+                                unit.publicId,
+                              );
+                              return FilterChip(
+                                label: Text('${unit.code} - ${unit.name}'),
+                                selected: selected,
+                                showCheckmark: false,
+                                backgroundColor: palette.card,
+                                selectedColor: palette.primary,
+                                side: BorderSide(
+                                  color: selected
+                                      ? palette.primary
+                                      : palette.line,
+                                ),
+                                labelStyle: theme.textTheme.labelLarge
+                                    ?.copyWith(
+                                      color: selected
+                                          ? palette.onPrimary
+                                          : palette.ink,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                onSelected: (_) => ref
+                                    .read(onboardingControllerProvider.notifier)
+                                    .togglePrimaryModule(unit.publicId),
+                              );
+                            },
                           ),
                       ],
                     ),
