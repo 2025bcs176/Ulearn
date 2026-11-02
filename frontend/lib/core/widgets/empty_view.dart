@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:peerpass/core/constants/app_dimens.dart';
+import 'package:peerpass/core/theme/app_palette.dart';
 
 /// Placeholder for a screen that has nothing to show.
 ///
 /// Distinct from a failure: an empty tutor list is a normal state, not an
-/// error, and the copy differs accordingly.
+/// error, and the copy differs accordingly. The icon sits in a tinted circle so
+/// the screen reads as "waiting for something" rather than as a broken page.
 class EmptyView extends StatelessWidget {
   const EmptyView({
     required this.title,
@@ -27,6 +29,7 @@ class EmptyView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final palette = AppPalette.of(context);
 
     return Center(
       child: Padding(
@@ -34,12 +37,20 @@ class EmptyView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 40, color: theme.colorScheme.outline),
-            const SizedBox(height: AppDimens.md),
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: palette.indigoTint,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 32, color: palette.onIndigoTint),
+            ),
+            const SizedBox(height: AppDimens.lg),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: theme.textTheme.titleMedium,
+              style: theme.textTheme.headlineSmall,
             ),
             if (message case final text?) ...[
               const SizedBox(height: AppDimens.xs),
@@ -47,12 +58,12 @@ class EmptyView extends StatelessWidget {
                 text,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+                  color: palette.muted,
                 ),
               ),
             ],
             if (action case final widget?) ...[
-              const SizedBox(height: AppDimens.lg),
+              const SizedBox(height: AppDimens.xl),
               widget,
             ],
           ],

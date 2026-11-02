@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:peerpass/app/design_preview_screen.dart';
 import 'package:peerpass/app/splash_screen.dart';
 import 'package:peerpass/core/constants/app_dimens.dart';
 import 'package:peerpass/core/models/user_profile.dart';
@@ -43,6 +45,9 @@ abstract final class AppRoutes {
   static const String matching = '/matching';
   static const String certificate = '/certificate';
   static const String tutorRequests = '/tutor-requests';
+
+  /// Debug-only catalogue of the design system. Not registered in release.
+  static const String designPreview = '/design-preview';
 
   /// One tutor's profile, opened from the rail.
   ///
@@ -194,6 +199,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.signUp,
         builder: (context, state) => const SignUpScreen(),
       ),
+      if (kDebugMode)
+        GoRoute(
+          path: AppRoutes.designPreview,
+          builder: (context, state) => const DesignPreviewScreen(),
+        ),
       GoRoute(
         path: AppRoutes.onboarding,
         builder: (context, state) => const OnboardingScreen(),
@@ -342,6 +352,12 @@ final routerProvider = Provider<GoRouter>((ref) {
 /// university has to run the wizard first. Passing only the status would have
 /// forced that distinction back out into every call site.
 String? _redirectFor(SessionState state, String location) {
+  // The design catalogue is a development tool, not a product screen. It is
+  // exempt from the auth guard so it can be opened on a device that is signed
+  // out, which is exactly when someone is checking a token rather than a flow.
+  // The route itself only exists in debug builds.
+  if (kDebugMode && location == AppRoutes.designPreview) return null;
+
   return switch (state.status) {
     // Nothing is known yet. Stay put only if already waiting; otherwise hold
     // the app on splash rather than guessing and flashing the wrong screen.

@@ -1,3 +1,5 @@
+import 'package:flutter/widgets.dart';
+
 /// Spacing and radius scale for the client.
 ///
 /// Gaps are declared as constants rather than inline literals so that vertical
@@ -17,8 +19,11 @@ abstract final class AppDimens {
   /// Medium: 12pt. Default gap between components.
   static const double md = 12;
 
-  /// Large: 16pt. Screen edge padding on compact layouts.
+  /// Large: 16pt. Default gap inside a card.
   static const double lg = 16;
+
+  /// Large plus: 20pt. Gap between a card's title block and its body.
+  static const double lgPlus = 20;
 
   /// Extra large: 24pt. Between groups of related content.
   static const double xl = 24;
@@ -26,7 +31,10 @@ abstract final class AppDimens {
   /// Extra extra large: 32pt. Between distinct sections.
   static const double xxl = 32;
 
-  /// Corner radius for small components such as chips and badges.
+  /// Extra extra extra large: 40pt. Above a screen's first section.
+  static const double xxxl = 40;
+
+  /// Corner radius for small components such as inline badges.
   static const double radiusSm = 4;
 
   /// Corner radius for cards and sheets. The default.
@@ -35,8 +43,38 @@ abstract final class AppDimens {
   /// Corner radius for dialogs and modal surfaces.
   static const double radiusLg = 20;
 
+  /// Corner radius of a card or a composer surface. Campus Energy is soft.
+  static const double radiusCard = 24;
+
+  /// Corner radius of a button, an input, and a chip-shaped control.
+  static const double radiusButton = 14;
+
+  /// Corner radius of the top of a modal sheet.
+  static const double radiusSheet = 28;
+
+  /// Fully rounded, for a status pill.
+  static const double radiusPill = 999;
+
+  /// Height of the primary action on a screen.
+  static const double buttonHeight = 52;
+
+  /// Height of a secondary action, including the one beside a primary action.
+  static const double buttonHeightSmall = 44;
+
+  /// Minimum square of a tappable icon, per the accessibility floor.
+  static const double tapTarget = 48;
+
+  /// Height of the bottom navigation bar.
+  static const double navBarHeight = 64;
+
+  /// Width of a hairline divider.
+  static const double hairline = 1;
+
   /// Standard horizontal padding applied to every screen.
-  static const double screenPadding = lg;
+  ///
+  /// Wider than the previous 16pt. The extra 8pt is what lets a card's own
+  /// 24pt radius read as a card instead of as the edge of the screen.
+  static const double screenPadding = xl;
 
   /// Maximum width for a readable column on tablets and the web target.
   ///
@@ -56,4 +94,26 @@ abstract final class AppDimens {
   /// Maximum bounds of the sign-up animation.
   static const double signUpAnimationMaxWidth = 195;
   static const double signUpAnimationMaxHeight = 155;
+
+  /// The lift under a card.
+  ///
+  /// Deliberately soft and warm rather than grey: on a cream page a neutral
+  /// shadow reads as dirt. Kept as one constant so every raised surface in the
+  /// app casts the same shadow.
+  static const List<BoxShadow> cardShadow = [
+    BoxShadow(
+      color: Color(0x1214142B),
+      blurRadius: 20,
+      offset: Offset(0, 6),
+    ),
+  ];
+
+  /// The same lift, for a card that is being pressed.
+  static const List<BoxShadow> cardShadowPressed = [
+    BoxShadow(
+      color: Color(0x0A14142B),
+      blurRadius: 10,
+      offset: Offset(0, 3),
+    ),
+  ];
 }
