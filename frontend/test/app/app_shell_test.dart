@@ -29,7 +29,7 @@ const String _signedOutText = 'Sign in';
 /// The greeting home builds from the stored name. Asserting on this rather than
 /// on a placeholder string means the test fails if the profile stopped reaching
 /// the screen, which is the thing it is actually about.
-const String _homeText = 'Hello, Achieng';
+const String _homeText = 'Hey Achieng 👋';
 
 /// A student who has finished onboarding.
 const UserProfile _enrolled = UserProfile(
@@ -411,7 +411,11 @@ void main() {
     // on screen, so a tap at the recorded position would land on whatever happens
     // to be there instead of the entry -- which reads as a broken tile rather than
     // as a test that did not scroll.
-    await tester.scrollUntilVisible(find.text('My certificate'), 200);
+    await tester.scrollUntilVisible(
+      find.text('My certificate'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await _settle(tester);
 
     await tester.tap(find.text('My certificate'));
@@ -445,7 +449,11 @@ void main() {
     );
     await _settle(tester);
 
-    await tester.scrollUntilVisible(find.text('Waiting on you'), 200);
+    await tester.scrollUntilVisible(
+      find.text('Waiting on you'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await _settle(tester);
 
     await tester.tap(find.text('Waiting on you'));

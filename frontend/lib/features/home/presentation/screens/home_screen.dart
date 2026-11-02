@@ -6,52 +6,58 @@ import 'package:peerpass/core/constants/app_dimens.dart';
 import 'package:peerpass/core/models/user_profile.dart';
 import 'package:peerpass/core/models/user_role.dart';
 import 'package:peerpass/core/state/session.dart';
+import 'package:peerpass/core/theme/app_palette.dart';
+import 'package:peerpass/core/widgets/app_avatar.dart';
+import 'package:peerpass/core/widgets/app_button.dart';
+import 'package:peerpass/core/widgets/app_card.dart';
 import 'package:peerpass/core/widgets/content_width_limiter.dart';
+import 'package:peerpass/core/widgets/section_header.dart';
 
 /// The signed-in landing screen.
 ///
-/// Reads the student's own name, offers a way into their own sessions, into
-/// finding a tutor for a course unit, and a rail of the tutors already teaching at
-/// their university. Booking is still a promise, and the pending tile is the only
-/// thing on this screen that is: the distinction the pending tiles exist to make
-/// is between what works and what is written on the roadmap, and a list of
-/// sessions with no way to reach it from the landing screen would be a feature
-/// nobody can find.
+/// A composer, not a feature directory. The student arrives with a problem and
+/// the screen's job is to get them from that problem to a person: the course is
+/// one chip, the question is one field, and the action is one button. Sessions
+/// and the account live in the bottom bar, so repeating them here as tiles would
+/// be a menu dressed up as a dashboard.
 ///
-/// The two entries that lead somewhere are route pushes, not imports of the
-/// features' screens. A home screen that named them would have to import features
-/// it owns nothing of, which the dependency rules forbid -- see [tutorRail] for the
-/// longer form of that argument.
-///
-/// The active-session card and the tutor rail arrive as widgets rather than being
-/// built here, and that is an architectural decision rather than a preference. The
-/// card belongs to the sessions feature and the rail to the tutors feature, so
-/// naming either would make home a second place that has to change when those
-/// features do. The shell passes them in and home decides only where they go. Null
-/// means there is no card, which is the state the home screen's own tests are in --
-/// and for the rail, null means "nothing to browse here", which is honest rather
-/// than broken.
+/// The composer, the active-session card, and the tutor rail arrive as widgets
+/// rather than being built here, and that is an architectural decision rather
+/// than a preference. Each belongs to a feature that owns its data, so naming
+/// any of them would make home a second place that has to change when those
+/// features do. The shell passes them in and home decides only where they go.
+/// Null means the screen is being pumped on its own, which is the state home's
+/// own tests are in.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({
+    this.askComposer,
     this.activeSessionCard,
     this.tutorRail,
     this.onRefresh,
     super.key,
   });
 
+  /// The composer the matching feature builds. Null falls back to a plain button
+  /// into the catalogue, so home is never a dead end.
+  final Widget? askComposer;
+
   /// The card to show above the entries, if the shell has one.
   final Widget? activeSessionCard;
 
   /// The rail of tutors to show, if the shell has one.
   final Widget? tutorRail;
+
   final Future<void> Function()? onRefresh;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final palette = AppPalette.of(context);
     final profile = ref.watch(sessionControllerProvider).profile;
+    final composer = askComposer;
     final card = activeSessionCard;
     final rail = tutorRail;
+    final isTutor = profile?.hasRole(UserRole.tutor) ?? false;
 
     final content = SingleChildScrollView(
       physics: onRefresh == null
@@ -59,81 +65,89 @@ class HomeScreen extends ConsumerWidget {
           : const AlwaysScrollableScrollPhysics(),
       child: ContentWidthLimiter(
         child: Padding(
-          padding: const EdgeInsets.all(AppDimens.xl),
+          padding: const EdgeInsets.fromLTRB(
+            AppDimens.screenPadding,
+            AppDimens.lg,
+            AppDimens.screenPadding,
+            AppDimens.xxl,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
                 children: [
-                  CircleAvatar(
-                    // The pilot stores no images, so the placeholder is
-                    // derived from the stored name rather than uploaded.
-                    child: Text(profile?.initials ?? '?'),
-                  ),
-                  const SizedBox(width: AppDimens.lg),
+                  AppAvatar(name: profile?.fullName ?? '?'),
+                  const SizedBox(width: AppDimens.md),
                   Expanded(
-                    child: Text(
-                      _greeting(profile),
-                      style: theme.textTheme.headlineSmall,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _greeting(profile),
+                          style: theme.textTheme.headlineMedium,
+                        ),
+                        const SizedBox(height: AppDimens.xxs),
+                        Text(
+                          "Let's get you unstuck.",
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: palette.muted,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-              if (card != null) ...[const SizedBox(height: AppDimens.xl), card],
               const SizedBox(height: AppDimens.xl),
-              _FeatureEntry(
-                icon: Icons.school_outlined,
-                title: 'Find a tutor',
-                body:
-                    'Pick a course unit and see the tutors who can help '
-                    'you with it.',
-                onTap: () => context.push(AppRoutes.matching),
-              ),
-              const SizedBox(height: AppDimens.md),
-              _FeatureEntry(
-                icon: Icons.event_note_outlined,
-                title: 'My sessions',
-                body:
-                    'Past sessions, your PIN for the next one, and the '
-                    'rating you owe.',
-                onTap: () => context.push(AppRoutes.sessions),
-              ),
-              if (profile?.hasRole(UserRole.tutor) ?? false) ...[
+              if (composer != null)
+                composer
+              else
+                AppButton(
+                  label: 'Find a tutor',
+                  onPressed: () => context.push(AppRoutes.matching),
+                ),
+              if (card != null) ...[
+                const SizedBox(height: AppDimens.xl),
+                card,
+              ],
+              if (rail != null) ...[
+                const SizedBox(height: AppDimens.xxl),
+                rail,
+              ],
+              if (isTutor) ...[
+                const SizedBox(height: AppDimens.xxl),
+                const SectionHeader(
+                  title: 'For tutors',
+                  subtitle: 'Requests, hours, and the certificate they earn.',
+                ),
                 const SizedBox(height: AppDimens.md),
-                _FeatureEntry(
+                _HomeEntry(
                   icon: Icons.mark_email_unread_outlined,
                   title: 'Waiting on you',
-                  body:
-                      'Students who asked you to tutor them, and the '
-                      'sessions they are waiting on you to confirm.',
                   onTap: () => context.push(AppRoutes.tutorRequests),
                 ),
-                const SizedBox(height: AppDimens.md),
-                _FeatureEntry(
+                const SizedBox(height: AppDimens.sm),
+                _HomeEntry(
                   icon: Icons.workspace_premium_outlined,
                   title: 'My certificate',
-                  body:
-                      'The teaching hours you have banked, and the hours '
-                      'a certificate still needs.',
                   onTap: () => context.push(AppRoutes.certificate),
                 ),
-              ],
-              if (rail != null) ...[const SizedBox(height: AppDimens.xl), rail],
-              if (!(profile?.hasRole(UserRole.tutor) ?? false)) ...[
-                const SizedBox(height: AppDimens.xl),
-                FilledButton.icon(
+              ] else ...[
+                const SizedBox(height: AppDimens.xxl),
+                AppButton(
+                  label: 'Become a tutor',
+                  variant: AppButtonVariant.ghost,
+                  icon: Icons.verified_user_outlined,
                   onPressed: () => context.push(AppRoutes.tutorVerification),
-                  icon: const Icon(Icons.verified_user_outlined),
-                  label: const Text('Become a tutor'),
                 ),
               ],
-              const SizedBox(height: AppDimens.xxl),
+              const SizedBox(height: AppDimens.xl),
               Text(
                 'Signed in as ${profile?.email ?? ''}',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+                  color: palette.muted,
                 ),
               ),
             ],
@@ -143,7 +157,6 @@ class HomeScreen extends ConsumerWidget {
     );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('PeerPass')),
       body: SafeArea(
         child: Center(
           child: onRefresh == null
@@ -156,70 +169,49 @@ class HomeScreen extends ConsumerWidget {
 
   /// A greeting from the stored name, not a prompt for one.
   ///
-  /// Falls back to the address rather than a bare "Hello". A student who reaches
-  /// home without a name is not a state the router allows, so this is only ever
-  /// a guard against a display that would otherwise read "Hello, " and nothing.
+  /// Falls back to "there" rather than a bare "Hey". A student who reaches home
+  /// without a name is not a state the router allows, so this is only ever a
+  /// guard against a heading that would otherwise read "Hey ,".
   String _greeting(UserProfile? profile) {
     final firstName = profile?.firstName;
-    return firstName == null ? 'Hello' : 'Hello, $firstName';
+    return firstName == null ? 'Hey there 👋' : 'Hey $firstName 👋';
   }
 }
 
-/// A tile that leads to a real screen, so unlike the pending tiles it is tappable.
+/// One quiet entry, used for the two things a tutor can do from home.
 ///
-/// It carries no "Soon" chip. The pending tiles exist to keep home honest about
-/// what is not built; an entry point for a screen that *is* built is the opposite
-/// claim, and a list of sessions or a course catalogue with no way to reach either
-/// of them is a feature nobody can find.
-class _FeatureEntry extends StatelessWidget {
-  const _FeatureEntry({
+/// A card rather than a list tile so it carries the same lift as the rest of the
+/// screen; a row rather than a paragraph because these are secondary to the
+/// composer and should not compete with it.
+class _HomeEntry extends StatelessWidget {
+  const _HomeEntry({
     required this.icon,
     required this.title,
-    required this.body,
     required this.onTap,
   });
 
   final IconData icon;
   final String title;
-  final String body;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final palette = AppPalette.of(context);
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(AppDimens.lg),
-          child: Row(
-            children: [
-              Icon(icon, color: theme.colorScheme.onSurfaceVariant),
-              const SizedBox(width: AppDimens.lg),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: theme.textTheme.titleMedium),
-                    const SizedBox(height: AppDimens.xs),
-                    Text(
-                      body,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.chevron_right,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ],
+    return AppCard(
+      onTap: onTap,
+      padding: const EdgeInsets.all(AppDimens.lg),
+      semanticLabel: title,
+      child: Row(
+        children: [
+          Icon(icon, color: palette.primary, size: 22),
+          const SizedBox(width: AppDimens.md),
+          Expanded(
+            child: Text(title, style: theme.textTheme.titleMedium),
           ),
-        ),
+          Icon(Icons.chevron_right_rounded, color: palette.muted),
+        ],
       ),
     );
   }

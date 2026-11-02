@@ -20,6 +20,7 @@ import 'package:peerpass/features/incentives/presentation/screens/certificate_sc
 import 'package:peerpass/features/matching/presentation/screens/course_unit_picker_screen.dart';
 import 'package:peerpass/features/matching/presentation/screens/match_results_screen.dart';
 import 'package:peerpass/features/matching/presentation/screens/tutor_requests_screen.dart';
+import 'package:peerpass/features/matching/presentation/widgets/ask_composer.dart';
 import 'package:peerpass/features/sessions/presentation/providers/session_providers.dart';
 import 'package:peerpass/features/sessions/presentation/screens/confirm_request_screen.dart';
 import 'package:peerpass/features/sessions/presentation/screens/rate_session_screen.dart';
@@ -60,8 +61,20 @@ abstract final class AppRoutes {
   /// The unit is in the path for the same reason the session id is: the screen
   /// that answers "who can help with this course" is not reachable without the
   /// course, and a route that could not name it would be a link to nothing.
-  static String matchResultsPath(String courseUnitId) =>
-      '$matching/$courseUnitId';
+  ///
+  /// The question a student typed travels as a query, because it is free text
+  /// and belongs in `Uri`'s hands rather than in a path segment. It is optional:
+  /// a student who picked the unit from the catalogue has not written one yet,
+  /// and the request sheet is where they will.
+  static String matchResultsPath(String courseUnitId, {String? topic}) {
+    final path = '$matching/$courseUnitId';
+    final question = topic?.trim();
+    if (question == null || question.isEmpty) return path;
+    return Uri(
+      path: path,
+      queryParameters: <String, String>{'topic': question},
+    ).toString();
+  }
 
   /// The list, a session, and that session's rating form.
   ///
@@ -229,6 +242,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.home,
             builder: (context, state) => HomeScreen(
+              askComposer: const AskComposer(),
               activeSessionCard: const ActiveSessionCard(),
               tutorRail: const TutorRail(),
               onRefresh: () async {
@@ -319,7 +333,10 @@ final routerProvider = Provider<GoRouter>((ref) {
               message: 'That link does not name a course unit.',
             );
           }
-          return MatchResultsScreen(courseUnitId: courseUnitId);
+          return MatchResultsScreen(
+            courseUnitId: courseUnitId,
+            topic: state.uri.queryParameters['topic'],
+          );
         },
       ),
       GoRoute(

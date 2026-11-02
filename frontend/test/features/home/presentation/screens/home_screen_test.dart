@@ -7,6 +7,7 @@ import 'package:peerpass/core/models/user_profile.dart';
 import 'package:peerpass/core/models/user_role.dart';
 import 'package:peerpass/core/state/session.dart';
 import 'package:peerpass/core/theme/app_theme.dart';
+import 'package:peerpass/core/widgets/app_avatar.dart';
 import 'package:peerpass/features/auth/data/repositories/auth_repository.dart';
 import 'package:peerpass/features/auth/data/repositories/fake_auth_repository.dart';
 import 'package:peerpass/features/home/presentation/screens/home_screen.dart';
@@ -23,7 +24,7 @@ const UserProfile _enrolled = UserProfile(
 );
 
 /// The greeting the screen builds from the first name alone.
-const String _greeting = 'Hello, Achieng';
+const String _greeting = 'Hey Achieng 👋';
 
 /// The same account once they have been approved to teach.
 const UserProfile _tutor = UserProfile(
@@ -83,7 +84,7 @@ void main() {
     // pilot stores no images, and a client-side upload would put a face in a
     // bucket the API does not describe.
     expect(
-      find.descendant(of: find.byType(CircleAvatar), matching: find.text('AO')),
+      find.descendant(of: find.byType(AppAvatar), matching: find.text('AO')),
       findsOneWidget,
     );
   });
@@ -94,48 +95,18 @@ void main() {
     expect(find.text('Signed in as ${_enrolled.email}'), findsOneWidget);
   });
 
-  testWidgets('the sessions entry is live, not a promise', (tester) async {
-    // Sessions are built, so the landing screen has to offer a way in. Marked
-    // Soon, or hidden among the pending tiles, a working feature looks absent.
-    final harness = _harness(_enrolled);
-    await _pumpHome(tester, harness);
-
-    expect(find.text('My sessions'), findsOneWidget);
-    expect(find.text('Soon'), findsNothing);
-  });
-
-  testWidgets('tapping the sessions entry opens the sessions list', (
+  testWidgets('without a composer, home still offers a way into the catalogue', (
     tester,
   ) async {
-    // Asserted through a real router, because the claim under test is a
-    // navigation and a test without one would pass against a handler that
-    // pushes nothing at all.
-    final harness = _harness(_enrolled);
-    final router = GoRouter(
-      initialLocation: '/',
-      routes: [
-        GoRoute(path: '/', builder: (_, _) => const HomeScreen()),
-        GoRoute(
-          path: AppRoutes.sessions,
-          builder: (_, _) => const Scaffold(body: Text('Sessions list here')),
-        ),
-      ],
-    );
-    addTearDown(router.dispose);
+    // The composer is supplied by the shell because it belongs to matching. A
+    // home pumped without one is the shape of these tests, and it must not be a
+    // dead end: the fallback button is the same promise in fewer words.
+    await _pumpHome(tester, _harness(_enrolled));
 
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: harness.container,
-        child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
-      ),
-    );
-    await _settle(tester);
-
-    await tester.tap(find.text('My sessions'));
-    await _settle(tester);
-
-    expect(find.text('Sessions list here'), findsOneWidget);
-    expect(find.byType(HomeScreen), findsNothing);
+    expect(find.text('Find a tutor'), findsOneWidget);
+    // The old dashboard repeated the sessions tab as a tile. Sessions still have
+    // one way in, in the bottom bar, and a second copy on home would be a menu.
+    expect(find.text('My sessions'), findsNothing);
   });
 
   testWidgets('tapping the tutor entry opens the course unit picker', (

@@ -173,3 +173,21 @@ units so a student taps instead of typing.
 - Certificate PDF generation.
 - Photo upload beyond the configured storage path.
 - iOS distribution.
+
+## 8. Progress
+
+Kept current so the plan and the code do not drift apart.
+
+- [x] **Foundation.** Tokens, palette, typography, bundled variable fonts,
+      shared components, debug design preview, reference mockups, design-system
+      doc.
+- [x] **Home composer.** Course chips from the faculty catalogue, one question
+      field, one amber action. The question travels to the results screen and
+      prefills the request sheet. Home no longer repeats the sessions tab.
+- [ ] Onboarding wizard restyle.
+- [ ] Find a tutor: results cards, request sheet, topic chips.
+- [ ] Tutor profile: bio, reviews, availability, accept-time scheduling.
+- [ ] Notifications: backend, inbox, badge, FCM, deep links.
+- [ ] Sessions: mutual check-in, timeline, rating with tags.
+- [ ] Tutor HQ.
+- [ ] Hardening, validation, dry run, launch.

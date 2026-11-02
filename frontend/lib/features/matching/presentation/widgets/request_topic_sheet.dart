@@ -15,7 +15,10 @@ typedef RequestDraft = ({String topic, String? description});
 /// Returns null when the student backs out. A null answer and an empty one mean
 /// different things -- "not now" against "they sent a request with no topic" --
 /// and collapsing them would create the second request out of a cancelled sheet.
-Future<RequestDraft?> showRequestTopicSheet(BuildContext context) {
+Future<RequestDraft?> showRequestTopicSheet(
+  BuildContext context, {
+  String? initialTopic,
+}) {
   return showModalBottomSheet<RequestDraft>(
     context: context,
     isScrollControlled: true,
@@ -26,7 +29,7 @@ Future<RequestDraft?> showRequestTopicSheet(BuildContext context) {
       // a desk, which is a form nobody can read comfortably.
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
-        child: const _RequestTopicForm(),
+        child: _RequestTopicForm(initialTopic: initialTopic),
       ),
     ),
   );
@@ -44,14 +47,23 @@ const int maxTopicLength = 200;
 const int maxDescriptionLength = 2000;
 
 class _RequestTopicForm extends StatefulWidget {
-  const _RequestTopicForm();
+  const _RequestTopicForm({this.initialTopic});
+
+  /// What the student typed on the home composer, if they came from there.
+  ///
+  /// Prefilled rather than locked: the composer is a quick way in, and the
+  /// student may still want to sharpen the question once they know who they are
+  /// asking.
+  final String? initialTopic;
 
   @override
   State<_RequestTopicForm> createState() => _RequestTopicFormState();
 }
 
 class _RequestTopicFormState extends State<_RequestTopicForm> {
-  final TextEditingController _topic = TextEditingController();
+  late final TextEditingController _topic = TextEditingController(
+    text: widget.initialTopic,
+  );
   final TextEditingController _description = TextEditingController();
 
   /// What is wrong with the topic right now, or null.
