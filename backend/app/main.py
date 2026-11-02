@@ -9,7 +9,6 @@ import logging
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -220,13 +219,7 @@ def _register_exception_handlers(application: FastAPI) -> None:
 
 app = create_app()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allows all ports/origins for local development
-    allow_credentials=True,
-    allow_methods=["*"],  # Allows POST, GET, OPTIONS, etc.
-    allow_headers=["*"],
-)
+app.add_middleware()
 
 
 @app.get("/", include_in_schema=False)

@@ -33,8 +33,7 @@ from pyzbar.pyzbar import decode as decode_qr
 class TranscriptParseResult:
     qr_data: str | None = None
     qr_valid: bool = False
-    course_codes: list[str] = field(default_factory=list)
-    grades: list[str] = field(default_factory=list)
+    course_grades: dict[str, str] = field(default_factory=dict)
     raw_text: str = ""
     error: str | None = None
 
@@ -115,9 +114,14 @@ def parse_transcript(
                     qr = _extract_qr(images[0])
                     result.qr_data = qr
                     result.qr_valid = _qr_is_must(qr)
-                    # OCR fallback for scanned (image-only) PDFs
+                    # OCR fallback for scanned (image-only) PDFs - OCR all pages
                     if not result.raw_text.strip() and _ocr_available():
-                        result.raw_text = _ocr_image(images[0])
+                        all_images = convert_from_bytes(data)
+                        for img in all_images:
+                            ocr_text = _ocr_image(img)
+                            if ocr_text.strip():
+                                result.raw_text = ocr_text
+                                break
             except Exception as exc:
                 result.error = f"qr extraction failed: {exc}"
             Path(tmp_path).unlink(missing_ok=True)
@@ -140,6 +144,11 @@ def parse_transcript(
             result.error = f"image parse failed: {exc}"
             return result
 
-    result.course_codes = list(dict.fromkeys(_CODE_RE.findall(result.raw_text)))
-    result.grades = _GRADE_RE.findall(result.raw_text)
+    result.course_grades = dict(
+        zip(
+            list(dict.fromkeys(_CODE_RE.findall(result.raw_text))),
+            _GRADE_RE.findall(result.raw_text),
+            strict=False,
+        )
+    )
     return result

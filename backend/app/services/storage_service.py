@@ -47,11 +47,19 @@ def _supabase_ready() -> bool:
 
 
 def _local_dir() -> Path:
-    return Path(os.getenv("LOCAL_STORAGE_DIR", "uploads")).resolve()
+    from app.core.config import get_settings
+
+    return Path(get_settings().local_storage_dir).resolve()
 
 
 def upload_transcript(upload: UploadFile, object_key: str) -> str:
-    """Store a transcript/QR file and return its object key (not a public URL)."""
+    """Store a transcript/QR file and return its object key (not a public URL).
+
+    Returns a prefixed key such as ``firebase:...``, ``supabase:...``, or
+    ``local:...`` so downloads always use the same backend that received the
+    file instead of silently switching backends.
+    """
+    # Track which backend receives the file to avoid silent switching
     if _firebase_ready():
         try:
             from firebase_admin import storage
@@ -60,10 +68,11 @@ def upload_transcript(upload: UploadFile, object_key: str) -> str:
             blob = bucket.blob(object_key)
             upload.file.seek(0)
             blob.upload_from_file(upload.file, content_type=upload.content_type)
-            return object_key
+            return f"firebase:{object_key}"
         except Exception as exc:
+            # Fail explicitly instead of silently switching backends
             raise ValidationProblem(
-                "Could not store the transcript.",
+                "Could not store the transcript (Firebase).",
                 errors={"evidence": str(exc)},
             ) from exc
 
@@ -71,23 +80,23 @@ def upload_transcript(upload: UploadFile, object_key: str) -> str:
         try:
             url = os.getenv("SUPABASE_URL", "").rstrip("/")
             key = os.getenv("SUPABASE_SERVICE_KEY", "")
-            bucket = os.getenv("SUPABASE_STORAGE_BUCKET", "")
+            bucket_name = os.getenv("SUPABASE_STORAGE_BUCKET", "")
             from supabase import create_client
 
             client = create_client(url, key)
             upload.file.seek(0)
             data = upload.file.read()
-            client.storage.from_(bucket).upload(
+            client.storage.from_(bucket_name).upload(
                 object_key,
                 data,
                 file_options={
                     "content-type": upload.content_type or "application/octet-stream"
                 },
             )
-            return object_key
+            return f"supabase:{object_key}"
         except Exception as exc:
             raise ValidationProblem(
-                "Could not store the transcript.",
+                "Could not store the transcript (Supabase).",
                 errors={"evidence": str(exc)},
             ) from exc
 
@@ -100,17 +109,31 @@ def upload_transcript(upload: UploadFile, object_key: str) -> str:
             import shutil
 
             shutil.copyfileobj(upload.file, fh)
-        return object_key
+        return f"local:{object_key}"
     except Exception as exc:
         raise ValidationProblem(
-            "Could not store the transcript.",
+            "Could not store the transcript (local).",
             errors={"evidence": str(exc)},
         ) from exc
 
 
 def download_transcript(object_key: str) -> tuple[bytes, str]:
     """Return (bytes, content_type) for a stored transcript. Raises on failure."""
-    if _firebase_ready():
+    # Parse backend prefix to avoid silent switching
+    if object_key.startswith("firebase:"):
+        backend = "firebase"
+        object_key = object_key[len("firebase:") :]
+    elif object_key.startswith("supabase:"):
+        backend = "supabase"
+        object_key = object_key[len("supabase:") :]
+    elif object_key.startswith("local:"):
+        backend = "local"
+        object_key = object_key[len("local:") :]
+    else:
+        # No prefix: legacy object key, try backends in order
+        backend = None
+
+    if backend == "firebase" or (backend is None and _firebase_ready()):
         try:
             from firebase_admin import storage
 
@@ -124,15 +147,15 @@ def download_transcript(object_key: str) -> tuple[bytes, str]:
                 errors={"evidence": str(exc)},
             ) from exc
 
-    if _supabase_ready():
+    if backend == "supabase" or (backend is None and _supabase_ready()):
         try:
             url = os.getenv("SUPABASE_URL", "").rstrip("/")
             key = os.getenv("SUPABASE_SERVICE_KEY", "")
-            bucket = os.getenv("SUPABASE_STORAGE_BUCKET", "")
+            bucket_name = os.getenv("SUPABASE_STORAGE_BUCKET", "")
             from supabase import create_client
 
             client = create_client(url, key)
-            data = client.storage.from_(bucket).download(object_key)
+            data = client.storage.from_(bucket_name).download(object_key)
             return data, "application/octet-stream"
         except Exception as exc:
             raise ValidationProblem(
@@ -141,15 +164,21 @@ def download_transcript(object_key: str) -> tuple[bytes, str]:
             ) from exc
 
     # --- local filesystem fallback ---
-    try:
-        dest = _local_dir() / object_key
-        data = dest.read_bytes()
-        return data, "application/octet-stream"
-    except Exception as exc:
-        raise ValidationProblem(
-            "Could not read the transcript.",
-            errors={"evidence": str(exc)},
-        ) from exc
+    if backend == "local" or backend is None:
+        try:
+            dest = _local_dir() / object_key
+            data = dest.read_bytes()
+            return data, "application/octet-stream"
+        except Exception as exc:
+            raise ValidationProblem(
+                "Could not read the transcript.",
+                errors={"evidence": str(exc)},
+            ) from exc
+
+    raise ValidationProblem(
+        "Could not read the transcript.",
+        errors={"evidence": "No matching storage backend found"},
+    )
 
 
 def is_available() -> bool:

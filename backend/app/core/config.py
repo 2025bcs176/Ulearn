@@ -76,6 +76,14 @@ class Settings(BaseSettings):
         ),
     )
 
+    local_storage_dir: str = Field(
+        default="uploads",
+        description=(
+            "Directory for local transcript/QR evidence storage (zero-cost \n"
+            "fallback). Must be writable by the application user."
+        ),
+    )
+
     @model_validator(mode="after")
     def _refuse_development_only_settings(self) -> Settings:
         """Make the dangerous knobs unrepresentable outside development.

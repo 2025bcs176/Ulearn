@@ -203,7 +203,7 @@ async def upload_evidence(
     from app.services import storage_service, transcript_parser
 
     object_key = (
-        f"transcripts/{user.public_id}/{competency.public_id}/{upload.filename}"
+        f"transcripts/{user.public_id}/{competency.public_id}/{uuid.uuid4()}.pdf"
     )
     object_key = storage_service.upload_transcript(upload, object_key)
     competency.evidence_reference = object_key
@@ -219,23 +219,43 @@ async def upload_evidence(
         rejection: str | None = None
         if not parsed.qr_valid:
             rejection = "Transcript QR code is not a valid MUST stamp."
-        elif competency.course_unit.code not in parsed.course_codes:
+        elif competency.course_unit.code not in parsed.course_grades:
             rejection = (
                 f"Transcript does not list the selected course unit "
                 f"({competency.course_unit.code})."
             )
-        elif competency.grade.label not in parsed.grades:
+        elif (
+            parsed.course_grades.get(competency.course_unit.code)
+            != competency.grade.label
+        ):
+            transcript_grade = parsed.course_grades.get(competency.course_unit.code)
             rejection = (
-                f"Claimed grade {competency.grade.label} does not match the transcript."
+                f"Claimed grade {competency.grade.label} does not match the transcript "
+                f"for {competency.course_unit.code} "
+                f"(transcript shows {transcript_grade})."
             )
         else:
-            scale = competency.course_unit.university.grading_scale
-            minimum = scale.competency_min_points if scale else None
-            if minimum is not None and competency.grade.grade_points < minimum:
-                rejection = (
-                    f"Grade {competency.grade.label} is below the competency "
-                    f"threshold (requires B+ or higher)."
+            # Validate transcript ownership: the transcript should contain
+            # the student's registration number to bind it to this account.
+            if user.reg_no and user.reg_no.strip():
+                import re as _re
+
+                reg_pattern = _re.compile(
+                    r"\\b" + _re.escape(user.reg_no.strip()) + r"\\b"
                 )
+                if not reg_pattern.search(parsed.raw_text):
+                    rejection = (
+                        "Transcript does not contain your registration number "
+                        f"({user.reg_no}). Ownership could not be verified."
+                    )
+            if rejection is None:
+                scale = competency.course_unit.university.grading_scale
+                minimum = scale.competency_min_points if scale else None
+                if minimum is not None and competency.grade.grade_points < minimum:
+                    rejection = (
+                        f"Grade {competency.grade.label} is below the competency "
+                        f"threshold (requires B+ or higher)."
+                    )
 
         if rejection is not None:
             competency.status = CompetencyStatus.REJECTED

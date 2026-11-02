@@ -2513,7 +2513,7 @@ async def _seed_course_units(
                 university_id=university.id,
                 subject_id=subject.id if subject is not None else None,
                 grade_id=None,
-                year_level=int(_m.group(1)) if _m else None,
+                year_level=int(_m.group(1)) if _m and int(_m.group(1)) < 7 else None,
                 semester=int(_m.group(2)) if _m else None,
             )
         )

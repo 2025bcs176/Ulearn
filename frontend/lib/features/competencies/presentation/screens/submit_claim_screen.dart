@@ -33,6 +33,7 @@ class _SubmitClaimScreenState extends ConsumerState<SubmitClaimScreen> {
   String? _gradeId;
   bool _submitting = false;
   PlatformFile? _selectedFile;
+  String? _pendingClaimId;
 
   @override
   void dispose() {
@@ -283,7 +284,9 @@ class _SubmitClaimScreenState extends ConsumerState<SubmitClaimScreen> {
       }
       return;
     }
-    setState(() => _selectedFile = file);
+    if (mounted) {
+      setState(() => _selectedFile = file);
+    }
   }
 
   Future<void> _submit() async {
@@ -293,6 +296,31 @@ class _SubmitClaimScreenState extends ConsumerState<SubmitClaimScreen> {
         universityId == null ||
         _courseUnitId == null ||
         _gradeId == null) {
+      return;
+    }
+
+    // If a previous claim exists but its upload failed, retry just the upload
+    if (_pendingClaimId != null && _selectedFile != null) {
+      final uploadFailure = await ref
+          .read(submitClaimProvider)
+          .uploadEvidence(
+            competencyId: _pendingClaimId!,
+            file: _selectedFile!,
+          );
+      if (!mounted) return;
+      if (uploadFailure != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload failed again: ${uploadFailure.message}')),
+        );
+      } else {
+        _pendingClaimId = null;
+        _selectedFile = null;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Your tutor proof was uploaded successfully.')),
+        );
+        if (context.mounted) Navigator.of(context).pop();
+      }
+      if (mounted) setState(() => _submitting = false);
       return;
     }
 
@@ -348,6 +376,7 @@ class _SubmitClaimScreenState extends ConsumerState<SubmitClaimScreen> {
 
       // If a transcript file was attached, upload it now that the claim exists.
       if (_selectedFile != null && result.claim != null) {
+        _pendingClaimId = result.claim!.id;
         final uploadFailure = await ref
             .read(submitClaimProvider)
             .uploadEvidence(
@@ -357,8 +386,12 @@ class _SubmitClaimScreenState extends ConsumerState<SubmitClaimScreen> {
         if (!mounted) return;
         if (uploadFailure != null) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(uploadFailure.message)),
+            SnackBar(
+              content: Text('Upload failed: ${uploadFailure.message}. Tap Submit to retry.'),
+              duration: const Duration(seconds: 5),
+            ),
           );
+          _selectedFile = null; // Allow resubmission to retry upload
           return;
         }
       }

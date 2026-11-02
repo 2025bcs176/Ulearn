@@ -649,7 +649,13 @@ async def update_profile(
     if "tel" in sent:
         user.tel = sent["tel"]
     if "program_id" in sent:
-        user.program_id = await _resolve_program(db, sent["program_id"])
+        user.program_id = await _resolve_program(
+            db,
+            sent["program_id"],
+            university_id=user.university_id,
+            faculty_id=user.faculty_id,
+        )
+        user.program = None  # Expire cached relationship
     if "full_name" in sent:
         user.full_name = sent["full_name"]
     if sent.get("academic_data_consented") and user.academic_data_consented_at is None:
@@ -720,12 +726,20 @@ async def _resolve_subject(
 
 
 async def _resolve_program(
-    db: AsyncSession, public_id: uuid.UUID | None
+    db: AsyncSession,
+    public_id: uuid.UUID | None,
+    university_id: uuid.UUID | None = None,
+    faculty_id: uuid.UUID | None = None,
 ) -> uuid.UUID | None:
-    """The primary key for a programme's public id, or `NotFoundProblem`."""
+    """The primary key for a programme's public id, scoped to university/faculty."""
     if public_id is None:
         return None
-    result = await db.execute(select(Program.id).where(Program.public_id == public_id))
+    query = select(Program.id).where(Program.public_id == public_id)
+    if university_id is not None:
+        query = query.where(Program.university_id == university_id)
+    if faculty_id is not None:
+        query = query.where(Program.faculty_id == faculty_id)
+    result = await db.execute(query)
     row = result.scalar_one_or_none()
     if row is None:
         raise NotFoundProblem("That programme could not be found.")
