@@ -45,6 +45,10 @@ argon2-cffi
 firebase-admin
 
 # Multipart uploads for transcript/QR evidence.
+n# OCR and transcript parsing dependencies
+pdf2image
+pytesseract
+pyzbar
 python-multipart
 
 # Cloud storage for transcript/QR evidence (free tier, no billing).
