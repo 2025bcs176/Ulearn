@@ -24,6 +24,15 @@ from app.schemas.base import MeanRating, OrmSchema
 
 MAX_SUSPENSION_REASON_LENGTH = 500
 
+#: How long a tutor's bio may be.
+#:
+#: The same bound as the model's column. A bio is read inside a card, so the
+#: limit is a layout decision as much as a storage one.
+MAX_BIO_LENGTH = 280
+
+#: How long an avatar URL may be.
+MAX_AVATAR_URL_LENGTH = 500
+
 #: How many entries the "top tutors" rail returns when the client says nothing.
 #: Ten is a rail, not a list: enough to scroll past, few enough that a student
 #: reads the ordering rather than the page numbers.
@@ -93,6 +102,41 @@ class TutorProfileSummary(OrmSchema):
     standing: TutorStanding
     average_rating: MeanRating | None = Field(default=None)
     completed_sessions: int = Field(ge=0)
+    avatar_url: str | None = Field(
+        default=None,
+        max_length=MAX_AVATAR_URL_LENGTH,
+        description=(
+            "A photo when the tutor has one. Null is the normal beta state: the "
+            "client draws a generated avatar from the name, so a tutor is never "
+            "represented by an empty frame."
+        ),
+    )
+    bio: str | None = Field(
+        default=None,
+        max_length=MAX_BIO_LENGTH,
+        description=(
+            "A few sentences in the tutor's own voice. Null when they have not "
+            "written one, which is a normal state and not a reason to hide "
+            "their other evidence."
+        ),
+    )
+    year_of_study: int | None = Field(
+        default=None,
+        ge=1,
+        le=6,
+        description=(
+            "The tutor's year, when they have declared it. Useful context for "
+            "a student choosing between two people who look equally qualified."
+        ),
+    )
+    accepting_requests: bool = Field(
+        default=True,
+        description=(
+            "Whether the tutor is currently taking new requests. A paused "
+            "tutor does not appear in matching; the rail still shows them with "
+            "this flag set so a student who has met them can see why."
+        ),
+    )
 
 
 class TutorRailEntry(OrmSchema):
@@ -127,6 +171,28 @@ class TutorRailEntry(OrmSchema):
         description="Mean score, or null with no ratings yet.",
     )
     completed_sessions: int = Field(ge=0)
+    avatar_url: str | None = Field(
+        default=None,
+        max_length=MAX_AVATAR_URL_LENGTH,
+        description="A photo when the tutor has one; null draws a generated avatar.",
+    )
+    bio: str | None = Field(
+        default=None,
+        max_length=MAX_BIO_LENGTH,
+        description=(
+            "A few sentences in the tutor's own voice, or null when they have "
+            "not written one. The card falls back to their evidence, so a "
+            "missing bio is not a missing card."
+        ),
+    )
+    year_of_study: int | None = Field(default=None, ge=1, le=6)
+    accepting_requests: bool = Field(
+        default=True,
+        description=(
+            "False when the tutor has paused new requests. The rail shows them "
+            "with the flag set; matching leaves them out."
+        ),
+    )
     endorsed_course_unit_ids: list[uuid.UUID] = Field(
         default_factory=list,
         max_length=RAIL_ENDORSED_UNITS,

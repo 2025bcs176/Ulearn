@@ -584,6 +584,10 @@ it is simply not yours to rail on.
     "standing": "verified",
     "average_rating": "4.10",
     "completed_sessions": 9,
+    "avatar_url": null,
+    "bio": "Third-year CS. I explain recursion with trees, not slides.",
+    "year_of_study": 3,
+    "accepting_requests": true,
     "endorsed_course_unit_ids": ["1f4a…"],
     "endorsement_count": 3
   }
@@ -609,6 +613,21 @@ ratings totalling 33 average 4.125 and are sent as `"4.13"`.
 `endorsement_count` is the true total across every unit, so a tutor endorsed in
 fourteen units is not summarised by any five of them. The detail screen caps its
 list the same way, so a client can lay out both from one assumption.
+
+`bio`, `avatar_url`, and `year_of_study` are presentation fields the card draws.
+All three are nullable and null is normal: the beta seeds generated avatars, so
+`avatar_url` is empty for every pilot tutor, and a tutor who has not written a
+bio is shown their evidence instead. The client must not treat a missing bio as
+a missing card.
+
+`accepting_requests` is the tutor's pause switch. A paused tutor **is** still on
+the rail, with the flag set, so a student who has met them can see why they are
+not being proposed; matching leaves them out and reports
+`not_accepting_requests` as the exclusion.
+
+`contact_phone` is never in either response. A tutor's phone number is handed
+only to the two parties of a confirmed session, because a number on a public card
+is a number that gets called by people who never booked.
 
 A tutor is left out when they are `suspended`, belong to another university, hold
 no profile to rank on, or have no verified grade at or above the university's
@@ -636,7 +655,11 @@ One tutor's public profile, for a screen the student opened from the rail.
     "full_name": "Detail Tutor",
     "standing": "verified",
     "average_rating": "4.13",
-    "completed_sessions": 7
+    "completed_sessions": 7,
+    "avatar_url": null,
+    "bio": null,
+    "year_of_study": 2,
+    "accepting_requests": true
   },
   "endorsed_course_unit_ids": ["1f4a…"],
   "endorsement_count": 2
@@ -719,9 +742,9 @@ minted there would name no row, and a client that stored it would follow it to a
 
 A candidate is a tutor with a **verified** grade at or above
 `competency_min_points` for that unit, at the caller's own university, with a
-profile, and not `suspended`. Provisional standing is a ranking input rather than
-a disqualification — otherwise no tutor could ever earn the Verified standing
-that reading requires.
+profile, not `suspended`, and currently accepting requests. Provisional standing
+is a ranking input rather than a disqualification — otherwise no tutor could ever
+earn the Verified standing that reading requires.
 
 `reason` is a stable code, and the set is generated from one constant
 (`MATCH_EXCLUSION_REASONS`) so a documented reason cannot drift from one the
@@ -734,6 +757,7 @@ engine emits:
 | `suspended`          | Revoked for student-facing matching.                                 |
 | `below_threshold`    | A verified grade under `competency_min_points`. The bar is inclusive. |
 | `not_the_tutor`      | Verified grade and the role, but no profile to rank on.              |
+| `not_accepting_requests` | The tutor has paused new requests. The one exclusion the tutor chose; a student can wait or ask someone else. |
 
 `score` is relative: the client shows order, not a number a student could compare
 across requests. Ties are broken by grade, then name, then the course unit's

@@ -15,7 +15,7 @@ import uuid
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, ForeignKey, Integer, Numeric
+from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -97,6 +97,41 @@ class TutorProfile(Base, TimestampMixin):
     suspended_reason: Mapped[str | None] = mapped_column(nullable=True)
     operator_suspended: Mapped[bool] = mapped_column(
         nullable=False, default=False, server_default="false"
+    )
+
+    #: A few sentences in the tutor's own voice, shown on their card and detail
+    #: screen. Bounded rather than free text because it sits inside a card: a
+    #: tutor who writes an essay is not summarised by it, and the client would
+    #: have to truncate a sentence it cannot see the end of.
+    #:
+    #: Nullable, and null is a normal state: a tutor who has not written one is
+    #: shown their grade evidence and standing instead, which is what the card
+    #: was doing before bios existed.
+    bio: Mapped[str | None] = mapped_column(String(280), nullable=True)
+
+    #: A photo, when one has been uploaded. The beta ships generated initials
+    #: avatars, so this is null for every seeded tutor; the column exists so
+    #: turning photos on later is a server-side change rather than a migration
+    #: in the middle of the pilot.
+    #:
+    #: Stored as a URL rather than bytes: the API is not a file host, and a
+    #: database column holding an image makes every tutor query read it.
+    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    #: How a student reaches the tutor once a session exists. Private: it is
+    #: returned to the two parties of a confirmed session and to nobody else,
+    #: because a phone number on a public tutor card is a number that gets
+    #: called by people who never booked.
+    contact_phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+    #: Whether the tutor is currently taking new requests.
+    #:
+    #: The beta's stand-in for an availability calendar: a single switch a tutor
+    #: can flip when they are too busy to teach, rather than a weekly schedule
+    #: the pilot has no booking engine to honour. Matching excludes a tutor who
+    #: has paused, so pausing is a real promise rather than a label.
+    accepting_requests: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
     )
 
     user: Mapped[User] = relationship(back_populates="tutor_profile")

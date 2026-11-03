@@ -133,6 +133,10 @@ async def list_top_tutors(
                 # shows the same `Decimal` the promotion rule was applied with.
                 average_rating=profile.average_rating,
                 completed_sessions=profile.completed_sessions,
+                avatar_url=profile.avatar_url,
+                bio=profile.bio,
+                year_of_study=tutor.year_of_study,
+                accepting_requests=profile.accepting_requests,
                 endorsed_course_unit_ids=[
                     row.course_unit_id for row in endorsed[:RAIL_ENDORSED_UNITS]
                 ],
@@ -185,6 +189,10 @@ async def get_tutor_detail(
             standing=profile.standing,
             average_rating=profile.average_rating,
             completed_sessions=profile.completed_sessions,
+            avatar_url=profile.avatar_url,
+            bio=profile.bio,
+            year_of_study=tutor.year_of_study,
+            accepting_requests=profile.accepting_requests,
         ),
         endorsed_course_unit_ids=[
             entry.course_unit_id for entry in endorsed[:RAIL_ENDORSED_UNITS]

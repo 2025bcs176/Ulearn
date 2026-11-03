@@ -657,11 +657,17 @@ advertised reason nothing produces leaves a client with a branch that never fire
 and a tutor with a real, fixable problem told the platform has no reason.
 
 Codes: `unverified`, `same_university_only`, `suspended`, `below_threshold`,
-`not_the_tutor`. The order of the checks is the order above, and it is not
-arbitrary: `unverified` is reported before any number is compared, so a tutor
-with an unverified A is not told their problem was the grade. Pending
-competencies are therefore read rather than filtered out — dropping the row
-silently made the commonest reason for a tutor's absence unanswerable.
+`not_the_tutor`, `not_accepting_requests`. The order of the checks is the order
+above, and it is not arbitrary: `unverified` is reported before any number is
+compared, so a tutor with an unverified A is not told their problem was the grade.
+Pending competencies are therefore read rather than filtered out — dropping the
+row silently made the commonest reason for a tutor's absence unanswerable.
+
+`not_accepting_requests` is the only exclusion the tutor chose themselves. It
+exists because the beta has no availability calendar: a single pause switch is
+what a tutor can actually keep true, and matching honours it rather than
+proposing someone who has said they are too busy. The rail still lists them with
+the flag set, because discovery is not a request.
 
 The caller is never a candidate for their own request, and is filtered in the
 query rather than reported as an exclusion: they were never considered, so
@@ -702,6 +708,11 @@ nothing else:
 - Neither endpoint creates a `tutor_profiles` row. The row is created when the
   tutor role is granted; a browse that minted one would hand every signed-in
   student a `probationary` standing on every cold start.
+- The rail and the detail screen carry `bio`, `avatar_url`, `year_of_study`, and
+  `accepting_requests`, so a card can read like a person rather than a grade
+  report. `contact_phone` is on neither: a number on a public card is a number
+  people who never booked will call, so it is returned only to the two parties of
+  a confirmed session.
 - The competency bar applies on **both** paths, filtered and unfiltered. Every
   unit at one university is graded on that university's single scale, so applying
   it only when a unit was named would mean the same tutor passes in one query and
