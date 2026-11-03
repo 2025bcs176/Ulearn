@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:peerpass/core/constants/app_dimens.dart';
 import 'package:peerpass/core/models/tutor_standing.dart';
+import 'package:peerpass/core/theme/app_palette.dart';
+import 'package:peerpass/core/widgets/app_avatar.dart';
+import 'package:peerpass/core/widgets/app_button.dart';
+import 'package:peerpass/core/widgets/app_card.dart';
+import 'package:peerpass/core/widgets/app_pill.dart';
 import 'package:peerpass/features/matching/data/models/match_result.dart';
 
 /// One tutor the API is willing to propose, with the evidence behind it.
 ///
-/// A vertical row rather than a rail card, because a candidate list is a list:
+/// A vertical card rather than a rail row, because a candidate list is a list:
 /// it is longer than a rail, it is read top to bottom, and each row carries the
-/// unit's grade as well as the tutor. The rail's card would put the same four
-/// fields in a 200pt box that the screen has the whole width for.
+/// unit's grade as well as the tutor. The extra width is spent on a bio and the
+/// evidence a student would otherwise have to open the profile to find.
 ///
 /// [onAsk] is what makes the list usable rather than a reading of one. It is
 /// null on a tutor who has already been asked, which the caller expresses by
@@ -41,49 +46,109 @@ class MatchCandidateTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final palette = AppPalette.of(context);
     final tutor = candidate.tutor;
+    final isVerified = tutor.standing == TutorStanding.verified;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: AppDimens.md),
-      child: Padding(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppDimens.md),
+      child: AppCard(
         padding: const EdgeInsets.all(AppDimens.lg),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Text(
-                    tutor.fullName,
-                    style: theme.textTheme.titleMedium,
-                  ),
+                AppAvatar(
+                  name: tutor.fullName,
+                  imageUrl: tutor.avatarUrl,
+                  size: 48,
+                  isVerified: isVerified,
                 ),
-                const SizedBox(width: AppDimens.sm),
-                _StandingChip(
-                  standing: tutor.standing,
-                  standingWire: tutor.standingWire,
+                const SizedBox(width: AppDimens.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        tutor.fullName,
+                        style: theme.textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: AppDimens.xxs),
+                      Wrap(
+                        spacing: AppDimens.xs,
+                        runSpacing: AppDimens.xs,
+                        children: [
+                          AppPill(
+                            tutor.standingLabel,
+                            tone: _standingTone(tutor.standing),
+                            isCompact: true,
+                          ),
+                          if (tutor.yearLabel case final year?)
+                            AppPill(year, isCompact: true),
+                          if (!tutor.acceptingRequests)
+                            const AppPill(
+                              'Paused',
+                              tone: AppPillTone.danger,
+                              isCompact: true,
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: AppDimens.sm),
-            Text(
-              tutor.ratingLabel,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            Text(
-              candidate.gradeLabel,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
             const SizedBox(height: AppDimens.md),
+            // The bio is the reason the student can choose between two
+            // equally-qualified tutors. Without one the row falls back to the
+            // evidence the API already sent, rather than leaving a gap.
+            if (tutor.hasBio)
+              Text(
+                tutor.bio!,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium,
+              )
+            else
+              Text(
+                candidate.gradeLabel,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: palette.muted,
+                ),
+              ),
+            const SizedBox(height: AppDimens.md),
+            Wrap(
+              spacing: AppDimens.sm,
+              runSpacing: AppDimens.sm,
+              children: [
+                AppPill(
+                  tutor.ratingLabel,
+                  icon: Icons.star_rounded,
+                  tone: tutor.hasRatings
+                      ? AppPillTone.warning
+                      : AppPillTone.neutral,
+                  isCompact: true,
+                ),
+                AppPill(
+                  '${tutor.completedSessions} sessions',
+                  isCompact: true,
+                ),
+                if (candidate.competencyGradePoints != null)
+                  AppPill(candidate.gradeLabel, isCompact: true),
+              ],
+            ),
+            const SizedBox(height: AppDimens.lg),
             Align(
               alignment: Alignment.centerLeft,
-              child: FilledButton.tonal(
+              child: AppButton(
+                label: busy ? 'Sending…' : askLabel,
+                isSmall: true,
+                isFullWidth: false,
+                isLoading: busy,
                 onPressed: onAsk,
-                child: Text(busy ? 'Sending…' : askLabel),
               ),
             ),
           ],
@@ -91,57 +156,18 @@ class MatchCandidateTile extends StatelessWidget {
       ),
     );
   }
-}
 
-/// A tutor's standing, in the rail's colours.
-///
-/// A second copy of `TutorStandingChip`, on purpose. The dependency rules forbid
-/// one feature importing another's presentation layer, and a chip is presentation;
-/// the alternative -- the tutors feature reaching into core to hold a widget -- is
-/// a decision about what `core/` is for, taken here on this feature's behalf. The
-/// colour table is five lines and the standing itself is parsed once, in
-/// `core/models/tutor_standing.dart`, so what can drift is a colour and not a
-/// meaning.
-class _StandingChip extends StatelessWidget {
-  const _StandingChip({required this.standingWire, this.standing});
-
-  final String standingWire;
-  final TutorStanding? standing;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final (background, foreground) = switch (standing) {
-      TutorStanding.verified => (
-        scheme.secondaryContainer,
-        scheme.onSecondaryContainer,
-      ),
-      TutorStanding.probationary => (
-        scheme.surfaceContainerHighest,
-        scheme.onSurfaceVariant,
-      ),
-      TutorStanding.reduced => (
-        scheme.tertiaryContainer,
-        scheme.onTertiaryContainer,
-      ),
-      TutorStanding.suspended ||
-      null => (scheme.errorContainer, scheme.onErrorContainer),
+  /// The standing, in the pill's vocabulary.
+  ///
+  /// The tone is semantic rather than a colour chosen here: a suspended tutor
+  /// is the only one a student must not mistake for an available one.
+  AppPillTone _standingTone(TutorStanding? standing) {
+    return switch (standing) {
+      TutorStanding.verified => AppPillTone.success,
+      TutorStanding.reduced => AppPillTone.warning,
+      TutorStanding.suspended => AppPillTone.danger,
+      TutorStanding.probationary => AppPillTone.neutral,
+      null => AppPillTone.danger,
     };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.sm,
-        vertical: AppDimens.xxs,
-      ),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(AppDimens.radiusSm),
-      ),
-      child: Text(
-        standing?.label ?? standingWire,
-        style: theme.textTheme.labelSmall?.copyWith(color: foreground),
-      ),
-    );
   }
 }

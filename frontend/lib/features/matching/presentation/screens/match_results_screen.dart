@@ -137,9 +137,9 @@ class _MatchResultsScreenState extends ConsumerState<MatchResultsScreen> {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
-                    AppDimens.lg,
+                    AppDimens.screenPadding,
                     AppDimens.md,
-                    AppDimens.lg,
+                    AppDimens.screenPadding,
                     AppDimens.sm,
                   ),
                   child: _WidenToggle(
@@ -155,9 +155,9 @@ class _MatchResultsScreenState extends ConsumerState<MatchResultsScreen> {
                     when topic.trim().isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(
-                      AppDimens.lg,
+                      AppDimens.screenPadding,
                       0,
-                      AppDimens.lg,
+                      AppDimens.screenPadding,
                       AppDimens.sm,
                     ),
                     child: Row(
@@ -187,7 +187,7 @@ class _MatchResultsScreenState extends ConsumerState<MatchResultsScreen> {
                 if (choice.request != null || choice.failure != null)
                   Padding(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: AppDimens.lg,
+                      horizontal: AppDimens.screenPadding,
                     ),
                     child: _ChoiceBanner(
                       choice: choice,
@@ -328,7 +328,7 @@ class _Results extends StatelessWidget {
     // the app had looked at the right course.
     if (result.noEligibleTutors) {
       return ListView(
-        padding: const EdgeInsets.all(AppDimens.lg),
+        padding: const EdgeInsets.all(AppDimens.screenPadding),
         children: [
           if (result.widened) ...[
             _WidenedNotice(unitLabel: unitLabel),
@@ -348,7 +348,7 @@ class _Results extends StatelessWidget {
     }
 
     return ListView(
-      padding: const EdgeInsets.all(AppDimens.lg),
+      padding: const EdgeInsets.all(AppDimens.screenPadding),
       children: [
         if (result.widened) ...[
           _WidenedNotice(unitLabel: unitLabel),
@@ -500,7 +500,7 @@ class _Banner extends StatelessWidget {
       color: background,
       margin: const EdgeInsets.only(bottom: AppDimens.sm),
       child: Padding(
-        padding: const EdgeInsets.all(AppDimens.lg),
+        padding: const EdgeInsets.all(AppDimens.screenPadding),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -555,7 +555,7 @@ class _WidenedNotice extends StatelessWidget {
     return Card(
       color: theme.colorScheme.tertiaryContainer,
       child: Padding(
-        padding: const EdgeInsets.all(AppDimens.lg),
+        padding: const EdgeInsets.all(AppDimens.screenPadding),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

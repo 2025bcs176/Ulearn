@@ -23,6 +23,10 @@ class TutorSummary {
     required this.completedSessions,
     this.standing,
     this.averageRating,
+    this.bio,
+    this.avatarUrl,
+    this.yearOfStudy,
+    this.acceptingRequests = true,
   });
 
   /// Reads the student-facing tutor shape.
@@ -58,6 +62,17 @@ class TutorSummary {
       standing: TutorStanding.fromWire(standingWire),
       averageRating: readDecimal(json['average_rating']),
       completedSessions: completedSessions.toInt(),
+      bio: _readString(json, 'bio'),
+      avatarUrl: _readString(json, 'avatar_url'),
+      yearOfStudy: switch (json['year_of_study']) {
+        final num year => year.toInt(),
+        // Null is the documented state for a tutor who has not declared one.
+        _ => null,
+      },
+      // Absent means accepting: the API defaults the field to true, and an
+      // older server that predates the pause must not read as every tutor
+      // having paused. Only an explicit false is a pause.
+      acceptingRequests: json['accepting_requests'] != false,
     );
   }
 
@@ -89,8 +104,37 @@ class TutorSummary {
 
   final int completedSessions;
 
+  /// A few sentences in the tutor's own voice, or null when they have not
+  /// written one.
+  ///
+  /// Null is a normal state and not a reason to hide the card: the widgets fall
+  /// back to the tutor's evidence, which is what the card showed before bios
+  /// existed.
+  final String? bio;
+
+  /// A photo URL, or null when the client should draw a generated avatar.
+  ///
+  /// The beta seeds no photos, so null is the common case rather than an error.
+  final String? avatarUrl;
+
+  /// The tutor's year, when they have declared one.
+  final int? yearOfStudy;
+
+  /// Whether the tutor is currently taking new requests.
+  ///
+  /// False after an explicit pause from the API. The card says so and hides the
+  /// ask action; matching already leaves a paused tutor out, so a candidate with
+  /// this false is a state the client should not normally see.
+  final bool acceptingRequests;
+
   /// The standing as a student reads it.
   String get standingLabel => standing?.label ?? standingWire;
+
+  /// The year as a label, or null when the tutor has not declared one.
+  String? get yearLabel => yearOfStudy == null ? null : 'Year $yearOfStudy';
+
+  /// Whether this tutor has written a bio worth showing.
+  bool get hasBio => bio != null && bio!.trim().isNotEmpty;
 
   /// The average rating as a student reads it.
   ///
@@ -114,7 +158,11 @@ class TutorSummary {
           other.fullName == fullName &&
           other.standingWire == standingWire &&
           other.averageRating == averageRating &&
-          other.completedSessions == completedSessions;
+          other.completedSessions == completedSessions &&
+          other.bio == bio &&
+          other.avatarUrl == avatarUrl &&
+          other.yearOfStudy == yearOfStudy &&
+          other.acceptingRequests == acceptingRequests;
 
   @override
   int get hashCode => Object.hash(
@@ -123,6 +171,10 @@ class TutorSummary {
     standingWire,
     averageRating,
     completedSessions,
+    bio,
+    avatarUrl,
+    yearOfStudy,
+    acceptingRequests,
   );
 
   @override

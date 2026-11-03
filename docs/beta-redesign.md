@@ -186,10 +186,12 @@ Kept current so the plan and the code do not drift apart.
       prefills the request sheet. Home no longer repeats the sessions tab.
 - [x] **Onboarding restyle.** Step counter, segmented progress, display
       headings, pinned action bar, tinted failure and consent surfaces.
-- [ ] Find a tutor: results cards, request sheet, topic chips. Backend tutor
-      profile fields (`bio`, `avatar_url`, `contact_phone`, `accepting_requests`)
-      are in place, exposed on the rail and detail, and matching now excludes a
-      paused tutor with `not_accepting_requests`.
+- [x] **Find a tutor cards.** Rail and candidate cards read the tutor as a
+      person — bio, year, generated avatar, rating, paused state — and the
+      request sheet is on the app's buttons and inputs. Backend tutor profile
+      fields are in place, and matching excludes a paused tutor with
+      `not_accepting_requests`.
+- [ ] Topic chips on the request sheet, from the seeded unit topic lists.
 - [ ] Tutor profile: bio, reviews, availability, accept-time scheduling.
 - [ ] Notifications: backend, inbox, badge, FCM, deep links.
 - [ ] Sessions: mutual check-in, timeline, rating with tags.

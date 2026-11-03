@@ -4,13 +4,17 @@ import 'package:go_router/go_router.dart';
 import 'package:peerpass/app/router.dart';
 import 'package:peerpass/core/constants/app_dimens.dart';
 import 'package:peerpass/core/error/failures.dart';
+import 'package:peerpass/core/models/tutor_standing.dart';
+import 'package:peerpass/core/theme/app_palette.dart';
+import 'package:peerpass/core/widgets/app_avatar.dart';
+import 'package:peerpass/core/widgets/app_card.dart';
+import 'package:peerpass/core/widgets/app_pill.dart';
 import 'package:peerpass/core/widgets/empty_view.dart';
 import 'package:peerpass/core/widgets/failure_view.dart';
 import 'package:peerpass/core/widgets/loading_view.dart';
 import 'package:peerpass/features/tutors/data/models/tutor_rail_entry.dart';
 import 'package:peerpass/features/tutors/presentation/formatting.dart';
 import 'package:peerpass/features/tutors/presentation/providers/tutor_providers.dart';
-import 'package:peerpass/features/tutors/presentation/widgets/tutor_standing_chip.dart';
 
 /// How wide one rail card is.
 ///
@@ -22,9 +26,9 @@ const double _cardWidth = 200;
 
 /// How tall one rail card is, for the same reason.
 ///
-/// Tall enough for the name, the chip, the rating, the sessions and the
-/// endorsements without the text wrapping into a second line per field.
-const double _cardHeight = 172;
+/// Tall enough for the avatar and name, a two-line bio, and the rating pill
+/// without any of them being truncated into a second row of ellipses.
+const double _cardHeight = 188;
 
 /// The tutors to browse, as a rail of cards on the home screen.
 ///
@@ -132,53 +136,107 @@ class TutorCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final palette = AppPalette.of(context);
     final tutor = entry.tutor;
+    final isVerified = tutor.standing == TutorStanding.verified;
 
     return SizedBox(
       width: width,
-      child: Card(
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () => context.push(AppRoutes.tutorDetailPath(tutor.userId)),
-          child: Padding(
-            padding: const EdgeInsets.all(AppDimens.md),
-            child: Column(
+      child: AppCard(
+        padding: const EdgeInsets.all(AppDimens.lg),
+        semanticLabel: 'Open ${tutor.fullName}',
+        onTap: () => context.push(AppRoutes.tutorDetailPath(tutor.userId)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
               children: [
-                TutorStandingChip(
-                  standing: tutor.standing,
-                  standingWire: tutor.standingWire,
+                AppAvatar(
+                  name: tutor.fullName,
+                  imageUrl: tutor.avatarUrl,
+                  size: 40,
+                  isVerified: isVerified,
                 ),
-                const SizedBox(height: AppDimens.sm),
-                Text(
-                  tutor.fullName,
-                  style: theme.textTheme.titleSmall,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: AppDimens.xxs),
-                Text(
-                  tutor.ratingLabel,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                Text(
-                  sessionsTaughtLabel(tutor.completedSessions),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                Text(
-                  entry.endorsementLabel,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                const SizedBox(width: AppDimens.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        tutor.fullName,
+                        style: theme.textTheme.titleSmall,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (tutor.yearLabel case final year?)
+                        Text(
+                          year,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: palette.muted,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: AppDimens.sm),
+            // A bio when there is one, the evidence otherwise. Both are the
+            // same height so the card does not jump as a tutor writes one.
+            Expanded(
+              child: tutor.hasBio
+                  ? Text(
+                      tutor.bio!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall,
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          sessionsTaughtLabel(tutor.completedSessions),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: palette.muted,
+                          ),
+                        ),
+                        Text(
+                          entry.endorsementLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: palette.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+            const SizedBox(height: AppDimens.sm),
+            Row(
+              children: [
+                AppPill(
+                  tutor.ratingLabel,
+                  icon: Icons.star_rounded,
+                  tone: tutor.hasRatings
+                      ? AppPillTone.warning
+                      : AppPillTone.neutral,
+                  isCompact: true,
+                ),
+                const Spacer(),
+                if (!tutor.acceptingRequests)
+                  const AppPill(
+                    'Paused',
+                    icon: Icons.pause_rounded,
+                    tone: AppPillTone.danger,
+                    isCompact: true,
+                  ),
+              ],
+            ),
+          ],
         ),
       ),
     );

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:peerpass/core/constants/app_dimens.dart';
+import 'package:peerpass/core/theme/app_palette.dart';
+import 'package:peerpass/core/widgets/app_button.dart';
 
 /// What a student wrote when asking for help.
 typedef RequestDraft = ({String topic, String? description});
@@ -116,6 +118,7 @@ class _RequestTopicFormState extends State<_RequestTopicForm> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final palette = AppPalette.of(context);
 
     return Padding(
       // The view inset is what keeps the keyboard from covering the submit
@@ -123,8 +126,8 @@ class _RequestTopicFormState extends State<_RequestTopicForm> {
       // is behind the keyboard, which on a phone is a dead end rather than an
       // inconvenience.
       padding: EdgeInsets.only(
-        left: AppDimens.lg,
-        right: AppDimens.lg,
+        left: AppDimens.screenPadding,
+        right: AppDimens.screenPadding,
         bottom: MediaQuery.viewInsetsOf(context).bottom + AppDimens.lg,
       ),
       child: SingleChildScrollView(
@@ -137,15 +140,13 @@ class _RequestTopicFormState extends State<_RequestTopicForm> {
           children: [
             Text(
               'What do you need help with?',
-              style: theme.textTheme.titleLarge,
+              style: theme.textTheme.headlineMedium,
             ),
-            const SizedBox(height: AppDimens.sm),
+            const SizedBox(height: AppDimens.xs),
             Text(
               'Your chosen tutor sees this when they decide whether to take '
               'your request. Be specific about the part you are stuck on.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+              style: theme.textTheme.bodySmall?.copyWith(color: palette.muted),
             ),
             const SizedBox(height: AppDimens.lg),
             TextField(
@@ -157,7 +158,6 @@ class _RequestTopicFormState extends State<_RequestTopicForm> {
                 labelText: 'Topic',
                 hintText: 'Eigenvalues and diagonalisation',
                 errorText: _topicError,
-                border: const OutlineInputBorder(),
               ),
               onChanged: (_) {
                 // Every keystroke rebuilds. `_canSubmit` is read when the button
@@ -178,30 +178,23 @@ class _RequestTopicFormState extends State<_RequestTopicForm> {
               decoration: const InputDecoration(
                 labelText: 'Anything else (optional)',
                 hintText: 'Where you have got to, what you have tried',
-                border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: AppDimens.md),
-            // Stacked, not a row. The app's filled button is full width by
-            // design -- `minimumSize: Size.fromHeight(48)` -- so a filled button
-            // in a row asks for an infinite width and takes the whole form down
-            // with it. Primary first, because that is the one the student wants
-            // and the one within reach of a thumb.
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                FilledButton(
-                  // Disabled rather than enabled-and-wrong: the button says the
-                  // form is not ready yet, which is the truth, rather than
-                  // answering a tap with an error the student did not cause.
-                  onPressed: _canSubmit ? _submit : null,
-                  child: const Text('Ask this tutor'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                ),
-              ],
+            const SizedBox(height: AppDimens.lg),
+            // Stacked, not a row: the primary action is the one within reach of
+            // a thumb, and the cancel below it is the quiet way out rather than
+            // a second equal choice.
+            AppButton(
+              // Disabled rather than enabled-and-wrong: the button says the
+              // form is not ready yet, which is the truth, rather than
+              // answering a tap with an error the student did not cause.
+              label: 'Ask this tutor',
+              onPressed: _canSubmit ? _submit : null,
+            ),
+            AppButton(
+              label: 'Cancel',
+              variant: AppButtonVariant.ghost,
+              onPressed: () => Navigator.of(context).pop(),
             ),
           ],
         ),
