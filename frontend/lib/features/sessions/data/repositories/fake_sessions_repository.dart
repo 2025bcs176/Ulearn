@@ -24,7 +24,7 @@ class FakeSessionsRepository implements SessionsRepository {
     // Otherwise a tutor-side screen test would fail on "no PIN" for a reason that
     // has nothing to do with what it is testing.
     for (final session in _sessions) {
-      _pins.putIfAbsent(session.id, () => '42');
+      _pins.putIfAbsent(session.id, () => '654321');
     }
   }
 
@@ -142,7 +142,7 @@ class FakeSessionsRepository implements SessionsRepository {
       'help_request_id': requestId,
     });
     _sessions.add(created);
-    _pins[created.id] = '42';
+    _pins[created.id] = '654321';
     return created;
   }
 
@@ -198,6 +198,7 @@ class FakeSessionsRepository implements SessionsRepository {
           retryAt: DateTime.now().add(const Duration(minutes: 15)),
         );
       }
+
       throw const ValidationFailure(
         'The session PIN is incorrect.',
         fieldErrors: {'pin': 'incorrect'},
@@ -217,6 +218,44 @@ class FakeSessionsRepository implements SessionsRepository {
   }
 
   @override
+  Future<SessionModel> requestCompletion({required String sessionId}) async {
+    return _replace(
+      _require(sessionId)
+          .copyWith(completionRequestedAt: DateTime.utc(2026, 3, 4, 10)),
+    );
+  }
+
+  @override
+  Future<SessionPinModel> revealCompletionCode({
+    required String sessionId,
+  }) async {
+    return SessionPinModel(
+      sessionId: sessionId,
+      sessionPin: '654321',
+      attemptsRemaining: maxPinAttempts,
+    );
+  }
+
+  @override
+  Future<SessionModel> verifyCompletionCode({
+    required String sessionId,
+    required String code,
+  }) async {
+    if (code != '654321') {
+      throw const ValidationFailure(
+        'The completion code is incorrect.',
+        fieldErrors: {'pin': 'incorrect'},
+      );
+    }
+    return _replace(
+      _require(sessionId).copyWith(
+        status: TutoringSessionStatus.completed,
+        statusWire: TutoringSessionStatus.completed.wireValue,
+      ),
+    );
+  }
+
+  @override
   Future<SessionModel> endSession(String sessionId) async {
     endedSessionIds.add(sessionId);
     return _replace(
@@ -231,6 +270,7 @@ class FakeSessionsRepository implements SessionsRepository {
   Future<RatingModel> rateSession({
     required String sessionId,
     required int score,
+    required bool comprehensionHelped,
     String? feedbackText,
     List<String> endorsedCourseUnitIds = const [],
   }) async {
@@ -245,6 +285,7 @@ class FakeSessionsRepository implements SessionsRepository {
       raterId: session.tuteeId,
       rateeId: session.tutorId,
       score: score,
+      comprehensionHelped: comprehensionHelped,
       feedbackText: feedbackText,
       createdAt: DateTime.utc(2026, 3, 4, 9),
     );

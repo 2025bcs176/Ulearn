@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 
 from app.models.enums import (
     CompetencyStatus,
+    ReportStatus,
     TutorStanding,
     UserRole,
     VerificationSource,
@@ -166,3 +167,32 @@ class AdminTutorStandingResponse(OrmSchema):
 
 class AdminTutorStandingPage(Page[AdminTutorStandingResponse]):
     """A bounded page of tutor standing summaries."""
+
+
+class AdminSessionReportResponse(OrmSchema):
+    id: uuid.UUID
+    session_id: uuid.UUID
+    reporter_id: uuid.UUID
+    reporter_email: str
+    category: str
+    description: str | None
+    status: ReportStatus
+    created_at: datetime
+
+
+class AdminSessionReportPage(Page[AdminSessionReportResponse]):
+    """Safeguarding reports awaiting operator action."""
+
+
+class AdminSessionReportUpdate(RequestSchema):
+    status: ReportStatus
+    suspend_tutor: bool = False
+    suspension_reason: Trimmed | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def suspension_reason_required(self) -> Self:
+        if self.suspend_tutor and not (
+            self.suspension_reason and self.suspension_reason.strip()
+        ):
+            raise ValueError("suspension_reason is required when suspending a tutor")
+        return self

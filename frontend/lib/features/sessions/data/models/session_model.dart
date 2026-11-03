@@ -83,9 +83,13 @@ class SessionModel {
     this.scheduledStart,
     this.startedAt,
     this.endedAt,
+    this.completionRequestedAt,
     this.durationMinutes = 0,
     this.meetingLink,
+    this.meetingVenue,
+    this.meetingVenueDetail,
     this.isRated = false,
+    this.isOfflineSnapshot = false,
   });
 
   /// Reads the wire form.
@@ -150,14 +154,18 @@ class SessionModel {
       scheduledStart: _readDateTime(json, 'scheduled_start'),
       startedAt: _readDateTime(json, 'started_at'),
       endedAt: _readDateTime(json, 'ended_at'),
+      completionRequestedAt: _readDateTime(json, 'completion_requested_at'),
       durationMinutes: (json['duration_minutes'] as num?)?.toInt() ?? 0,
       meetingLink: _readString(json, 'meeting_link'),
+      meetingVenue: _readString(json, 'meeting_venue'),
+      meetingVenueDetail: _readString(json, 'meeting_venue_detail'),
       isRated: switch (json['is_rated']) {
         final bool rated => rated,
         // Not a boolean. The field has one obvious neutral reading, and refusing
         // the whole session over it would be worse than reading it as unrated.
         _ => false,
       },
+      isOfflineSnapshot: json['_offline_cached'] == true,
     );
   }
 
@@ -211,9 +219,11 @@ class SessionModel {
 
   final DateTime? endedAt;
 
+  final DateTime? completionRequestedAt;
+
   final int durationMinutes;
 
-  /// The two-digit handshake pin the API generated.
+  /// The six-digit handshake pin the API generated.
   ///
   /// Shown to the tutee and never to the tutor. The API sends it to both parties
   /// because they share one response shape, which means the pin is not a secret
@@ -227,6 +237,17 @@ class SessionModel {
   /// dependency, and the agreed substitute for in-app chat is a value the student
   /// can hand to a browser.
   final String? meetingLink;
+  final String? meetingVenue;
+  final String? meetingVenueDetail;
+
+  String? get venueLabel {
+    final venue = meetingVenue;
+    final detail = meetingVenueDetail;
+    if (venue == null && detail == null) return null;
+    if (venue == null) return detail;
+    if (detail == null || detail.isEmpty) return venue;
+    return '$venue · $detail';
+  }
 
   /// Whether a rating exists for this session yet.
   ///
@@ -236,6 +257,8 @@ class SessionModel {
   /// to the client that just submitted it, and is held on the detail screen for
   /// as long as that screen is open.
   final bool isRated;
+
+  final bool isOfflineSnapshot;
 
   final DateTime createdAt;
 
@@ -278,13 +301,16 @@ class SessionModel {
   ///
   /// False for a status this client does not recognise: an unfamiliar state must
   /// not be presented as something to act on.
-  bool get isActive => status?.isActive ?? false;
+  bool get isActive => !isOfflineSnapshot && (status?.isActive ?? false);
 
   SessionModel copyWith({
     String? statusWire,
     TutoringSessionStatus? status,
+    DateTime? completionRequestedAt,
     int? durationMinutes,
     String? meetingLink,
+    String? meetingVenue,
+    String? meetingVenueDetail,
     bool? isRated,
   }) {
     return SessionModel(
@@ -303,8 +329,12 @@ class SessionModel {
       scheduledStart: scheduledStart,
       startedAt: startedAt,
       endedAt: endedAt,
+      completionRequestedAt:
+          completionRequestedAt ?? this.completionRequestedAt,
       durationMinutes: durationMinutes ?? this.durationMinutes,
       meetingLink: meetingLink ?? this.meetingLink,
+      meetingVenue: meetingVenue ?? this.meetingVenue,
+      meetingVenueDetail: meetingVenueDetail ?? this.meetingVenueDetail,
       isRated: isRated ?? this.isRated,
       createdAt: createdAt,
     );
@@ -324,8 +354,11 @@ class SessionModel {
           other.scheduledStart == scheduledStart &&
           other.startedAt == startedAt &&
           other.endedAt == endedAt &&
+          other.completionRequestedAt == completionRequestedAt &&
           other.durationMinutes == durationMinutes &&
           other.meetingLink == meetingLink &&
+          other.meetingVenue == meetingVenue &&
+          other.meetingVenueDetail == meetingVenueDetail &&
           other.isRated == isRated &&
           other.createdAt == createdAt;
 
@@ -341,8 +374,11 @@ class SessionModel {
     scheduledStart,
     startedAt,
     endedAt,
+    completionRequestedAt,
     durationMinutes,
     meetingLink,
+    meetingVenue,
+    meetingVenueDetail,
     isRated,
     createdAt,
   );

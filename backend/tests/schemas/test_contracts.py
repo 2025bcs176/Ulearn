@@ -375,6 +375,24 @@ class TestSessionLifecycle:
 
         assert created.duration_minutes == 60
 
+    def test_other_on_campus_requires_room_detail(self) -> None:
+        with pytest.raises(ValidationError, match="meeting_venue_detail"):
+            SessionCreate(
+                course_unit_id=uuid.uuid4(),
+                topic="Eigenvalues",
+                duration_minutes=60,
+                meeting_venue="Other on-campus",
+            )
+
+    def test_venue_detail_requires_a_venue(self) -> None:
+        with pytest.raises(ValidationError, match="meeting_venue"):
+            SessionCreate(
+                course_unit_id=uuid.uuid4(),
+                topic="Eigenvalues",
+                duration_minutes=60,
+                meeting_venue_detail="Lab 1, table 4",
+            )
+
     @pytest.mark.parametrize("minutes", [0, -30, 10_000])
     def test_an_implausible_duration_is_rejected(self, minutes: int) -> None:
         """Zero would complete instantly and bank certificate hours."""
@@ -398,12 +416,12 @@ class TestRating:
     @pytest.mark.parametrize("score", [MIN_RATING - 1, MAX_RATING + 1, 0])
     def test_an_out_of_range_score_is_rejected(self, score: int) -> None:
         with pytest.raises(ValidationError):
-            RatingCreate(score=score)
+            RatingCreate(comprehension_helped=True, score=score)
 
     @pytest.mark.parametrize("score", [MIN_RATING, MAX_RATING])
     def test_the_bounds_themselves_are_accepted(self, score: int) -> None:
         """A gate at exactly B+ is a gate the boundary values must pass."""
-        assert RatingCreate(score=score).score == score
+        assert RatingCreate(comprehension_helped=True, score=score).score == score
 
     def test_the_bounds_agree_with_the_database(self) -> None:
         """Stated in two places, so the two are pinned to each other.

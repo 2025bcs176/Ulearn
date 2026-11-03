@@ -96,6 +96,13 @@ class AdminApiClient {
     return response.data!;
   }
 
+  Future<Map<String, dynamic>> getJson(String path) async {
+    final response = await _authorized(
+      () => _dio.get<Map<String, dynamic>>(path, options: _authOptions()),
+    );
+    return response.data!;
+  }
+
   /// Sends a write and discards the response body.
   Future<void> patch(String path, {required Map<String, dynamic> data}) async {
     await _authorized(

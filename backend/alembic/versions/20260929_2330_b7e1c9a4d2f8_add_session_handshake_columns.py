@@ -37,10 +37,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint(
-        op.f("ck_sessions_session_pin_length"),
-        "sessions",
-        type_="check",
-    )
+    constraint_name = op.f("ck_sessions_session_pin_length")
+    bind = op.get_bind()
+    check_constraints = sa.inspect(bind).get_check_constraints("sessions")
+    if any(item.get("name") == constraint_name for item in check_constraints):
+        op.drop_constraint(constraint_name, "sessions", type_="check")
     op.drop_column("sessions", "meeting_link")
     op.drop_column("sessions", "session_pin")

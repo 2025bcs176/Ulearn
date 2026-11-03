@@ -42,7 +42,10 @@ class TutorDetailScreen extends ConsumerWidget {
                   onRefresh: () =>
                       ref.refresh(tutorDetailProvider(userId).future),
                 ),
-                null => const LoadingView(message: 'Loading tutor'),
+                null => const LoadingView(
+                  message: 'Loading tutor',
+                  variant: LoadingViewVariant.detail,
+                ),
               },
             },
           ),

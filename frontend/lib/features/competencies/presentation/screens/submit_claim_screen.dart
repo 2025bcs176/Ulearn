@@ -94,7 +94,7 @@ class _SubmitClaimScreenState extends ConsumerState<SubmitClaimScreen> {
         _gradeId != null;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Become a tutor')),
+      appBar: AppBar(title: const Text('Tutor verification')),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async {
@@ -201,6 +201,38 @@ class _SubmitClaimScreenState extends ConsumerState<SubmitClaimScreen> {
                     onChanged: (value) =>
                         setState(() => _source = value ?? 'transcript'),
                   ),
+                  const SizedBox(height: AppDimens.sm),
+                  Card(
+                    color: Theme.of(context).colorScheme.secondaryContainer,
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppDimens.md),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSecondaryContainer,
+                          ),
+                          const SizedBox(width: AppDimens.sm),
+                          Expanded(
+                            child: Text(
+                              _source == 'transcript'
+                                  ? 'An FCI operator reviews your transcript reference through the approved faculty process. Your claim stays pending until it is checked.'
+                                  : 'Provide a link or reference an operator can check. Submission does not grant tutor access until review is complete.',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSecondaryContainer,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: AppDimens.md),
                   if (_source == 'transcript') ...[
                     const SizedBox(height: AppDimens.md),
@@ -252,10 +284,13 @@ class _SubmitClaimScreenState extends ConsumerState<SubmitClaimScreen> {
                     onPressed: canSubmit ? _submit : null,
                     icon: const Icon(Icons.send_outlined),
                     label: _submitting
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                        ? Semantics(
+                            label: 'Submitting tutor proof',
+                            child: const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
                           )
                         : const Text('Submit proof'),
                   ),

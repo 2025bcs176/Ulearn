@@ -21,7 +21,7 @@ from pydantic import ValidationError
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 
-from app.core.exceptions import ValidationProblem
+from app.core.exceptions import AuthorizationProblem, ConflictProblem, ValidationProblem
 from app.models.course_unit import CourseUnit, Subject, University
 from app.models.endorsement import UnitEndorsement
 from app.models.enums import SessionStatus, UserRole
@@ -103,7 +103,11 @@ async def test_endorsing_the_session_course_unit_creates_the_endorsement(
         db_session,
         student,
         session.public_id,
-        RatingCreate(score=5, endorsed_course_unit_ids=[course_unit.public_id]),
+        RatingCreate(
+            comprehension_helped=True,
+            score=5,
+            endorsed_course_unit_ids=[course_unit.public_id],
+        ),
     )
 
     assert rating.score == 5
@@ -130,7 +134,7 @@ async def test_a_rating_may_carry_no_endorsement(db_session) -> None:
         db_session,
         student,
         session.public_id,
-        RatingCreate(score=1),
+        RatingCreate(comprehension_helped=True, score=1),
     )
 
     assert await _endorsement_rows(db_session, session) == []
@@ -151,7 +155,11 @@ async def test_endorsing_a_unit_the_session_is_not_about_is_rejected(
             db_session,
             student,
             session.public_id,
-            RatingCreate(score=5, endorsed_course_unit_ids=[other_unit.public_id]),
+            RatingCreate(
+                comprehension_helped=True,
+                score=5,
+                endorsed_course_unit_ids=[other_unit.public_id],
+            ),
         )
 
     assert "endorsed_course_unit_ids" in raised.value.errors
@@ -177,7 +185,9 @@ async def test_endorsing_a_course_unit_that_does_not_exist_is_rejected(
             db_session,
             student,
             session.public_id,
-            RatingCreate(score=5, endorsed_course_unit_ids=[unknown]),
+            RatingCreate(
+                comprehension_helped=True, score=5, endorsed_course_unit_ids=[unknown]
+            ),
         )
 
     assert "endorsed_course_unit_ids" in raised.value.errors
@@ -190,88 +200,88 @@ async def test_endorsing_a_course_unit_that_does_not_exist_is_rejected(
 async def test_rerating_replaces_the_endorsements_rather_than_accumulating(
     db_session,
 ) -> None:
-    """Re-submitting the same unit leaves exactly one claim, not two.
-
-    The aggregate would otherwise count a single session twice, and the unique
-    key exists precisely so this cannot be reached by accident -- but the service
-    replacing the row is what makes the retry safe in the first place.
-    """
+    """A second submission is rejected because feedback is immutable."""
     student, _tutor, session, course_unit, _other = await _seed(db_session)
 
-    for _attempt in range(2):
+    await rating_service.submit_rating(
+        db_session,
+        student,
+        session.public_id,
+        RatingCreate(
+            comprehension_helped=True,
+            score=4,
+            endorsed_course_unit_ids=[course_unit.public_id],
+        ),
+    )
+    with pytest.raises(ConflictProblem, match="already been submitted"):
         await rating_service.submit_rating(
             db_session,
             student,
             session.public_id,
-            RatingCreate(score=4, endorsed_course_unit_ids=[course_unit.public_id]),
+            RatingCreate(
+                comprehension_helped=True,
+                score=4,
+                endorsed_course_unit_ids=[course_unit.public_id],
+            ),
         )
 
-    rows = await _endorsement_rows(db_session, session)
-    assert len(rows) == 1
+    assert len(await _endorsement_rows(db_session, session)) == 1
 
 
 async def test_rerating_with_an_empty_list_withdraws_the_endorsement(
     db_session,
 ) -> None:
-    """Removing a unit from a corrected submission makes the claim go away.
-
-    The second submission is the rater correcting the first. If it merged rather
-    than replaced, a withdrawn claim would stay in the per-unit aggregate
-    forever with no way to remove it -- which would be worse than having no
-    endorsement at all.
-    """
+    """An endorsement cannot be withdrawn by changing immutable feedback."""
     student, _tutor, session, course_unit, _other = await _seed(db_session)
 
     await rating_service.submit_rating(
         db_session,
         student,
         session.public_id,
-        RatingCreate(score=5, endorsed_course_unit_ids=[course_unit.public_id]),
+        RatingCreate(
+            comprehension_helped=True,
+            score=5,
+            endorsed_course_unit_ids=[course_unit.public_id],
+        ),
     )
     assert len(await _endorsement_rows(db_session, session)) == 1
 
-    await rating_service.submit_rating(
-        db_session,
-        student,
-        session.public_id,
-        RatingCreate(score=5, endorsed_course_unit_ids=[]),
-    )
-
-    assert await _endorsement_rows(db_session, session) == []
+    with pytest.raises(ConflictProblem, match="already been submitted"):
+        await rating_service.submit_rating(
+            db_session,
+            student,
+            session.public_id,
+            RatingCreate(
+                comprehension_helped=True, score=5, endorsed_course_unit_ids=[]
+            ),
+        )
+    assert len(await _endorsement_rows(db_session, session)) == 1
 
 
 async def test_a_withdrawn_endorsement_can_be_made_again(db_session) -> None:
-    """Withdrawing is not one-way, and the re-added row is a fresh one.
-
-    Asserted on the public id changing, so a withdrawal that silently no-opped
-    would fail here even if a row happened to still exist.
-    """
+    """A withdrawn endorsement cannot be recreated through a second rating."""
     student, _tutor, session, course_unit, _other = await _seed(db_session)
 
     await rating_service.submit_rating(
         db_session,
         student,
         session.public_id,
-        RatingCreate(score=5, endorsed_course_unit_ids=[course_unit.public_id]),
+        RatingCreate(
+            comprehension_helped=True,
+            score=5,
+            endorsed_course_unit_ids=[course_unit.public_id],
+        ),
     )
-    first = (await _endorsement_rows(db_session, session))[0].public_id
-
-    await rating_service.submit_rating(
-        db_session,
-        student,
-        session.public_id,
-        RatingCreate(score=5, endorsed_course_unit_ids=[]),
-    )
-    await rating_service.submit_rating(
-        db_session,
-        student,
-        session.public_id,
-        RatingCreate(score=5, endorsed_course_unit_ids=[course_unit.public_id]),
-    )
-
-    rows = await _endorsement_rows(db_session, session)
-    assert len(rows) == 1
-    assert rows[0].public_id != first
+    with pytest.raises(ConflictProblem, match="already been submitted"):
+        await rating_service.submit_rating(
+            db_session,
+            student,
+            session.public_id,
+            RatingCreate(
+                comprehension_helped=True, score=5, endorsed_course_unit_ids=[]
+            ),
+        )
+    assert len(await _endorsement_rows(db_session, session)) == 1
 
 
 async def test_only_the_raters_own_endorsements_are_replaced(db_session) -> None:
@@ -300,7 +310,7 @@ async def test_only_the_raters_own_endorsements_are_replaced(db_session) -> None
         db_session,
         student,
         session.public_id,
-        RatingCreate(score=4, endorsed_course_unit_ids=[]),
+        RatingCreate(comprehension_helped=True, score=4, endorsed_course_unit_ids=[]),
     )
 
     rows = await _endorsement_rows(db_session, session)
@@ -320,7 +330,9 @@ def test_duplicate_endorsed_units_are_refused_by_the_schema() -> None:
     unit = uuid.uuid4()
 
     with pytest.raises(ValidationError, match="duplicates"):
-        RatingCreate(score=4, endorsed_course_unit_ids=[unit, unit])
+        RatingCreate(
+            comprehension_helped=True, score=4, endorsed_course_unit_ids=[unit, unit]
+        )
 
 
 def test_the_endorsement_list_is_bounded() -> None:
@@ -334,7 +346,9 @@ def test_the_endorsement_list_is_bounded() -> None:
     ]
 
     with pytest.raises(ValidationError):
-        RatingCreate(score=4, endorsed_course_unit_ids=too_many)
+        RatingCreate(
+            comprehension_helped=True, score=4, endorsed_course_unit_ids=too_many
+        )
 
 
 async def test_the_database_refuses_a_party_endorsing_themselves(db_session) -> None:
@@ -390,7 +404,11 @@ async def test_an_endorsement_does_not_outlive_its_session(db_session) -> None:
         db_session,
         student,
         session.public_id,
-        RatingCreate(score=5, endorsed_course_unit_ids=[course_unit.public_id]),
+        RatingCreate(
+            comprehension_helped=True,
+            score=5,
+            endorsed_course_unit_ids=[course_unit.public_id],
+        ),
     )
     assert len(await _endorsement_rows(db_session, session)) == 1
     # Read before the delete: a bulk delete expires the ORM instance, so touching
@@ -423,7 +441,11 @@ async def test_the_per_unit_aggregate_counts_only_endorsed_units(db_session) -> 
         db_session,
         student,
         session.public_id,
-        RatingCreate(score=5, endorsed_course_unit_ids=[course_unit.public_id]),
+        RatingCreate(
+            comprehension_helped=True,
+            score=5,
+            endorsed_course_unit_ids=[course_unit.public_id],
+        ),
     )
 
     summary = await rating_service.get_tutor_rating_summary(db_session, tutor)
@@ -433,15 +455,21 @@ async def test_the_per_unit_aggregate_counts_only_endorsed_units(db_session) -> 
     ] == [(course_unit.public_id, 1)]
     # A rating with no endorsement still counts towards the rating total and
     # leaves no unit entry behind.
-    await rating_service.submit_rating(
-        db_session,
-        student,
-        session.public_id,
-        RatingCreate(score=5, endorsed_course_unit_ids=[]),
-    )
+    with pytest.raises(ConflictProblem, match="already been submitted"):
+        await rating_service.submit_rating(
+            db_session,
+            student,
+            session.public_id,
+            RatingCreate(
+                comprehension_helped=True, score=5, endorsed_course_unit_ids=[]
+            ),
+        )
+    assert len(await _endorsement_rows(db_session, session)) == 1
     summary = await rating_service.get_tutor_rating_summary(db_session, tutor)
     assert summary.rating_count == 1
-    assert summary.per_unit == []
+    assert [
+        (row.course_unit_id, row.endorsement_count) for row in summary.per_unit
+    ] == [(course_unit.public_id, 1)]
 
 
 async def test_the_aggregate_counts_each_session_once_across_raters(db_session) -> None:
@@ -477,7 +505,11 @@ async def test_the_aggregate_counts_each_session_once_across_raters(db_session) 
             db_session,
             rater,
             rated.public_id,
-            RatingCreate(score=5, endorsed_course_unit_ids=[course_unit.public_id]),
+            RatingCreate(
+                comprehension_helped=True,
+                score=5,
+                endorsed_course_unit_ids=[course_unit.public_id],
+            ),
         )
 
     summary = await rating_service.get_tutor_rating_summary(db_session, tutor)
@@ -497,7 +529,11 @@ async def test_the_aggregate_reports_public_ids_only(db_session) -> None:
         db_session,
         student,
         session.public_id,
-        RatingCreate(score=5, endorsed_course_unit_ids=[course_unit.public_id]),
+        RatingCreate(
+            comprehension_helped=True,
+            score=5,
+            endorsed_course_unit_ids=[course_unit.public_id],
+        ),
     )
 
     summary = await rating_service.get_tutor_rating_summary(db_session, tutor)
@@ -561,7 +597,11 @@ async def test_the_aggregate_is_ordered_and_stable(db_session) -> None:
             db_session,
             rater,
             rated_session.public_id,
-            RatingCreate(score=5, endorsed_course_unit_ids=[unit.public_id]),
+            RatingCreate(
+                comprehension_helped=True,
+                score=5,
+                endorsed_course_unit_ids=[unit.public_id],
+            ),
         )
 
     summary = await rating_service.get_tutor_rating_summary(db_session, tutor)
@@ -585,7 +625,7 @@ async def test_the_aggregate_is_empty_for_a_tutor_with_no_endorsements(
         db_session,
         student,
         session.public_id,
-        RatingCreate(score=2),
+        RatingCreate(comprehension_helped=True, score=2),
     )
 
     summary = await rating_service.get_tutor_rating_summary(db_session, tutor)
@@ -679,7 +719,11 @@ async def test_endorsement_through_the_router_reaches_the_summary(
 
     response = await client.post(
         f"/v1/ratings/{session.public_id}",
-        json={"score": 5, "endorsed_course_unit_ids": [str(course_unit.public_id)]},
+        json={
+            "comprehension_helped": True,
+            "score": 5,
+            "endorsed_course_unit_ids": [str(course_unit.public_id)],
+        },
         headers=_bearer(student_body),
     )
 
@@ -731,7 +775,11 @@ async def test_endorsing_a_foreign_unit_through_the_router_is_a_422(
 
     response = await client.post(
         f"/v1/ratings/{session.public_id}",
-        json={"score": 4, "endorsed_course_unit_ids": [str(foreign_unit.public_id)]},
+        json={
+            "comprehension_helped": True,
+            "score": 4,
+            "endorsed_course_unit_ids": [str(foreign_unit.public_id)],
+        },
         headers=_bearer(student_body),
     )
 
@@ -761,24 +809,30 @@ async def test_withdrawing_an_endorsement_through_the_router(
 
     first = await client.post(
         f"/v1/ratings/{session.public_id}",
-        json={"score": 5, "endorsed_course_unit_ids": [str(course_unit.public_id)]},
+        json={
+            "comprehension_helped": True,
+            "score": 5,
+            "endorsed_course_unit_ids": [str(course_unit.public_id)],
+        },
         headers=_bearer(student_body),
     )
     assert first.status_code == 201, first.text
 
     second = await client.post(
         f"/v1/ratings/{session.public_id}",
-        json={"score": 5, "endorsed_course_unit_ids": []},
+        json={"comprehension_helped": True, "score": 5, "endorsed_course_unit_ids": []},
         headers=_bearer(student_body),
     )
-    assert second.status_code == 201, second.text
+    assert second.status_code == 409, second.text
 
     summary = await client.get("/v1/ratings/me", headers=_bearer(tutor_body))
     assert summary.status_code == 200, summary.text
     payload = summary.json()
-    # The rating still stands; only the endorsement was withdrawn.
+    # The immutable feedback and endorsement still stand.
     assert payload["rating_count"] == 1
-    assert payload["per_unit"] == []
+    assert payload["per_unit"] == [
+        {"course_unit_id": str(course_unit.public_id), "endorsement_count": 1}
+    ]
 
 
 async def test_a_duplicate_endorsed_unit_through_the_router_is_a_422(
@@ -792,6 +846,7 @@ async def test_a_duplicate_endorsed_unit_through_the_router_is_a_422(
     response = await client.post(
         f"/v1/ratings/{session.public_id}",
         json={
+            "comprehension_helped": True,
             "score": 4,
             "endorsed_course_unit_ids": [
                 str(course_unit.public_id),
@@ -824,7 +879,11 @@ async def test_a_tutee_rating_their_tutor_creates_no_tutor_profile(
         db_session,
         student,
         session.public_id,
-        RatingCreate(score=5, endorsed_course_unit_ids=[course_unit.public_id]),
+        RatingCreate(
+            comprehension_helped=True,
+            score=5,
+            endorsed_course_unit_ids=[course_unit.public_id],
+        ),
     )
 
     # The rating is real feedback about the session and is kept.
@@ -847,7 +906,11 @@ async def test_a_tutee_rating_does_not_credit_the_students_counters(
         db_session,
         student,
         session.public_id,
-        RatingCreate(score=5, endorsed_course_unit_ids=[course_unit.public_id]),
+        RatingCreate(
+            comprehension_helped=True,
+            score=5,
+            endorsed_course_unit_ids=[course_unit.public_id],
+        ),
     )
 
     profile = await db_session.scalar(
@@ -863,12 +926,13 @@ async def test_a_tutor_rating_their_tutee_creates_no_tutor_profile(
     """The reverse direction: a tutor rating a student must not promote anyone."""
     student, tutor, session, _course_unit, _other = await _seed(db_session)
 
-    await rating_service.submit_rating(
-        db_session,
-        tutor,
-        session.public_id,
-        RatingCreate(score=4),
-    )
+    with pytest.raises(AuthorizationProblem, match="Only the tutee"):
+        await rating_service.submit_rating(
+            db_session,
+            tutor,
+            session.public_id,
+            RatingCreate(comprehension_helped=True, score=4),
+        )
 
     profile = await db_session.scalar(
         select(TutorProfile).where(TutorProfile.user_id == student.id)

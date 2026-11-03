@@ -9,8 +9,9 @@ Map<String, dynamic> _session({
   String? scheduledStart = '2026-03-04T09:00:00Z',
   String? startedAt,
   String? endedAt,
-  String? sessionPin = '42',
   String? meetingLink = 'https://meet.peerpass.test/abc',
+  String? meetingVenue = 'FCI Lab 1',
+  String? meetingVenueDetail = 'Room B',
   bool isRated = false,
 }) {
   return {
@@ -31,8 +32,9 @@ Map<String, dynamic> _session({
     'scheduled_start': scheduledStart,
     'started_at': startedAt,
     'ended_at': endedAt,
-    'session_pin': sessionPin,
     'meeting_link': meetingLink,
+    'meeting_venue': meetingVenue,
+    'meeting_venue_detail': meetingVenueDetail,
   };
 }
 
@@ -40,7 +42,10 @@ void main() {
   group('reading a session', () {
     test('carries every field the screens render', () {
       final session = SessionModel.fromJson(
-        _session(startedAt: '2026-03-04T09:05:00Z', endedAt: '2026-03-04T10:00:00Z'),
+        _session(
+          startedAt: '2026-03-04T09:05:00Z',
+          endedAt: '2026-03-04T10:00:00Z',
+        ),
       );
 
       expect(session.id, 'session-1');
@@ -52,6 +57,9 @@ void main() {
       expect(session.durationMinutes, 60);
       expect(session.isRated, isFalse);
       expect(session.meetingLink, 'https://meet.peerpass.test/abc');
+      expect(session.meetingVenue, 'FCI Lab 1');
+      expect(session.meetingVenueDetail, 'Room B');
+      expect(session.venueLabel, 'FCI Lab 1 · Room B');
       expect(session.scheduledStart, DateTime.utc(2026, 3, 4, 9));
       expect(session.startedAt, DateTime.utc(2026, 3, 4, 9, 5));
       expect(session.endedAt, DateTime.utc(2026, 3, 4, 10));
@@ -107,13 +115,16 @@ void main() {
           ..remove('scheduled_start')
           ..remove('started_at')
           ..remove('ended_at')
-          ..remove('meeting_link'),
+          ..remove('meeting_link')
+          ..remove('meeting_venue')
+          ..remove('meeting_venue_detail'),
       );
 
       expect(session.scheduledStart, isNull);
       expect(session.startedAt, isNull);
       expect(session.endedAt, isNull);
       expect(session.meetingLink, isNull);
+      expect(session.venueLabel, isNull);
     });
 
     test('a key sent as null reads as absent too', () {
@@ -125,13 +136,16 @@ void main() {
           ..['scheduled_start'] = null
           ..['started_at'] = null
           ..['ended_at'] = null
-          ..['meeting_link'] = null,
+          ..['meeting_link'] = null
+          ..['meeting_venue'] = null
+          ..['meeting_venue_detail'] = null,
       );
 
       expect(session.scheduledStart, isNull);
       expect(session.startedAt, isNull);
       expect(session.endedAt, isNull);
       expect(session.meetingLink, isNull);
+      expect(session.venueLabel, isNull);
       // A null in one optional field does not take the rest of the record with it.
       // `duration_minutes` is not one of the fields nulled above, so it proves the
       // other four were read individually rather than the parse falling over.
@@ -158,19 +172,20 @@ void main() {
     });
 
     test('a non-boolean is_rated reads as unrated rather than failing', () {
-      final session = SessionModel.fromJson(
-        _session()..['is_rated'] = 'yes',
-      );
+      final session = SessionModel.fromJson(_session()..['is_rated'] = 'yes');
 
       expect(session.isRated, isFalse);
     });
 
-    test('an unparseable timestamp is a server fault, not a silent default', () {
-      expect(
-        () => SessionModel.fromJson(_session()..['created_at'] = 'yesterday'),
-        throwsA(isA<FormatException>()),
-      );
-    });
+    test(
+      'an unparseable timestamp is a server fault, not a silent default',
+      () {
+        expect(
+          () => SessionModel.fromJson(_session()..['created_at'] = 'yesterday'),
+          throwsA(isA<FormatException>()),
+        );
+      },
+    );
   });
 
   group('reading a rating', () {

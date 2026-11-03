@@ -94,7 +94,7 @@ Map<String, dynamic> _session({
     'is_rated': false,
     'created_at': '2026-03-01T08:00:00Z',
     'scheduled_start': '2026-03-04T09:00:00Z',
-    'session_pin': '42',
+    'session_pin': '654321',
     'meeting_link': null,
   };
 }
@@ -182,60 +182,73 @@ void main() {
       );
     });
 
-    test('a body the client cannot read is reported, not rethrown raw', () async {
-      // A server fault, not a student's problem. Surfaced as a message a person can
-      // act on rather than as a FormatException from inside a model.
-      server.reply(200, [
-        {'id': 'session-1', 'status': 'scheduled'},
-      ]);
+    test(
+      'a body the client cannot read is reported, not rethrown raw',
+      () async {
+        // A server fault, not a student's problem. Surfaced as a message a person can
+        // act on rather than as a FormatException from inside a model.
+        server.reply(200, [
+          {'id': 'session-1', 'status': 'scheduled'},
+        ]);
 
-      await expectLater(
-        repository.sessionsForMe(),
-        throwsA(
-          isA<ServerFailure>().having(
-            (f) => f.message,
-            'message',
-            contains('could not read'),
+        await expectLater(
+          repository.sessionsForMe(),
+          throwsA(
+            isA<ServerFailure>().having(
+              (f) => f.message,
+              'message',
+              contains('could not read'),
+            ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
   });
 
   group('the handshake', () {
-    test('posts the pin to the pin endpoint and adopts what comes back', () async {
-      server.reply(200, _session(status: 'in_progress'));
+    test(
+      'posts the pin to the pin endpoint and adopts what comes back',
+      () async {
+        server.reply(200, _session(status: 'in_progress'));
 
-      final session = await repository.verifyPin(
-        sessionId: 'session-1',
-        pin: '42',
-      );
+        final session = await repository.verifyPin(
+          sessionId: 'session-1',
+          pin: '654321',
+        );
 
-      expect(server.calls.single.method, 'POST');
-      expect(server.calls.single.path, '/v1/sessions/session-1/verify-pin');
-      expect(server.calls.single.body, {'pin': '42'});
-      expect(session.status, TutoringSessionStatus.inProgress);
-    });
+        expect(server.calls.single.method, 'POST');
+        expect(server.calls.single.path, '/v1/sessions/session-1/verify-pin');
+        expect(server.calls.single.body, {'pin': '654321'});
+        expect(session.status, TutoringSessionStatus.inProgress);
+      },
+    );
 
-    test('a wrong pin keeps the API sentence and the field it blames', () async {
-      // The tutor's screen needs both halves: which field was wrong, and that the
-      // session did *not* start. Losing the field list would leave the error under
-      // the PIN box with nothing tying it to the box.
-      server.reply(422, _problem(errors: {'pin': 'incorrect'}));
+    test(
+      'a wrong pin keeps the API sentence and the field it blames',
+      () async {
+        // The tutor's screen needs both halves: which field was wrong, and that the
+        // session did *not* start. Losing the field list would leave the error under
+        // the PIN box with nothing tying it to the box.
+        server.reply(422, _problem(errors: {'pin': 'incorrect'}));
 
-      await expectLater(
-        repository.verifyPin(sessionId: 'session-1', pin: '41'),
-        throwsA(
-          isA<ValidationFailure>()
-              .having((f) => f.message, 'message', 'The session PIN is incorrect.')
-              .having(
-                (f) => f.fieldErrors,
-                'fieldErrors',
-                containsPair('pin', 'incorrect'),
-              ),
-        ),
-      );
-    });
+        await expectLater(
+          repository.verifyPin(sessionId: 'session-1', pin: '41'),
+          throwsA(
+            isA<ValidationFailure>()
+                .having(
+                  (f) => f.message,
+                  'message',
+                  'The session PIN is incorrect.',
+                )
+                .having(
+                  (f) => f.fieldErrors,
+                  'fieldErrors',
+                  containsPair('pin', 'incorrect'),
+                ),
+          ),
+        );
+      },
+    );
   });
 
   group('ending a session', () {
@@ -258,7 +271,10 @@ void main() {
       // generic "something went wrong" is not.
       server.reply(
         409,
-        _problem(status: 409, detail: 'A cancelled session cannot be completed.'),
+        _problem(
+          status: 409,
+          detail: 'A cancelled session cannot be completed.',
+        ),
       );
 
       await expectLater(
@@ -281,6 +297,7 @@ void main() {
       final rating = await repository.rateSession(
         sessionId: 'session-1',
         score: 4,
+        comprehensionHelped: true,
         feedbackText: 'Clear and patient.',
       );
 
@@ -288,6 +305,7 @@ void main() {
       expect(server.calls.single.path, '/v1/ratings/session-1');
       expect(server.calls.single.body, {
         'score': 4,
+        'comprehension_helped': true,
         'feedback_text': 'Clear and patient.',
       });
       expect(rating.score, 4);
@@ -299,9 +317,16 @@ void main() {
       // note on a re-submission.
       server.reply(201, _rating());
 
-      await repository.rateSession(sessionId: 'session-1', score: 5);
+      await repository.rateSession(
+        sessionId: 'session-1',
+        score: 5,
+        comprehensionHelped: true,
+      );
 
-      expect(server.calls.single.body, {'score': 5});
+      expect(server.calls.single.body, {
+        'score': 5,
+        'comprehension_helped': true,
+      });
     });
 
     test('sends the endorsed unit only when one is endorsed', () async {
@@ -310,17 +335,26 @@ void main() {
       // session's own course unit, so the client has nothing to choose: it either
       // names that unit or sends no field at all.
       server.reply(201, _rating());
-      await repository.rateSession(sessionId: 'session-1', score: 5);
+      await repository.rateSession(
+        sessionId: 'session-1',
+        score: 5,
+        comprehensionHelped: true,
+      );
       server.reply(201, _rating());
       await repository.rateSession(
         sessionId: 'session-1',
         score: 5,
+        comprehensionHelped: true,
         endorsedCourseUnitIds: ['unit-1'],
       );
 
-      expect(server.calls.first.body, {'score': 5});
+      expect(server.calls.first.body, {
+        'score': 5,
+        'comprehension_helped': true,
+      });
       expect(server.calls.last.body, {
         'score': 5,
+        'comprehension_helped': true,
         'endorsed_course_unit_ids': ['unit-1'],
       });
     });
@@ -335,7 +369,11 @@ void main() {
       );
 
       await expectLater(
-        repository.rateSession(sessionId: 'session-1', score: 6),
+        repository.rateSession(
+          sessionId: 'session-1',
+          score: 6,
+          comprehensionHelped: true,
+        ),
         throwsA(isA<ValidationFailure>()),
       );
     });
@@ -379,10 +417,7 @@ void main() {
         durationMinutes: 90,
       );
 
-      expect(
-        (server.calls.single.body! as Map)['duration_minutes'],
-        90,
-      );
+      expect((server.calls.single.body! as Map)['duration_minutes'], 90);
     });
 
     test('a request someone else already confirmed is a conflict', () async {

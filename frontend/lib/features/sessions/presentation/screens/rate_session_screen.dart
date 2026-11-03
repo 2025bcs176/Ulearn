@@ -98,96 +98,130 @@ class _Form extends ConsumerWidget {
     return PopScope(
       // The first rating is mandatory. Once a rating exists, this screen is an
       // optional correction and normal back navigation is restored.
-      canPop: alreadySubmitted,
+      canPop: alreadySubmitted || !isRaterTutee,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(session.topic, style: theme.textTheme.titleLarge),
-          const SizedBox(height: AppDimens.xs),
-          Text(
-            alreadySubmitted
-                ? 'You already rated this session. Sending this replaces it.'
-                : 'A rating is required to finish this session review.',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: AppDimens.lg),
-          _ScorePicker(
-            score: form.score,
-            enabled: !form.submitting,
-            onSelected: controller.chooseScore,
-          ),
-          const SizedBox(height: AppDimens.lg),
-          Text('Add a note (optional)', style: theme.textTheme.titleSmall),
-          const SizedBox(height: AppDimens.sm),
-          TextField(
-            // No controller: the draft is in the provider, so it survives a rebuild
-            // and a keyboard-triggered setState, which is the same reasoning the
-            // onboarding wizard's state keeps.
-            onChanged: controller.writeFeedback,
-            enabled: !form.submitting,
-            minLines: 3,
-            maxLines: 5,
-            maxLength: 2000,
-            textInputAction: TextInputAction.newline,
-            decoration: const InputDecoration(
-              hintText: 'What was useful? What would you tell someone booking?',
-              border: OutlineInputBorder(),
-              counterText: '',
-            ),
-          ),
-          if (isRaterTutee) ...[
-            const SizedBox(height: AppDimens.md),
-            CheckboxListTile(
-              value: form.endorsing,
-              // A checkbox that cannot be turned on is a broken promise, so this one
-              // is not shown unless the session's unit is actually known -- the API
-              // refuses an endorsement naming anything other unit, and there is
-              // nothing for the claim to attach to otherwise.
-              onChanged: form.submitting
-                  ? null
-                  : (value) => controller.setEndorsing(value: value ?? false),
-              title: const Text('Recommend this tutor for this course unit'),
-              // Says different things on a first rating and on a correction, because
-              // the API behaves differently: `endorsed_course_unit_ids` is replaced on
-              // every submission, and an empty list withdraws what the rater endorsed
-              // last time. `RatingResponse` does not echo a rater's own endorsements,
-              // so the box cannot start out ticked to match, and a student fixing
-              // their score would otherwise lose the claim without being told.
-              subtitle: Text(
-                alreadySubmitted
-                    ? 'Optional. Sending this withdraws the recommendation if you '
-                          'leave it off.'
-                    : 'Optional. It helps other students find a tutor who has '
-                          'actually taught this unit.',
-              ),
-              controlAffinity: ListTileControlAffinity.leading,
-              contentPadding: EdgeInsets.zero,
-            ),
-          ],
-          if (form.failure != null) ...[
+          if (!isRaterTutee) ...[
             const SizedBox(height: AppDimens.md),
             Text(
-              form.failure!.message,
+              'Only the student who requested this session submits feedback.',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.error,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
+          ] else ...[
+            const SizedBox(height: AppDimens.xs),
+            Text(
+              alreadySubmitted
+                  ? 'Feedback has already been submitted for this session.'
+                  : 'Both answers are required to finish this session review.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: AppDimens.lg),
+            _ScorePicker(
+              score: form.score,
+              enabled: !form.submitting,
+              onSelected: controller.chooseScore,
+            ),
+            const SizedBox(height: AppDimens.lg),
+            Text(
+              'Did this session help you understand the topic?',
+              style: theme.textTheme.titleSmall,
+            ),
+            const SizedBox(height: AppDimens.sm),
+            SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(value: true, label: Text('Yes')),
+                ButtonSegment(value: false, label: Text('No')),
+              ],
+              selected: form.comprehensionHelped == null
+                  ? <bool>{}
+                  : <bool>{form.comprehensionHelped!},
+              emptySelectionAllowed: form.comprehensionHelped == null,
+              onSelectionChanged: form.submitting
+                  ? null
+                  : (selection) {
+                      if (selection.isNotEmpty) {
+                        controller.chooseComprehension(helped: selection.first);
+                      }
+                    },
+            ),
+            const SizedBox(height: AppDimens.lg),
+            Text('Add a note (optional)', style: theme.textTheme.titleSmall),
+            const SizedBox(height: AppDimens.sm),
+            TextField(
+              // No controller: the draft is in the provider, so it survives a rebuild
+              // and a keyboard-triggered setState, which is the same reasoning the
+              // onboarding wizard's state keeps.
+              onChanged: controller.writeFeedback,
+              enabled: !form.submitting,
+              minLines: 3,
+              maxLines: 5,
+              maxLength: 2000,
+              textInputAction: TextInputAction.newline,
+              decoration: const InputDecoration(
+                hintText:
+                    'What was useful? What would you tell someone booking?',
+                border: OutlineInputBorder(),
+                counterText: '',
+              ),
+            ),
+            if (isRaterTutee) ...[
+              const SizedBox(height: AppDimens.md),
+              CheckboxListTile(
+                value: form.endorsing,
+                // A checkbox that cannot be turned on is a broken promise, so this one
+                // is not shown unless the session's unit is actually known -- the API
+                // refuses an endorsement naming anything other unit, and there is
+                // nothing for the claim to attach to otherwise.
+                onChanged: form.submitting
+                    ? null
+                    : (value) => controller.setEndorsing(value: value ?? false),
+                title: const Text('Recommend this tutor for this course unit'),
+                // Says different things on a first rating and on a correction, because
+                // the API behaves differently: `endorsed_course_unit_ids` is replaced on
+                // every submission, and an empty list withdraws what the rater endorsed
+                // last time. `RatingResponse` does not echo a rater's own endorsements,
+                // so the box cannot start out ticked to match, and a student fixing
+                // their score would otherwise lose the claim without being told.
+                subtitle: Text(
+                  alreadySubmitted
+                      ? 'Optional. Sending this withdraws the recommendation if you '
+                            'leave it off.'
+                      : 'Optional. It helps other students find a tutor who has '
+                            'actually taught this unit.',
+                ),
+                controlAffinity: ListTileControlAffinity.leading,
+                contentPadding: EdgeInsets.zero,
+              ),
+            ],
+            if (form.failure != null) ...[
+              const SizedBox(height: AppDimens.md),
+              Text(
+                form.failure!.message,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+            ],
+            const SizedBox(height: AppDimens.lg),
+            FilledButton(
+              onPressed: isRaterTutee && !alreadySubmitted && form.canSubmit
+                  ? () => _submit(context, ref, session)
+                  : null,
+              child: form.submitting
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Submit feedback'),
+            ),
           ],
-          const SizedBox(height: AppDimens.lg),
-          FilledButton(
-            onPressed: form.canSubmit
-                ? () => _submit(context, ref, session)
-                : null,
-            child: form.submitting
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(alreadySubmitted ? 'Update rating' : 'Submit rating'),
-          ),
         ],
       ),
     );

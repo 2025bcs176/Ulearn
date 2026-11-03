@@ -12,7 +12,9 @@ from app.core.exceptions import NotFoundProblem, ValidationProblem
 from app.models.audit import AdminAuditEvent
 from app.models.competency import Competency
 from app.models.course_unit import CourseUnit, University
-from app.models.enums import CompetencyStatus
+from app.models.enums import CompetencyStatus, TutorStanding
+from app.models.report import SessionReport
+from app.models.session import Session
 from app.models.tutor_profile import TutorProfile
 from app.models.user import User, load_roles
 from app.schemas.admin import (
@@ -22,6 +24,9 @@ from app.schemas.admin import (
     AdminCompetencyPageParams,
     AdminCompetencyResponse,
     AdminCompetencyReviewRequest,
+    AdminSessionReportPage,
+    AdminSessionReportResponse,
+    AdminSessionReportUpdate,
     AdminTutorStandingPage,
     AdminTutorStandingResponse,
     AdminUserPage,
@@ -261,6 +266,100 @@ async def list_tutor_standings(
         total=await db.scalar(select(func.count()).select_from(TutorProfile)) or 0,
         limit=params.limit,
         offset=params.offset,
+    )
+
+
+async def list_session_reports(
+    db: AsyncSession, actor_id: uuid.UUID, params: PageParams
+) -> AdminSessionReportPage:
+    query = (
+        select(SessionReport)
+        .options(
+            selectinload(SessionReport.reporter),
+            selectinload(SessionReport.session),
+        )
+        .order_by(SessionReport.created_at.asc(), SessionReport.id.asc())
+    )
+    total = await db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    rows = list(
+        (await db.scalars(query.offset(params.offset).limit(params.limit))).all()
+    )
+    await record_audit(
+        db,
+        actor_id=actor_id,
+        action="admin.session_reports.list",
+        target_type="session_report",
+        context={"limit": params.limit, "offset": params.offset},
+    )
+    return AdminSessionReportPage(
+        items=[
+            AdminSessionReportResponse(
+                id=row.public_id,
+                session_id=row.session.public_id,
+                reporter_id=row.reporter.public_id,
+                reporter_email=row.reporter.email,
+                category=row.category.value,
+                description=row.description,
+                status=row.status,
+                created_at=row.created_at,
+            )
+            for row in rows
+        ],
+        total=total,
+        limit=params.limit,
+        offset=params.offset,
+    )
+
+
+async def update_session_report(
+    db: AsyncSession,
+    actor_id: uuid.UUID,
+    report_id: uuid.UUID,
+    payload: AdminSessionReportUpdate,
+) -> AdminSessionReportResponse:
+    row = await db.scalar(
+        select(SessionReport)
+        .where(SessionReport.public_id == report_id)
+        .options(
+            selectinload(SessionReport.session).selectinload(Session.tutor),
+            selectinload(SessionReport.reporter),
+        )
+    )
+    if row is None:
+        raise NotFoundProblem("That safeguarding report could not be found.")
+    row.status = payload.status
+    if payload.suspend_tutor:
+        profile = await db.scalar(
+            select(TutorProfile).where(TutorProfile.user_id == row.session.tutor_id)
+        )
+        if profile is None:
+            raise ValidationProblem(
+                "The reported session has no tutor profile.",
+                errors={"suspend_tutor": "tutor profile is missing"},
+            )
+        profile.standing = TutorStanding.SUSPENDED
+        profile.suspended_reason = payload.suspension_reason
+        profile.operator_suspended = True
+    await record_audit(
+        db,
+        actor_id=actor_id,
+        action="admin.session_reports.update",
+        target_type="session_report",
+        target_public_id=row.public_id,
+        context={
+            "status": payload.status.value,
+            "suspend_tutor": payload.suspend_tutor,
+        },
+    )
+    return AdminSessionReportResponse(
+        id=row.public_id,
+        session_id=row.session.public_id,
+        reporter_id=row.reporter.public_id,
+        reporter_email=row.reporter.email,
+        category=row.category.value,
+        description=row.description,
+        status=row.status,
+        created_at=row.created_at,
     )
 
 

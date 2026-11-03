@@ -41,7 +41,10 @@ SessionModel session({
   String status = 'scheduled',
   bool isRated = false,
   String? meetingLink,
+  String? meetingVenue,
+  String? meetingVenueDetail,
   String? endedAt,
+  String? completionRequestedAt,
 }) {
   return SessionModel.fromJson({
     'id': _sessionId,
@@ -60,7 +63,10 @@ SessionModel session({
     'scheduled_start': '2026-03-04T09:00:00Z',
     'started_at': '2026-03-04T09:05:00Z',
     'ended_at': endedAt,
+    'completion_requested_at': completionRequestedAt,
     'meeting_link': meetingLink,
+    'meeting_venue': meetingVenue,
+    'meeting_venue_detail': meetingVenueDetail,
   });
 }
 
@@ -182,6 +188,21 @@ void main() {
       expect(find.text('https://meet.peerpass.test/abc'), findsOneWidget);
     });
 
+    testWidgets('the selected on-campus venue is shown', (tester) async {
+      await _pumpDetail(
+        tester,
+        FakeSessionsRepository(
+          sessions: [
+            session(meetingVenue: 'FCI Lab 1', meetingVenueDetail: 'Desk 3'),
+          ],
+        ),
+        _tutee,
+      );
+
+      expect(find.text('Venue'), findsOneWidget);
+      expect(find.text('FCI Lab 1 · Desk 3'), findsOneWidget);
+    });
+
     testWidgets('a session that is not there says so and offers another try', (
       tester,
     ) async {
@@ -215,7 +236,7 @@ void main() {
 
       await tester.tap(find.text('Show PIN'));
       await _settle(tester);
-      expect(find.text('42'), findsOneWidget);
+      expect(find.text('654321'), findsOneWidget);
     });
 
     testWidgets('hiding the PIN drops it from the screen', (tester) async {
@@ -227,7 +248,7 @@ void main() {
 
       await tester.tap(find.text('Show PIN'));
       await _settle(tester);
-      expect(find.text('42'), findsOneWidget);
+      expect(find.text('654321'), findsOneWidget);
 
       await tester.tap(find.text('Hide PIN'));
       await _settle(tester);
@@ -266,7 +287,7 @@ void main() {
       await tester.tap(find.text('Show PIN'));
       await _settle(tester);
 
-      expect(find.text('42'), findsOneWidget);
+      expect(find.text('654321'), findsOneWidget);
       expect(find.textContaining('1 attempt left'), findsOneWidget);
     });
 
@@ -282,7 +303,7 @@ void main() {
 
       // Nothing to warn about on a fresh session, so the panel does not cry wolf
       // on every single one.
-      expect(find.text('42'), findsOneWidget);
+      expect(find.text('654321'), findsOneWidget);
       expect(find.textContaining('attempt'), findsNothing);
     });
   });
@@ -297,7 +318,7 @@ void main() {
 
       // The digits are the tutor's to read out. A tutee who could see their own
       // would have nothing to prove, and the tutor no way to tell an in-person
-      // student from someone guessing two digits on a borrowed account.
+      // student from someone guessing a code on a borrowed account.
       expect(find.text('Show PIN'), findsNothing);
       expect(find.text('42'), findsNothing);
       expect(find.widgetWithText(TextField, 'PIN'), findsOneWidget);
@@ -309,12 +330,12 @@ void main() {
       final repository = FakeSessionsRepository(sessions: [session()]);
       await _pumpDetail(tester, repository, _tutee);
 
-      await tester.enterText(find.byType(TextField), '42');
+      await tester.enterText(find.byType(TextField), '654321');
       await _settle(tester);
       await tester.tap(find.text('Start session'));
       await _settle(tester);
 
-      expect(repository.pinAttempts, ['42']);
+      expect(repository.pinAttempts, ['654321']);
       // The panel changes rather than disappearing: the tutee needs to know the
       // handshake worked, not just that the screen stopped asking.
       expect(find.text('Handshake complete'), findsOneWidget);
@@ -326,7 +347,7 @@ void main() {
       final repository = FakeSessionsRepository(sessions: [session()]);
       await _pumpDetail(tester, repository, _tutee);
 
-      await tester.enterText(find.byType(TextField), '41');
+      await tester.enterText(find.byType(TextField), '654320');
       await _settle(tester);
       await tester.tap(find.text('Start session'));
       await _settle(tester);
@@ -334,7 +355,7 @@ void main() {
       // The pin really was sent rather than refused by the client: the client
       // cannot know it is wrong, and pretending otherwise would hide a genuine
       // mismatch behind a guess.
-      expect(repository.pinAttempts, ['41']);
+      expect(repository.pinAttempts, ['654320']);
       expect(
         find.text('That is not the right PIN. Ask your tutor to check it.'),
         findsOneWidget,
@@ -352,61 +373,52 @@ void main() {
       final repository = FakeSessionsRepository(sessions: [session()]);
       await _pumpDetail(tester, repository, _tutee);
 
-      await tester.enterText(find.byType(TextField), '41');
+      await tester.enterText(find.byType(TextField), '654320');
       await _settle(tester);
       await tester.tap(find.text('Start session'));
       await _settle(tester);
-      await tester.enterText(find.byType(TextField), '42');
+      await tester.enterText(find.byType(TextField), '654321');
       await _settle(tester);
       await tester.tap(find.text('Start session'));
       await _settle(tester);
 
-      expect(repository.pinAttempts, ['41', '42']);
+      expect(repository.pinAttempts, ['654320', '654321']);
       expect(find.text('Handshake complete'), findsOneWidget);
     });
   });
 
-
   group('ending a live session', () {
-    testWidgets('the confirmation is what sends it', (tester) async {
+    testWidgets('the tutor requests completion', (tester) async {
       final repository = FakeSessionsRepository(
         sessions: [session(status: 'in_progress')],
       );
-      await _pumpDetail(tester, repository, _tutee);
+      await _pumpDetail(tester, repository, _tutor);
 
-      await tester.tap(find.text('End session'));
+      await tester.tap(find.text('Request completion'));
       await _settle(tester);
 
-      // A completed session is terminal in the API's transition table, so the
-      // button is the only moment at which the student sees what they are giving up.
-      expect(find.text('End this session?'), findsOneWidget);
-      expect(repository.endedSessionIds, isEmpty);
-
-      await tester.tap(find.text('Keep going'));
-      await _settle(tester);
+      expect(
+        find.text('Enter the six-digit code shown by the student.'),
+        findsOneWidget,
+      );
       expect(repository.endedSessionIds, isEmpty);
     });
 
-    testWidgets('confirming ends it and offers the rating', (tester) async {
+    testWidgets('the tutee reveals the completion code', (tester) async {
       final repository = FakeSessionsRepository(
-        sessions: [session(status: 'in_progress')],
+        sessions: [
+          session(
+            status: 'in_progress',
+            completionRequestedAt: '2026-03-04T10:00:00Z',
+          ),
+        ],
       );
       await _pumpDetail(tester, repository, _tutee);
 
-      await tester.tap(find.text('End session'));
-      await _settle(tester);
-      await tester.tap(
-        find.descendant(
-          of: find.byType(AlertDialog),
-          matching: find.text('End session'),
-        ),
-      );
+      await tester.tap(find.text('Show completion code'));
       await _settle(tester);
 
-      expect(repository.endedSessionIds, [_sessionId]);
-      // The completed session must move through the rating form before the
-      // quality loop is complete.
-      expect(find.text('Rate this session'), findsOneWidget);
+      expect(find.text('654321'), findsOneWidget);
     });
   });
 

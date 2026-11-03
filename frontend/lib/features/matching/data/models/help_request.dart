@@ -65,6 +65,7 @@ class HelpRequest {
     this.description,
     this.status,
     this.matchedTutorId,
+    this.isOfflineCached = false,
   });
 
   /// Reads one help request.
@@ -116,6 +117,7 @@ class HelpRequest {
           ? matchedTutorId
           : null,
       createdAt: DateTime.parse(createdAt),
+      isOfflineCached: json['_offline_cached'] == true,
     );
   }
 
@@ -154,6 +156,9 @@ class HelpRequest {
 
   final DateTime createdAt;
 
+  /// True when this is a read-only stale snapshot and cannot be mutated safely.
+  final bool isOfflineCached;
+
   /// Whether a tutor has been named and has not yet answered.
   ///
   /// False for an unknown status: a request this client cannot read is not one to
@@ -191,6 +196,7 @@ class HelpRequest {
           other.description == description &&
           other.statusWire == statusWire &&
           other.matchedTutorId == matchedTutorId &&
+          other.isOfflineCached == isOfflineCached &&
           other.createdAt == createdAt;
 
   @override
@@ -202,6 +208,7 @@ class HelpRequest {
     description,
     statusWire,
     matchedTutorId,
+    isOfflineCached,
     createdAt,
   );
 

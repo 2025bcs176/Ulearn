@@ -31,12 +31,15 @@ class RemoteSessionsRepository implements SessionsRepository {
   }
 
   @override
-  Future<SessionModel> session(String sessionId) =>
-      _guard(() async => SessionModel.fromJson(await _remote.session(sessionId)));
+  Future<SessionModel> session(String sessionId) => _guard(
+    () async => SessionModel.fromJson(await _remote.session(sessionId)),
+  );
 
   @override
   Future<SessionPinModel> revealPin({required String sessionId}) {
-    return _guard(() async => SessionPinModel.fromJson(await _remote.revealPin(sessionId)));
+    return _guard(
+      () async => SessionPinModel.fromJson(await _remote.revealPin(sessionId)),
+    );
   }
 
   @override
@@ -47,6 +50,35 @@ class RemoteSessionsRepository implements SessionsRepository {
     return _guard(
       () async =>
           SessionModel.fromJson(await _remote.verifyPin(sessionId, pin)),
+    );
+  }
+
+  @override
+  Future<SessionModel> requestCompletion({required String sessionId}) {
+    return _guard(
+      () async =>
+          SessionModel.fromJson(await _remote.requestCompletion(sessionId)),
+    );
+  }
+
+  @override
+  Future<SessionPinModel> revealCompletionCode({required String sessionId}) {
+    return _guard(
+      () async => SessionPinModel.fromJson(
+        await _remote.revealCompletionCode(sessionId),
+      ),
+    );
+  }
+
+  @override
+  Future<SessionModel> verifyCompletionCode({
+    required String sessionId,
+    required String code,
+  }) {
+    return _guard(
+      () async => SessionModel.fromJson(
+        await _remote.verifyCompletionCode(sessionId, code),
+      ),
     );
   }
 
@@ -82,6 +114,7 @@ class RemoteSessionsRepository implements SessionsRepository {
   Future<RatingModel> rateSession({
     required String sessionId,
     required int score,
+    required bool comprehensionHelped,
     String? feedbackText,
     List<String> endorsedCourseUnitIds = const [],
   }) {
@@ -90,6 +123,7 @@ class RemoteSessionsRepository implements SessionsRepository {
         await _remote.submitRating(
           sessionId,
           score: score,
+          comprehensionHelped: comprehensionHelped,
           feedbackText: feedbackText,
           endorsedCourseUnitIds: endorsedCourseUnitIds,
         ),

@@ -1,10 +1,12 @@
 import 'package:peerpass_admin/core/models/admin_competency.dart';
 import 'package:peerpass_admin/core/models/admin_page.dart';
 import 'package:peerpass_admin/core/models/admin_session.dart';
+import 'package:peerpass_admin/core/models/admin_session_report.dart';
 import 'package:peerpass_admin/core/models/admin_tutor_standing.dart';
 import 'package:peerpass_admin/core/models/admin_user.dart';
 import 'package:peerpass_admin/core/models/audit_event.dart';
 import 'package:peerpass_admin/core/models/competency_status.dart';
+import 'package:peerpass_admin/core/models/topic_heatmap.dart';
 import 'package:peerpass_admin/core/network/admin_api_client.dart';
 import 'package:peerpass_admin/features/admin/data/repositories/admin_repository.dart';
 
@@ -67,6 +69,30 @@ class HttpAdminRepository implements AdminRepository {
   Future<AdminPage<AdminTutorStanding>> tutorStandings(
     AdminPageRequest request,
   ) => _page('/v1/admin/tutor-standings', request, AdminTutorStanding.fromJson);
+
+  @override
+  Future<TopicHeatmap> topicHeatmap() async => TopicHeatmap.fromJson(
+    await _client.getJson('/v1/admin/analytics/topic-heatmap'),
+  );
+
+  @override
+  Future<AdminSessionReportPage> sessionReports(AdminPageRequest request) =>
+      _page('/v1/admin/session-reports', request, AdminSessionReport.fromJson);
+
+  @override
+  Future<void> updateSessionReport(
+    AdminSessionReport report, {
+    required String status,
+    bool suspendTutor = false,
+    String? suspensionReason,
+  }) => _client.patch(
+    '/v1/admin/session-reports/${report.id}',
+    data: <String, dynamic>{
+      'status': status,
+      'suspend_tutor': suspendTutor,
+      'suspension_reason': ?suspensionReason,
+    },
+  );
 
   @override
   Future<void> reviewCompetency(

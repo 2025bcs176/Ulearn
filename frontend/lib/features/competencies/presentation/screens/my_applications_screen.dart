@@ -38,8 +38,10 @@ class MyApplicationsScreen extends ConsumerWidget {
           await ref.read(myClaimsProvider.future);
         },
         child: claims.when(
-          loading: () =>
-              const LoadingView(message: 'Loading your applications'),
+          loading: () => const LoadingView(
+            message: 'Loading your applications',
+            variant: LoadingViewVariant.cards,
+          ),
           error: (error, stackTrace) => _CenteredScroll(
             child: FailureView(
               // Every repository method throws a Failure, so this is normally a
