@@ -30,7 +30,7 @@ from app.schemas.session import (
     SessionResponse,
     SessionTransitionRequest,
 )
-from app.services import rating_service
+from app.services import notification_service, rating_service
 
 #: Wrong entries before the tutee is put on a cooldown.
 #:
@@ -130,6 +130,13 @@ async def create_session(
     help_request.status = HelpRequestStatus.MATCHED
     help_request.matched_tutor_id = user.id
     await db.flush()
+    await notification_service.request_accepted(
+        db,
+        tutee_id=session.tutee_id,
+        tutor=user,
+        topic=session.topic,
+        session_id=session.public_id,
+    )
     await db.commit()
     await db.refresh(session)
     return await _session_response(db, session)
@@ -227,6 +234,21 @@ async def transition_session(
     session.status = payload.status
     if payload.status is SessionStatus.COMPLETED:
         await rating_service.record_completion(db, session)
+    elif payload.status is SessionStatus.CANCELLED:
+        # The caller recorded themselves as the canceller just above, so the
+        # recipient is never themselves. A cancellation the other party learns
+        # about only by opening the session is a no-show waiting to happen.
+        recipient_id = (
+            session.tutor_id if user.id == session.tutee_id else session.tutee_id
+        )
+        await notification_service.session_cancelled(
+            db,
+            recipient_id=recipient_id,
+            cancelled_by=user,
+            topic=session.topic,
+            reason=session.cancellation_reason,
+            session_id=session.public_id,
+        )
 
     await db.flush()
     await db.commit()
@@ -356,6 +378,13 @@ async def verify_completion_pin(
     session.completion_pin_hash = None
     session.completion_pin_expires_at = None
     await rating_service.record_completion(db, session)
+    await notification_service.session_completed(
+        db,
+        tutee_id=session.tutee_id,
+        tutor=user,
+        topic=session.topic,
+        session_id=session.public_id,
+    )
     await db.commit()
     return await _session_response(db, session)
 
@@ -481,6 +510,13 @@ async def verify_session_pin(
     session.session_pin_expires_at = None
     session.status = SessionStatus.IN_PROGRESS
     session.started_at = _utc(session.started_at or datetime.now(UTC))
+    await notification_service.session_started(
+        db,
+        tutor_id=session.tutor_id,
+        tutee=user,
+        topic=session.topic,
+        session_id=session.public_id,
+    )
     await db.flush()
     await db.commit()
     return await _session_response(db, session)

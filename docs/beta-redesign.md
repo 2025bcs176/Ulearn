@@ -97,14 +97,17 @@ Endpoints:
 - `POST /v1/notifications/devices`
 - `DELETE /v1/notifications/devices/{token}`
 
-Events: request received, request accepted, request declined, session starting,
-session started, session completed, rating received, promotion, certificate
-earned.
+Events now produced: request received, request accepted, request declined,
+session started, session completed, session cancelled, rating received, and
+promotion. Certificate-earned and session reminders are not produced yet, so they
+are not in the enum: a type the client can draw but nothing raises is a dead deep
+link.
 
-Push uses Firebase Admin behind `FCM_ENABLED`. With it off, in-app
-notifications still persist and the API still boots. Reminders are sent by
-`python -m app.cli send-session-reminders`, run by cron, and are idempotent
-through `dedupe_key`. There is no in-process scheduler.
+Push uses Firebase Admin behind `FCM_ENABLED`, and is **deferred**: `device_tokens`
+and the registration endpoints are in place, but nothing sends a push yet. The
+in-app inbox is the real deliverable and works with Firebase unconfigured.
+Reminders will be sent by `python -m app.cli send-session-reminders`, run by cron,
+and will be idempotent through `dedupe_key`. There is no in-process scheduler.
 
 ### 4.3 Tutor profile
 
@@ -193,7 +196,12 @@ Kept current so the plan and the code do not drift apart.
       `not_accepting_requests`.
 - [ ] Topic chips on the request sheet, from the seeded unit topic lists.
 - [ ] Tutor profile: bio, reviews, availability, accept-time scheduling.
-- [ ] Notifications: backend, inbox, badge, FCM, deep links.
+- [x] **Notifications backend.** `notifications` and `device_tokens`, a
+      reversible migration, the inbox and device endpoints, and a producer for
+      every event the enum carries. Writes share the transaction of the action
+      they announce; `dedupe_key` makes a retried event at-most-once.
+- [ ] Notifications client: inbox screen, unread badge, deep links. FCM push is
+      deferred until the in-app inbox is in the beta build.
 - [ ] Sessions: mutual check-in, timeline, rating with tags.
 - [ ] Tutor HQ.
 - [ ] Hardening, validation, dry run, launch.

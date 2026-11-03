@@ -1033,6 +1033,79 @@ unit is a 422, because a session is evidence about one unit and no more.
 Feedback cannot be edited after submission. The comprehension answer is stored
 with the rating and contributes to anonymized pilot analytics.
 
+## Notifications
+
+Every route here is scoped to the signed-in caller. There is no admin inbox: an
+operator already has the audit log and the review queues, and a second, quieter
+way to read a student's messages is not a feature.
+
+### `GET /v1/notifications`
+
+One page of the caller's inbox, newest first, using the standard envelope
+(`items`, `total`, `limit`, `offset`, `has_more`, `page_count`). *Auth.*
+
+A row carries `id`, `type`, `title`, `body`, `data`, `read_at`, and `created_at`.
+`read_at` null means unread. `data` holds the public ids the client needs to open
+the right screen; its `kind` is `help_request`, `session`, or `rating`.
+
+### `GET /v1/notifications/unread-count`
+
+`{"count": 2}`. Null `read_at` rows belonging to the caller only. *Auth.*
+
+### `POST /v1/notifications/{notification_id}/read`
+
+Marks one row read and returns it. Idempotent: reading a row that is already read
+returns the same `read_at` rather than an error, because a second tap is ordinary
+on a phone. A row belonging to someone else is a **404**, not a 403 — a 403 would
+confirm that the id exists.
+
+### `POST /v1/notifications/read-all`
+
+`{"marked": 3}`, counting only rows this call actually changed. A client can
+tell a fresh empty inbox from one that was already clear.
+
+### `POST /v1/notifications/devices`
+
+Registers a push token: `{"token": "...", "platform": "android"}`. *Auth.* The
+token is unique across the table; registering the same token while signed in as
+another account **moves** it to that account. A handset that changes hands must
+not keep delivering the previous owner's notifications. The response carries the
+device's public id, platform, and `last_seen_at` — never the token back, because
+the client already holds it and a token in a response body is a token in a log.
+
+### `DELETE /v1/notifications/devices/{token}`
+
+204 on success, and also 204 when the token is unknown or belongs to someone
+else. Called on sign-out: a sign-out that fails because the device was already
+cleaned up is a user stuck on a screen. Nothing is deleted unless the caller owns
+the token.
+
+### Notification types
+
+| `type` | Raised when | `data.kind` |
+| ------ | ----------- | ----------- |
+| `request_received` | A student chooses a tutor | `help_request` |
+| `request_accepted` | The chosen tutor confirms and a session is created | `session` |
+| `request_declined` | The chosen tutor declines | `help_request` |
+| `session_started` | The tutee enters the handshake PIN | `session` |
+| `session_completed` | The tutor confirms completion | `session` |
+| `session_cancelled` | Either party cancels an upcoming or live session | `session` |
+| `rating_received` | A tutee rates a completed session | `rating` |
+| `promotion` | A tutor's standing moves to Verified | — |
+
+Every type has a producer. A type with no producer would make the client draw an
+icon and a deep link for a notification that can never arrive.
+
+A notification is written **inside the transaction of the action it announces**,
+never in a second commit. A failed session update cannot leave a message saying
+the session happened. Rows that need at-most-once delivery carry a `dedupe_key`
+unique per user, so a retried request or a reminder job that runs twice leaves
+one row.
+
+Push delivery is deliberately not implemented yet. The in-app inbox persists and
+the API boots with Firebase unconfigured; `device_tokens` is the address a future
+notifier will use.
+
 ## Safeguarding reports
 
 ### `POST /v1/sessions/{session_id}/reports`

@@ -16,7 +16,9 @@ from app.models.enums import (
     COMPLETED_SESSION_STATUSES,
     SESSION_TRANSITIONS,
     CompetencyStatus,
+    DevicePlatform,
     HelpRequestStatus,
+    NotificationType,
     ReportCategory,
     ReportStatus,
     SessionStatus,
@@ -25,6 +27,7 @@ from app.models.enums import (
     VerificationSource,
 )
 from app.models.grading_scale import Grade, GradingScale
+from app.models.notification import DeviceToken, Notification
 from app.models.rate_limit import RateLimitCounter
 from app.models.rating import MAX_RATING, MIN_RATING, Rating
 from app.models.report import SessionReport
@@ -49,10 +52,14 @@ __all__ = [
     "Competency",
     "CompetencyStatus",
     "CourseUnit",
+    "DevicePlatform",
+    "DeviceToken",
     "Grade",
     "GradingScale",
     "HelpRequest",
     "HelpRequestStatus",
+    "Notification",
+    "NotificationType",
     "Program",
     "RateLimitCounter",
     "Rating",

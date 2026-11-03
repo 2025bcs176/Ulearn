@@ -8,8 +8,14 @@ from sqlalchemy import select
 
 from app.core.exceptions import ValidationProblem
 from app.models.course_unit import CourseUnit, Subject, University
-from app.models.enums import SessionStatus, TutorStanding, UserRole
+from app.models.enums import (
+    NotificationType,
+    SessionStatus,
+    TutorStanding,
+    UserRole,
+)
 from app.models.grading_scale import Grade, GradingScale
+from app.models.notification import Notification
 from app.models.session import Session
 from app.models.tutor_profile import TutorProfile
 from app.models.user import User, set_roles
@@ -77,7 +83,7 @@ async def _seed_session(db_session):
 
 
 async def test_submit_rating_promotes_a_tutor_to_verified(db_session):
-    student, _tutor, session, profile = await _seed_session(db_session)
+    student, tutor, session, profile = await _seed_session(db_session)
 
     rating = await rating_service.submit_rating(
         db_session,
@@ -90,6 +96,28 @@ async def test_submit_rating_promotes_a_tutor_to_verified(db_session):
     assert profile.standing is TutorStanding.VERIFIED
     assert profile.average_rating == Decimal("4.325")
     assert profile.rating_count == 4
+
+    notifications = list(
+        (
+            await db_session.scalars(
+                select(Notification)
+                .where(Notification.user_id == tutor.id)
+                .order_by(Notification.id)
+            )
+        ).all()
+    )
+    types = [row.type for row in notifications]
+    # The promotion is computed while the standing is recomputed, just before the
+    # rating row is announced; both are written in the same transaction.
+    assert types == [
+        NotificationType.PROMOTION,
+        NotificationType.RATING_RECEIVED,
+    ]
+    assert notifications[1].data == {
+        "kind": "rating",
+        "rating_id": str(rating.id),
+        "session_id": str(session.public_id),
+    }
 
 
 async def test_tutor_can_read_the_feedback_received_for_a_session(db_session):

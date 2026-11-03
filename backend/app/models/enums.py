@@ -127,6 +127,39 @@ class SessionStatus(StrEnum):
     NO_SHOW = "no_show"
 
 
+class NotificationType(StrEnum):
+    """Why a notification exists, as the client switches on it.
+
+    Every member has a producer in the service layer. A type with no producer is
+    worse than a missing one: the client draws an icon and a deep link for a
+    notification that can never arrive, and the one that does arrive has no
+    case. Certificate and reminder events are deliberately absent until the code
+    that raises them exists.
+    """
+
+    REQUEST_RECEIVED = "request_received"
+    REQUEST_ACCEPTED = "request_accepted"
+    REQUEST_DECLINED = "request_declined"
+    SESSION_STARTED = "session_started"
+    SESSION_COMPLETED = "session_completed"
+    SESSION_CANCELLED = "session_cancelled"
+    RATING_RECEIVED = "rating_received"
+    PROMOTION = "promotion"
+
+
+class DevicePlatform(StrEnum):
+    """Where a push token came from.
+
+    Stored so a future payload can be shaped per platform. The beta ships an
+    Android APK, but the column is not Android-only: a token table that cannot
+    hold the first iOS build is a migration on the day push is switched on.
+    """
+
+    ANDROID = "android"
+    IOS = "ios"
+    WEB = "web"
+
+
 #: The only moves a session may make.
 #:
 #: Declared as data rather than scattered `if` statements in a service, so the

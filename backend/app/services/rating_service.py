@@ -29,6 +29,7 @@ from app.schemas.rating import (
     TutorRatingSummary,
     UnitEndorsementCount,
 )
+from app.services import notification_service
 
 PROMOTION_MIN_SESSIONS = 3
 PROMOTION_MIN_AVERAGE = Decimal("4.10")
@@ -102,6 +103,14 @@ async def submit_rating(
             profile.rating_count += 1
             await _recompute_standing(db, profile)
         await db.flush()
+        await notification_service.rating_received(
+            db,
+            tutor_id=ratee_id,
+            rater=user,
+            score=payload.score,
+            rating_id=rating.public_id,
+            session_id=session.public_id,
+        )
         await db.commit()
         await db.refresh(rating)
         return RatingResponse.model_validate(rating)
@@ -389,39 +398,45 @@ async def _get_or_create_tutor_profile(
 
 
 async def _recompute_standing(db: AsyncSession, profile: TutorProfile) -> None:
+    # Captured before the rules run, because the notification this may raise is
+    # about the move, not the destination. A tutor who was already verified is
+    # not promoted again by their next five-star rating.
+    previous = profile.standing
+
     if profile.operator_suspended:
         profile.standing = TutorStanding.SUSPENDED
-        return
-    if profile.rating_count < PROMOTION_MIN_SESSIONS or profile.average_rating is None:
+    elif (
+        profile.rating_count < PROMOTION_MIN_SESSIONS or profile.average_rating is None
+    ):
         profile.standing = TutorStanding.PROBATIONARY
-        return
-
-    # Compare totals rather than a rounded average so 4.10 is exactly in and
-    # 4.099... is exactly out.
-    promotion_bar = profile.rating_total * 100 >= 410 * profile.rating_count
-    if promotion_bar:
-        profile.standing = TutorStanding.VERIFIED
-        profile.suspended_reason = None
-        return
-
-    if profile.rating_count < DEMOTION_MIN_RATED_SESSIONS:
-        profile.standing = TutorStanding.PROBATIONARY
-        return
-
-    if profile.average_rating < SUSPENDED_BELOW_AVERAGE:
-        profile.standing = TutorStanding.SUSPENDED
-        profile.suspended_reason = "Rating average below 3.0"
-    elif profile.average_rating < REDUCED_BELOW_AVERAGE:
-        profile.standing = TutorStanding.REDUCED
-        profile.suspended_reason = None
-    elif profile.standing is TutorStanding.VERIFIED:
-        # A verified tutor keeps the badge until the explicit demotion bar is
-        # crossed; a single average below the promotion bar is not a demotion.
-        profile.standing = TutorStanding.VERIFIED
-        profile.suspended_reason = None
     else:
-        profile.standing = TutorStanding.PROBATIONARY
-        profile.suspended_reason = None
+        # Compare totals rather than a rounded average so 4.10 is exactly in and
+        # 4.099... is exactly out.
+        promotion_bar = profile.rating_total * 100 >= 410 * profile.rating_count
+        if promotion_bar:
+            profile.standing = TutorStanding.VERIFIED
+            profile.suspended_reason = None
+        elif profile.rating_count < DEMOTION_MIN_RATED_SESSIONS:
+            profile.standing = TutorStanding.PROBATIONARY
+        elif profile.average_rating < SUSPENDED_BELOW_AVERAGE:
+            profile.standing = TutorStanding.SUSPENDED
+            profile.suspended_reason = "Rating average below 3.0"
+        elif profile.average_rating < REDUCED_BELOW_AVERAGE:
+            profile.standing = TutorStanding.REDUCED
+            profile.suspended_reason = None
+        elif profile.standing is TutorStanding.VERIFIED:
+            # A verified tutor keeps the badge until the explicit demotion bar is
+            # crossed; a single average below the promotion bar is not a demotion.
+            profile.standing = TutorStanding.VERIFIED
+            profile.suspended_reason = None
+        else:
+            profile.standing = TutorStanding.PROBATIONARY
+            profile.suspended_reason = None
+
+    if previous is not TutorStanding.VERIFIED and (
+        profile.standing is TutorStanding.VERIFIED
+    ):
+        await notification_service.promoted(db, tutor_id=profile.user_id)
 
 
 async def record_completion(db: AsyncSession, session: Session) -> None:

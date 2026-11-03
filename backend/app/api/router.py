@@ -15,6 +15,7 @@ from app.api.v1 import (
     competencies,
     incentives,
     matching,
+    notifications,
     ratings,
     reports,
     sessions,
@@ -35,6 +36,7 @@ api_router.include_router(academics.router)
 api_router.include_router(competencies.router)
 api_router.include_router(incentives.router)
 api_router.include_router(matching.router)
+api_router.include_router(notifications.router)
 api_router.include_router(ratings.router)
 api_router.include_router(reports.router)
 api_router.include_router(sessions.router)

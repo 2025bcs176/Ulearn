@@ -907,6 +907,33 @@ mistake is retractable. The unique constraint on
 under concurrent retries, and it is a database constraint rather than a service
 check because two simultaneous requests would both pass the check.
 
+### 8.3 Notifications are written in the transaction they announce
+
+An event is not a message. `select_tutor_for_request`, `create_session`, a
+session transition, a rating, and a promotion all write their own state first and
+call `notification_service` in the same transaction. The notification service
+flushes but never commits; the service that owns the action still owns the
+commit. This is the rule that makes a rollback safe: a session that failed to
+save cannot leave behind an inbox row telling a student it exists.
+
+`notifications` and `device_tokens` are separate tables for the same reason
+"event" and "channel" are different words. The inbox is the durable record and
+works with Firebase unconfigured — the first beta APK ships that way. A push
+token belongs to a handset, and the same token may arrive for a second account
+when a phone changes hands; registering it moves the row rather than refusing,
+because the alternative is delivering one student's messages to another.
+
+Rows that must not be announced twice carry a `dedupe_key`, unique per user. The
+pre-read handles the ordinary retry; the unique constraint handles the race, and
+the insert runs inside a savepoint so losing it costs nothing instead of
+poisoning the caller's transaction. Ordinary notifications leave the key null,
+and nulls are distinct in both databases.
+
+Every notification type in `NotificationType` has a producer. A type the client
+can render but nothing raises is a dead deep link and a branch that can never be
+tested, so certificate and reminder events are absent until the code that raises
+them exists.
+
 ---
 
 ## 9. Security & Compliance

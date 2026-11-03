@@ -36,7 +36,7 @@ from app.schemas.session import (
     SelectTutorRequest,
 )
 from app.schemas.tutor import TutorProfileSummary
-from app.services import faculty_scope
+from app.services import faculty_scope, notification_service
 
 
 async def create_help_request(
@@ -164,6 +164,17 @@ async def select_tutor_for_request(
     # while the tutor's screen says it did.
     request.matched_tutor = tutor
     request.status = HelpRequestStatus.PENDING_CONFIRMATION
+    # In the same transaction as the state change. A tutor who is told about a
+    # request that then failed to save has been sent to a screen with nothing on
+    # it, and the student has no idea their choice did not land.
+    await notification_service.request_received(
+        db,
+        tutor_id=tutor.id,
+        tutee=request.tutee,
+        unit_code=request.course_unit.code,
+        topic=request.topic,
+        request_id=request.public_id,
+    )
     await db.flush()
     await db.commit()
     return help_request_response(request)
@@ -206,6 +217,13 @@ async def decline_help_request(
         raise ConflictProblem("This help request is not waiting for your answer.")
 
     request.status = HelpRequestStatus.DECLINED
+    await notification_service.request_declined(
+        db,
+        tutee_id=request.tutee_id,
+        tutor=request.matched_tutor,
+        topic=request.topic,
+        request_id=request.public_id,
+    )
     await db.flush()
     await db.commit()
     return help_request_response(request)
