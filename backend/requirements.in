@@ -45,7 +45,7 @@ argon2-cffi
 firebase-admin
 
 # Multipart uploads for transcript/QR evidence.
-n# OCR and transcript parsing dependencies
+# OCR and transcript parsing dependencies
 pdf2image
 pytesseract
 pyzbar
