@@ -13,13 +13,18 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 
 from app.api.deps import CurrentUser, DatabaseSession
+from app.schemas.rating import (
+    DEFAULT_TUTOR_REVIEWS,
+    MAX_TUTOR_REVIEWS,
+    TutorReview,
+)
 from app.schemas.tutor import (
     DEFAULT_RAIL_TUTORS,
     MAX_RAIL_TUTORS,
     TutorDetailResponse,
     TutorRailEntry,
 )
-from app.services import tutor_service
+from app.services import rating_service, tutor_service
 
 router = APIRouter(prefix="/tutors", tags=["tutors"])
 
@@ -59,6 +64,28 @@ async def top_tutors(
         course_unit_id=course_unit_id,
         limit=limit,
     )
+
+
+@router.get(
+    "/{user_id}/reviews",
+    response_model=list[TutorReview],
+    summary="A tutor's recent public reviews",
+)
+async def tutor_reviews(
+    user_id: uuid.UUID,
+    caller: CurrentUser,
+    db: DatabaseSession,
+    limit: Annotated[int, Query(ge=1, le=MAX_TUTOR_REVIEWS)] = DEFAULT_TUTOR_REVIEWS,
+) -> list[TutorReview]:
+    """What other students said about this tutor, newest first.
+
+    Separate from the profile rather than nested in it so the detail screen can
+    paint the tutor's name, standing and rating without waiting on the review
+    query, and can retry one without refetching the other. `limit` is a page
+    size, not a cursor: there is no offset because nothing has asked for a
+    second page yet.
+    """
+    return await rating_service.list_public_reviews(db, user_id, limit=limit)
 
 
 @router.get(

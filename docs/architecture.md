@@ -950,6 +950,43 @@ can render but nothing raises is a dead deep link and a branch that can never be
 tested, so certificate and reminder events are absent until the code that raises
 them exists.
 
+### 8.4 A review is published; the note was confided
+
+A rating is one transaction between two people. A review is that same row read by
+a stranger, and the two are not the same document even though they share a table.
+
+The tags are a fixed vocabulary (`RatingTag`), capped at four per rating, stored
+as a JSON array on `ratings`. A closed set is what makes a tag something a profile
+can count and render without a moderation queue behind it, and four is a summary
+rather than a checklist that can be ticked in full. The vocabulary is enforced by
+`RatingCreate` and not by the database: `jsonb` membership checks exist on
+PostgreSQL and not on SQLite, and a migration that only works on one backend is
+not worth a constraint the edge already applies. The array has no server default
+for a related reason — `alembic check` cannot compare a JSON default on
+PostgreSQL, and a default that always reports drift would make the check
+worthless.
+
+What a public review carries is the score, the tags, the rater's **initials**, and
+the date. Not the rater's id, and not the written note. The note was written *to*
+the tutor: publishing it puts a student's words in front of strangers who did not
+have the conversation, and in a pilot cohort small enough to recognise itself the
+text alone ("the resit", "my lab group") identifies the author without a name.
+The tutor still reads every note through their own session; nothing was taken
+from them.
+
+A review whose session carries an **unresolved** report is withheld from the
+public list. That is a pause on a publication, not an erasure of a rating: the
+score still counts in the tutor's running average, because the session happened
+and the standing was already recomputed from it. Keeping those two apart is also
+what stops the filter becoming an exploit — filing a report cannot scrub a low
+score out of a tutor's record, it can only hide the entry while somebody looks.
+Resolving the report restores it.
+
+The endpoint is `GET /v1/tutors/{id}/reviews`, separate from the profile so the
+name, standing and rating paint without waiting on the review query. It has no
+offset: the profile shows the newest handful, and a pager no screen reads is a
+contract to maintain for nothing.
+
 ---
 
 ## 9. Security & Compliance

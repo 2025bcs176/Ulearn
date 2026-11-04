@@ -13,10 +13,21 @@ from typing import Self
 
 from pydantic import Field, model_validator
 
-from app.models.rating import MAX_RATING, MIN_RATING
+from app.models.enums import RatingTag
+from app.models.rating import MAX_RATING, MAX_TAGS_PER_RATING, MIN_RATING
 from app.schemas.base import MeanRating, OrmSchema, RequestSchema, Trimmed
 
 MAX_FEEDBACK_LENGTH = 2000
+
+#: How many reviews a tutor profile shows by default, and the most it will serve.
+#:
+#: A profile is a page, not an archive: the newest handful is what a student
+#: reads before deciding, and the rating count beside the average says how much
+#: evidence sits behind them. There is no offset parameter yet because nothing
+#: asks for a second page -- adding one when a screen wants it beats shipping a
+#: pager no client reads.
+DEFAULT_TUTOR_REVIEWS = 5
+MAX_TUTOR_REVIEWS = 20
 
 #: How many course units one rating may endorse.
 #:
@@ -66,6 +77,15 @@ class RatingCreate(RequestSchema):
         description="Whether the session helped the tutee understand the topic."
     )
     feedback_text: Trimmed | None = Field(default=None, max_length=MAX_FEEDBACK_LENGTH)
+    tags: list[RatingTag] = Field(
+        default_factory=list,
+        max_length=MAX_TAGS_PER_RATING,
+        description=(
+            "What the session was like, from a fixed vocabulary. Optional and "
+            "empty by default: a student who only wants to give a score is not "
+            "made to describe the tutor to get past the form."
+        ),
+    )
     endorsed_course_unit_ids: list[uuid.UUID] = Field(
         default_factory=list,
         max_length=MAX_ENDORSEMENTS_PER_RATING,
@@ -74,6 +94,19 @@ class RatingCreate(RequestSchema):
             "means no endorsement, which is a legitimate submission."
         ),
     )
+
+    @model_validator(mode="after")
+    def tags_are_unique(self) -> Self:
+        """The same tag may not appear twice in one submission.
+
+        Not collapsed silently, for the reason the endorsement validator gives:
+        the client sent something it can be told about, and a de-duplication
+        would let a buggy picker send six ticks and have four saved without
+        anything noticing.
+        """
+        if len(set(self.tags)) != len(self.tags):
+            raise ValueError("tags must not contain duplicates")
+        return self
 
     @model_validator(mode="after")
     def endorsed_units_are_unique(self) -> Self:
@@ -107,6 +140,40 @@ class RatingResponse(OrmSchema):
     score: int
     comprehension_helped: bool
     feedback_text: str | None = None
+    tags: list[str] = Field(
+        default_factory=list,
+        description="The tags the rater chose, in the order they chose them.",
+    )
+    created_at: datetime
+
+
+class TutorReview(OrmSchema):
+    """One review as any signed-in student reads it on a tutor's profile.
+
+    Not `RatingResponse`, and not a trimmed copy of it, because the two are
+    answering different questions. `RatingResponse` is a record of a transaction
+    between two people: it names them, and it carries the note one wrote to the
+    other. This is a publication to strangers, so it carries none of that -- the
+    rater is an initial and the note is absent.
+
+    The note is deliberately *not* published. It was written for the tutor, not
+    for an audience, and a small cohort makes "the student who wrote about the
+    resit" easy to identify from the text alone even without a name. What a
+    browsing student needs is the score, what the session was like, and that a
+    real person said so; the note stays between the two parties who were there.
+
+    `rater_initials` is computed server-side from the display name. The name
+    itself is never in this payload, and neither is any id belonging to the
+    rater, so a review cannot be used to enumerate who rated whom.
+    """
+
+    id: uuid.UUID = Field(validation_alias="public_id")
+    score: int = Field(ge=MIN_RATING, le=MAX_RATING)
+    tags: list[str] = Field(
+        default_factory=list,
+        description="From the fixed vocabulary; unknown values are a newer tag.",
+    )
+    rater_initials: str = Field(max_length=4)
     created_at: datetime
 
 

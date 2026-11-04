@@ -685,6 +685,47 @@ A 404 covers both "no such user" and "that user is not a tutor". They are the
 same answer on purpose: a route that distinguished them would confirm which
 accounts hold the tutor role.
 
+### `GET /v1/tutors/{user_id}/reviews`
+
+What other students said about this tutor, newest first. *Auth.*
+
+```json
+[
+  {
+    "id": "b73d…",
+    "score": 5,
+    "tags": ["clear_explanation", "made_it_click"],
+    "rater_initials": "AS",
+    "created_at": "2026-03-04T10:12:00Z"
+  }
+]
+```
+
+`limit` defaults to 5 and is capped at 20. There is no `offset`: the profile shows
+the newest handful, and the rating count beside the average says how much evidence
+is behind them.
+
+`tags` come from a fixed vocabulary — `clear_explanation`, `patient`,
+`well_prepared`, `made_it_click`, `practical_examples`, `on_time` — and an
+unrecognised value is a newer tag rather than a fault, so a client should render
+it from the value. The rater is an initial and an id is deliberately absent, so a
+review cannot be used to enumerate who rated whom.
+
+The written note is **not** in this payload. It was written to the tutor, and
+publishing it would put a student's words in front of strangers who were not in
+the conversation. The tutor reads it through their own session.
+
+A review whose session carries an unresolved report is omitted. The rating itself
+still counts in the tutor's average — withholding the publication is not erasing
+the evidence — which is what keeps filing a report from being a way to hide a low
+score. Resolving the report restores the review.
+
+| Status | `detail`                          | `errors` |
+| ------ | ---------------------------------- | -------- |
+| 401    | Sign-in required.                 |          |
+| 404    | That tutor could not be found.    |          |
+| 422    | Malformed id or `limit` out of range. |      |
+
 ## Matching
 
 What the platform is willing to propose, and why not the others. A bare list of
@@ -987,6 +1028,11 @@ One immutable tutee rating per session. A second submission is rejected, and
 tutor-to-tutee ratings are not accepted. Ratings exist only for `completed`
 sessions and include the required comprehension answer.
 
+A rating also carries optional **tags** from a fixed vocabulary, and those — with
+the score, the rater's initials, and the date — are what other students read on
+the tutor's profile. The written note is never published; see
+`GET /v1/tutors/{user_id}/reviews`.
+
 ### `GET /v1/ratings/me`
 
 The caller's own aggregate: average, total, count, recent ratings, and per-unit
@@ -1006,8 +1052,14 @@ other users cannot use this endpoint to read the session's feedback.
 
 ### `POST /v1/ratings/{session_id}`
 
-`{"score": 1-5, "comprehension_helped": true, "feedback_text": "...", "endorsed_course_unit_ids": ["..."]}`.
+`{"score": 1-5, "comprehension_helped": true, "feedback_text": "...", "tags": ["patient"], "endorsed_course_unit_ids": ["..."]}`.
 201 with the rating.
+
+`tags` is optional and empty by default. The vocabulary is fixed —
+`clear_explanation`, `patient`, `well_prepared`, `made_it_click`,
+`practical_examples`, `on_time` — capped at 4 per rating, and a value outside it
+or the same tag twice is a 422. Nothing is collapsed silently: a picker that
+sends every tick is told, not quietly given four.
 
 `endorsed_course_unit_ids` is optional and is **not** part of the score. It
 records "this tutor knows this unit" — a claim about subject coverage that is

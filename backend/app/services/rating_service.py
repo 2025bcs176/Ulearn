@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from collections.abc import Sequence
 from decimal import Decimal
@@ -18,15 +19,18 @@ from app.core.exceptions import (
 )
 from app.models.course_unit import CourseUnit
 from app.models.endorsement import UnitEndorsement
-from app.models.enums import SessionStatus, TutorStanding
+from app.models.enums import ReportStatus, SessionStatus, TutorStanding
 from app.models.rating import Rating
+from app.models.report import SessionReport
 from app.models.session import Session
 from app.models.tutor_profile import TutorProfile
 from app.models.user import User
 from app.schemas.rating import (
+    DEFAULT_TUTOR_REVIEWS,
     RatingCreate,
     RatingResponse,
     TutorRatingSummary,
+    TutorReview,
     UnitEndorsementCount,
 )
 from app.services import notification_service
@@ -88,6 +92,7 @@ async def submit_rating(
             score=payload.score,
             comprehension_helped=payload.comprehension_helped,
             feedback_text=payload.feedback_text,
+            tags=[tag.value for tag in payload.tags],
         )
         db.add(rating)
         await _replace_endorsements(
@@ -470,6 +475,91 @@ async def list_recent_ratings(
         .limit(limit)
     )
     return [RatingResponse.model_validate(row) for row in result.scalars()]
+
+
+async def list_public_reviews(
+    db: AsyncSession,
+    tutor_public_id: uuid.UUID,
+    *,
+    limit: int = DEFAULT_TUTOR_REVIEWS,
+) -> list[TutorReview]:
+    """The reviews a tutor's profile publishes, newest first.
+
+    Read by any signed-in student, which decides three things this query does
+    that a tutor-facing read does not. The rater is reduced to initials and no
+    id, the written note is not selected at all, and a review whose session
+    carries an unresolved report is withheld.
+
+    Withholding a review is not the same as erasing a rating, and the difference
+    matters. The rating still counts in the tutor's average -- the session
+    happened, and `TutorProfile` has already been updated from it -- so this
+    hides a *publication* while an allegation about that session is unresolved,
+    not the evidence. It also bounds the obvious abuse: a student cannot file a
+    report to scrub their own low score out of the tutor's standing, because
+    standing never reads this list. A report that is resolved restores the
+    review, on the grounds that an operator has looked at the session by then.
+
+    404 for a user who does not exist and for one who is not a tutor, the same
+    pair of answers `tutor_service.get_tutor_detail` gives and for the same
+    reason: the route must not become a way to discover which accounts hold the
+    tutor role.
+    """
+    tutor_id = await db.scalar(
+        select(User.id)
+        .join(TutorProfile, TutorProfile.user_id == User.id)
+        .where(User.public_id == tutor_public_id)
+    )
+    if tutor_id is None:
+        raise NotFoundProblem("That tutor could not be found.")
+
+    unresolved_report = (
+        select(SessionReport.id)
+        .where(
+            SessionReport.session_id == Rating.session_id,
+            SessionReport.status != ReportStatus.RESOLVED,
+        )
+        .exists()
+    )
+    result = await db.execute(
+        select(Rating)
+        .where(Rating.ratee_id == tutor_id, ~unresolved_report)
+        .options(selectinload(Rating.rater))
+        .order_by(Rating.created_at.desc())
+        .limit(limit)
+    )
+    return [
+        TutorReview(
+            id=rating.public_id,
+            score=rating.score,
+            tags=list(rating.tags or ()),
+            rater_initials=_initials(rating.rater.display_name),
+            created_at=rating.created_at,
+        )
+        for rating in result.scalars()
+    ]
+
+
+def _initials(display_name: str) -> str:
+    """The first letters of a name, for a review's byline.
+
+    Two letters at most, because "A. O." beside a date identifies the cohort
+    member without publishing their name, and a longer abbreviation is a name
+    with the vowels taken out.
+
+    An email address is cut at the `@` first: `User.display_name` falls back to
+    the address for an account with no name, and the initial of a domain is not
+    something anybody would recognise as themselves. The fallback for a string
+    with no letters at all is `?` rather than an empty string, because a byline
+    with nothing in it looks like a rendering bug instead of a missing name.
+    """
+    local = display_name.split("@", 1)[0]
+    words = [word for word in re.split(r"\W+", local) if word]
+    if not words:
+        return "?"
+    first = words[0][0].upper()
+    if len(words) == 1:
+        return first
+    return f"{first}{words[-1][0].upper()}"
 
 
 async def get_session_rating(
