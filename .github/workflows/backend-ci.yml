@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 # Pinned to 3.15 in every job because `app.core.security.new_uuid7` uses
 # `uuid.uuid7`, which is 3.14+. The floor is load-bearing: on an older
