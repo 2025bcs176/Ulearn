@@ -109,6 +109,15 @@ in-app inbox is the real deliverable and works with Firebase unconfigured.
 Reminders will be sent by `python -m app.cli send-session-reminders`, run by cron,
 and will be idempotent through `dedupe_key`. There is no in-process scheduler.
 
+The client is a fourth shell destination at `/notifications`. The tab badge and
+the screen read the same provider, so one fetch feeds both and reading a row
+clears the badge without a second request. Opening a row marks it read and pushes
+the screen that answers it: the tutor's request list, matching after a decline,
+the session, the rating form after a completed session, or the certificate after
+a promotion. A type this build does not know is still shown with its title and
+body and simply opens nothing, so an older APK does not drop a newer event.
+Device-registration UI is not built yet, because nothing sends a push.
+
 ### 4.3 Tutor profile
 
 New fields on `tutor_profiles`:
@@ -200,8 +209,9 @@ Kept current so the plan and the code do not drift apart.
       reversible migration, the inbox and device endpoints, and a producer for
       every event the enum carries. Writes share the transaction of the action
       they announce; `dedupe_key` makes a retried event at-most-once.
-- [ ] Notifications client: inbox screen, unread badge, deep links. FCM push is
-      deferred until the in-app inbox is in the beta build.
+- [x] **Notifications client.** An inbox screen, unread badge on a fourth shell
+      destination, mark-one and mark-all, paging, and a deep link per type. FCM
+      push remains deferred until the in-app inbox is in the beta build.
 - [ ] Sessions: mutual check-in, timeline, rating with tags.
 - [ ] Tutor HQ.
 - [ ] Hardening, validation, dry run, launch.

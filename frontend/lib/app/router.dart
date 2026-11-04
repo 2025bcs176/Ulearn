@@ -21,6 +21,8 @@ import 'package:peerpass/features/matching/presentation/screens/course_unit_pick
 import 'package:peerpass/features/matching/presentation/screens/match_results_screen.dart';
 import 'package:peerpass/features/matching/presentation/screens/tutor_requests_screen.dart';
 import 'package:peerpass/features/matching/presentation/widgets/ask_composer.dart';
+import 'package:peerpass/features/notifications/presentation/screens/notifications_screen.dart';
+import 'package:peerpass/features/notifications/presentation/widgets/notification_tab_icon.dart';
 import 'package:peerpass/features/sessions/presentation/providers/session_providers.dart';
 import 'package:peerpass/features/sessions/presentation/screens/confirm_request_screen.dart';
 import 'package:peerpass/features/sessions/presentation/screens/rate_session_screen.dart';
@@ -41,6 +43,7 @@ abstract final class AppRoutes {
   static const String myApplications = '/tutor-applications';
   static const String home = '/home';
   static const String sessions = '/sessions';
+  static const String notifications = '/notifications';
   static const String profile = '/profile';
   static const String tutors = '/tutors';
   static const String matching = '/matching';
@@ -233,9 +236,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state, child) => AuthenticatedShell(
           selectedIndex: switch (state.uri.path) {
             AppRoutes.sessions => 1,
-            AppRoutes.profile => 2,
+            AppRoutes.notifications => 2,
+            AppRoutes.profile => 3,
             _ => 0,
           },
+          notificationsIcon: const NotificationTabIcon(),
+          notificationsSelectedIcon: const NotificationTabIcon(selected: true),
           child: child,
         ),
         routes: [
@@ -256,6 +262,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.sessions,
             builder: (context, state) => const SessionsTabScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.notifications,
+            builder: (context, state) => const NotificationsScreen(),
           ),
           GoRoute(
             path: AppRoutes.profile,
@@ -470,6 +480,7 @@ String? _redirectForSignedIn(UserProfile? profile, String location) {
   // after its last step.
   return location == AppRoutes.home ||
           location == AppRoutes.sessions ||
+          location == AppRoutes.notifications ||
           location == AppRoutes.profile
       ? null
       : AppRoutes.home;

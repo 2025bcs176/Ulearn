@@ -6,11 +6,22 @@ class AuthenticatedShell extends StatelessWidget {
   const AuthenticatedShell({
     required this.child,
     required this.selectedIndex,
+    this.notificationsIcon,
+    this.notificationsSelectedIcon,
     super.key,
   });
 
   final Widget child;
   final int selectedIndex;
+
+  /// The notifications destination's icons, supplied by the router.
+  ///
+  /// They arrive as widgets rather than the shell importing the notifications
+  /// feature, because the shell is a layout in `home/` and a sibling feature's
+  /// presentation layer is not theirs to import. It also lets the selected icon
+  /// carry the unread badge without the shell knowing what a notification is.
+  final Widget? notificationsIcon;
+  final Widget? notificationsSelectedIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -27,6 +38,13 @@ class AuthenticatedShell extends StatelessWidget {
             icon: Icon(Icons.event_note_outlined),
             selectedIcon: Icon(Icons.event_note),
             label: 'Sessions',
+          ),
+          NavigationDestination(
+            icon: notificationsIcon ?? const Icon(Icons.notifications_outlined),
+            selectedIcon:
+                notificationsSelectedIcon ??
+                const Icon(Icons.notifications_rounded),
+            label: 'Alerts',
           ),
           const NavigationDestination(
             icon: Icon(Icons.person_outline),
@@ -72,6 +90,7 @@ class AuthenticatedShell extends StatelessWidget {
     final route = switch (index) {
       0 => AppRoutes.home,
       1 => AppRoutes.sessions,
+      2 => AppRoutes.notifications,
       _ => AppRoutes.profile,
     };
     context.go(route);

@@ -21,6 +21,10 @@ import 'package:peerpass/features/incentives/presentation/screens/certificate_sc
 import 'package:peerpass/features/matching/data/repositories/fake_matching_repository.dart';
 import 'package:peerpass/features/matching/data/repositories/matching_repository.dart';
 import 'package:peerpass/features/matching/presentation/screens/tutor_requests_screen.dart';
+import 'package:peerpass/features/notifications/data/models/notification_model.dart';
+import 'package:peerpass/features/notifications/data/repositories/fake_notifications_repository.dart';
+import 'package:peerpass/features/notifications/data/repositories/notifications_repository.dart';
+import 'package:peerpass/features/notifications/presentation/screens/notifications_screen.dart';
 import 'package:peerpass/features/sessions/data/repositories/fake_sessions_repository.dart';
 import 'package:peerpass/features/sessions/data/repositories/sessions_repository.dart';
 
@@ -463,6 +467,48 @@ void main() {
     // The empty state, because this fake proposes nobody. What is asserted is the
     // screen and its honest copy, not the absence of an error.
     expect(find.text('No one is waiting on you'), findsOneWidget);
+    expect(find.text(_homeText), findsNothing);
+  });
+
+  testWidgets('the alerts tab opens the inbox and the guard keeps it', (
+    tester,
+  ) async {
+    // The tab, the route, and the redirect allow-list in one chain. Each half can
+    // be right on its own while the app still bounces a student back home: the
+    // shell navigates, the guard undoes it, and the destination looks broken.
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(_signedIn()),
+          notificationsRepositoryProvider.overrideWithValue(
+            FakeNotificationsRepository(
+              notifications: [
+                AppNotification(
+                  id: 'notification-1',
+                  typeWire: AppNotificationType.requestReceived.wireValue,
+                  title: 'New tutoring request',
+                  body: 'A student needs help with CSC 121.',
+                  data: const {
+                    'kind': 'help_request',
+                    'request_id': 'request-1',
+                  },
+                  createdAt: DateTime.utc(2026, 11, 3, 9),
+                ),
+              ],
+            ),
+          ),
+        ],
+        child: const PeerPassApp(),
+      ),
+    );
+    await _settle(tester);
+    expect(find.text(_homeText), findsOneWidget);
+
+    await tester.tap(find.text('Alerts'));
+    await _settle(tester);
+
+    expect(find.byType(NotificationsScreen), findsOneWidget);
+    expect(find.text('New tutoring request'), findsOneWidget);
     expect(find.text(_homeText), findsNothing);
   });
 }

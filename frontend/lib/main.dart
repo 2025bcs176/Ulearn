@@ -18,6 +18,9 @@ import 'package:peerpass/features/incentives/data/repositories/remote_incentives
 import 'package:peerpass/features/matching/data/datasources/remote_matching_datasource.dart';
 import 'package:peerpass/features/matching/data/repositories/matching_repository.dart';
 import 'package:peerpass/features/matching/data/repositories/remote_matching_repository.dart';
+import 'package:peerpass/features/notifications/data/datasources/remote_notifications_datasource.dart';
+import 'package:peerpass/features/notifications/data/repositories/notifications_repository.dart';
+import 'package:peerpass/features/notifications/data/repositories/remote_notifications_repository.dart';
 import 'package:peerpass/features/sessions/data/datasources/remote_sessions_datasource.dart';
 import 'package:peerpass/features/sessions/data/repositories/remote_sessions_repository.dart';
 import 'package:peerpass/features/sessions/data/repositories/sessions_repository.dart';
@@ -79,6 +82,9 @@ Future<void> main() async {
   final matchingRepository = RemoteMatchingRepository(
     RemoteMatchingDatasource(dio, cache: sessionCache),
   );
+  final notificationsRepository = RemoteNotificationsRepository(
+    RemoteNotificationsDatasource(dio),
+  );
   final incentivesRepository = RemoteIncentivesRepository(
     RemoteIncentivesDatasource(dio),
   );
@@ -93,8 +99,8 @@ Future<void> main() async {
       // data layer for a fake in one line.
       //
       // `sessionsRepositoryProvider`, `tutorsRepositoryProvider`,
-      // `matchingRepositoryProvider`, `incentivesRepositoryProvider` and
-      // `competenciesRepositoryProvider` all
+      // `matchingRepositoryProvider`, `notificationsRepositoryProvider`,
+      // `incentivesRepositoryProvider` and `competenciesRepositoryProvider` all
       // throw unless they are overridden, so leaving one out does not degrade to
       // a fake that quietly reports no sessions, no tutors and nobody eligible:
       // the failure is immediate and names the missing override.
@@ -104,6 +110,9 @@ Future<void> main() async {
         sessionsRepositoryProvider.overrideWithValue(sessionsRepository),
         tutorsRepositoryProvider.overrideWithValue(tutorsRepository),
         matchingRepositoryProvider.overrideWithValue(matchingRepository),
+        notificationsRepositoryProvider.overrideWithValue(
+          notificationsRepository,
+        ),
         incentivesRepositoryProvider.overrideWithValue(incentivesRepository),
         competenciesRepositoryProvider.overrideWithValue(
           competenciesRepository,
