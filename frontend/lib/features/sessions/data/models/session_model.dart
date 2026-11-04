@@ -83,7 +83,10 @@ class SessionModel {
     this.scheduledStart,
     this.startedAt,
     this.endedAt,
-    this.completionRequestedAt,
+    this.tutorCheckedInAt,
+    this.tuteeCheckedInAt,
+    this.tutorFinishedAt,
+    this.tuteeFinishedAt,
     this.durationMinutes = 0,
     this.meetingLink,
     this.meetingVenue,
@@ -154,7 +157,10 @@ class SessionModel {
       scheduledStart: _readDateTime(json, 'scheduled_start'),
       startedAt: _readDateTime(json, 'started_at'),
       endedAt: _readDateTime(json, 'ended_at'),
-      completionRequestedAt: _readDateTime(json, 'completion_requested_at'),
+      tutorCheckedInAt: _readDateTime(json, 'tutor_checked_in_at'),
+      tuteeCheckedInAt: _readDateTime(json, 'tutee_checked_in_at'),
+      tutorFinishedAt: _readDateTime(json, 'tutor_finished_at'),
+      tuteeFinishedAt: _readDateTime(json, 'tutee_finished_at'),
       durationMinutes: (json['duration_minutes'] as num?)?.toInt() ?? 0,
       meetingLink: _readString(json, 'meeting_link'),
       meetingVenue: _readString(json, 'meeting_venue'),
@@ -219,17 +225,43 @@ class SessionModel {
 
   final DateTime? endedAt;
 
-  final DateTime? completionRequestedAt;
+  /// When the tutor independently tapped "I'm here", if they have.
+  final DateTime? tutorCheckedInAt;
+
+  /// When the student independently tapped "I'm here", if they have.
+  final DateTime? tuteeCheckedInAt;
+
+  /// When the tutor independently tapped "Finish", if they have.
+  final DateTime? tutorFinishedAt;
+
+  /// When the student independently tapped "Finish", if they have.
+  final DateTime? tuteeFinishedAt;
 
   final int durationMinutes;
 
-  /// The six-digit handshake pin the API generated.
+  /// The arrival timestamp for [publicId], or null when they have not joined.
   ///
-  /// Shown to the tutee and never to the tutor. The API sends it to both parties
-  /// because they share one response shape, which means the pin is not a secret
-  /// from a client that reads the payload -- the handshake proves the tutor was
-  /// in the room, not that they did not read the API. Recorded here so the
-  /// limitation is visible in the one place that could act on it.
+  /// One lookup for the four timestamp columns so a screen never has to ask
+  /// "which side am I?" and then index into a map of columns. Null for a viewer
+  /// who is neither party, which a stale cached profile can produce.
+  DateTime? checkedInAt(String publicId) {
+    if (isTutor(publicId)) return tutorCheckedInAt;
+    if (isTutee(publicId)) return tuteeCheckedInAt;
+    return null;
+  }
+
+  /// The departure timestamp for [publicId], or null when they have not finished.
+  DateTime? finishedAt(String publicId) {
+    if (isTutor(publicId)) return tutorFinishedAt;
+    if (isTutee(publicId)) return tuteeFinishedAt;
+    return null;
+  }
+
+  /// Whether [publicId] has independently recorded their arrival.
+  bool hasCheckedIn(String publicId) => checkedInAt(publicId) != null;
+
+  /// Whether [publicId] has independently recorded their departure.
+  bool hasFinished(String publicId) => finishedAt(publicId) != null;
 
   /// The meeting link the tutor shared, if any.
   ///
@@ -304,7 +336,12 @@ class SessionModel {
   SessionModel copyWith({
     String? statusWire,
     TutoringSessionStatus? status,
-    DateTime? completionRequestedAt,
+    DateTime? startedAt,
+    DateTime? endedAt,
+    DateTime? tutorCheckedInAt,
+    DateTime? tuteeCheckedInAt,
+    DateTime? tutorFinishedAt,
+    DateTime? tuteeFinishedAt,
     int? durationMinutes,
     String? meetingLink,
     String? meetingVenue,
@@ -325,10 +362,12 @@ class SessionModel {
       status: status ?? this.status,
       helpRequestId: helpRequestId,
       scheduledStart: scheduledStart,
-      startedAt: startedAt,
-      endedAt: endedAt,
-      completionRequestedAt:
-          completionRequestedAt ?? this.completionRequestedAt,
+      startedAt: startedAt ?? this.startedAt,
+      endedAt: endedAt ?? this.endedAt,
+      tutorCheckedInAt: tutorCheckedInAt ?? this.tutorCheckedInAt,
+      tuteeCheckedInAt: tuteeCheckedInAt ?? this.tuteeCheckedInAt,
+      tutorFinishedAt: tutorFinishedAt ?? this.tutorFinishedAt,
+      tuteeFinishedAt: tuteeFinishedAt ?? this.tuteeFinishedAt,
       durationMinutes: durationMinutes ?? this.durationMinutes,
       meetingLink: meetingLink ?? this.meetingLink,
       meetingVenue: meetingVenue ?? this.meetingVenue,
@@ -352,7 +391,10 @@ class SessionModel {
           other.scheduledStart == scheduledStart &&
           other.startedAt == startedAt &&
           other.endedAt == endedAt &&
-          other.completionRequestedAt == completionRequestedAt &&
+          other.tutorCheckedInAt == tutorCheckedInAt &&
+          other.tuteeCheckedInAt == tuteeCheckedInAt &&
+          other.tutorFinishedAt == tutorFinishedAt &&
+          other.tuteeFinishedAt == tuteeFinishedAt &&
           other.durationMinutes == durationMinutes &&
           other.meetingLink == meetingLink &&
           other.meetingVenue == meetingVenue &&
@@ -372,7 +414,10 @@ class SessionModel {
     scheduledStart,
     startedAt,
     endedAt,
-    completionRequestedAt,
+    tutorCheckedInAt,
+    tuteeCheckedInAt,
+    tutorFinishedAt,
+    tuteeFinishedAt,
     durationMinutes,
     meetingLink,
     meetingVenue,
@@ -409,68 +454,4 @@ DateTime? _readDateTime(Map<String, dynamic> json, String key) {
   final value = json[key];
   if (value == null) return null;
   return DateTime.parse(value as String);
-}
-
-@immutable
-/// The handshake pin, as the tutor reads it out.
-///
-/// Its own type rather than a field on `SessionModel`, because the pin is not
-/// part of a session: it belongs to one party. While it sat on the model, the
-/// tutee's own session screen carried their pin, and the whole handshake could be
-/// completed by one person without the other ever being there.
-class SessionPinModel {
-  const SessionPinModel({
-    required this.sessionId,
-    required this.sessionPin,
-    required this.attemptsRemaining,
-  });
-
-  /// Reads the wire form of `GET /v1/sessions/{id}/pin`.
-  ///
-  /// The pin itself is required. This response exists only to carry it, so its
-  /// absence is a server fault rather than a state to render around -- unlike
-  /// every optional field on `SessionModel`, where absence has a neutral reading.
-  factory SessionPinModel.fromJson(Map<String, dynamic> json) {
-    final sessionId = json['session_id'];
-    final pin = json['session_pin'];
-    if (sessionId is! String || pin is! String) {
-      throw FormatException('PIN response is missing its session or pin', json);
-    }
-    final remaining = json['attempts_remaining'];
-    if (remaining is! int) {
-      throw FormatException(
-        'PIN response is missing its attempts remaining count',
-        json,
-      );
-    }
-    return SessionPinModel(
-      sessionId: sessionId,
-      sessionPin: pin,
-      attemptsRemaining: remaining,
-    );
-  }
-
-  final String sessionId;
-  final String sessionPin;
-
-  /// Wrong entries left before the tutee is put on a cooldown.
-  ///
-  /// Shown to the tutor so they can stop guessing on the tutee's behalf. The
-  /// lockout itself is the API's: a ceiling counted on a device is one a student
-  /// clears by reinstalling the app.
-  final int attemptsRemaining;
-
-  @override
-  bool operator ==(Object other) =>
-      other is SessionPinModel &&
-      other.sessionId == sessionId &&
-      other.sessionPin == sessionPin &&
-      other.attemptsRemaining == attemptsRemaining;
-
-  @override
-  int get hashCode => Object.hash(sessionId, sessionPin, attemptsRemaining);
-
-  @override
-  String toString() =>
-      'SessionPinModel($sessionId, attempts: $attemptsRemaining)';
 }

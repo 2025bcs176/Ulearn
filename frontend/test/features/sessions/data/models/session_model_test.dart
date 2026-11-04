@@ -9,6 +9,10 @@ Map<String, dynamic> _session({
   String? scheduledStart = '2026-03-04T09:00:00Z',
   String? startedAt,
   String? endedAt,
+  String? tutorCheckedInAt,
+  String? tuteeCheckedInAt,
+  String? tutorFinishedAt,
+  String? tuteeFinishedAt,
   String? meetingLink = 'https://meet.peerpass.test/abc',
   String? meetingVenue = 'FCI Lab 1',
   String? meetingVenueDetail = 'Room B',
@@ -32,6 +36,10 @@ Map<String, dynamic> _session({
     'scheduled_start': scheduledStart,
     'started_at': startedAt,
     'ended_at': endedAt,
+    'tutor_checked_in_at': tutorCheckedInAt,
+    'tutee_checked_in_at': tuteeCheckedInAt,
+    'tutor_finished_at': tutorFinishedAt,
+    'tutee_finished_at': tuteeFinishedAt,
     'meeting_link': meetingLink,
     'meeting_venue': meetingVenue,
     'meeting_venue_detail': meetingVenueDetail,
@@ -45,6 +53,10 @@ void main() {
         _session(
           startedAt: '2026-03-04T09:05:00Z',
           endedAt: '2026-03-04T10:00:00Z',
+          tutorCheckedInAt: '2026-03-04T09:05:00Z',
+          tuteeCheckedInAt: '2026-03-04T09:07:00Z',
+          tutorFinishedAt: '2026-03-04T10:02:00Z',
+          tuteeFinishedAt: '2026-03-04T10:00:00Z',
         ),
       );
 
@@ -63,6 +75,17 @@ void main() {
       expect(session.scheduledStart, DateTime.utc(2026, 3, 4, 9));
       expect(session.startedAt, DateTime.utc(2026, 3, 4, 9, 5));
       expect(session.endedAt, DateTime.utc(2026, 3, 4, 10));
+      expect(session.tutorCheckedInAt, DateTime.utc(2026, 3, 4, 9, 5));
+      expect(session.tuteeCheckedInAt, DateTime.utc(2026, 3, 4, 9, 7));
+      expect(session.tutorFinishedAt, DateTime.utc(2026, 3, 4, 10, 2));
+      expect(session.tuteeFinishedAt, DateTime.utc(2026, 3, 4, 10));
+      // The pass is keyed to a party, so the screen never has to choose a
+      // column by hand.
+      expect(session.checkedInAt('student-1'), session.tuteeCheckedInAt);
+      expect(session.checkedInAt('tutor-1'), session.tutorCheckedInAt);
+      expect(session.finishedAt('student-1'), session.tuteeFinishedAt);
+      expect(session.hasFinished('tutor-1'), isTrue);
+      expect(session.checkedInAt('someone-else'), isNull);
     });
 
     test('tells the two parties apart', () {
@@ -115,6 +138,10 @@ void main() {
           ..remove('scheduled_start')
           ..remove('started_at')
           ..remove('ended_at')
+          ..remove('tutor_checked_in_at')
+          ..remove('tutee_checked_in_at')
+          ..remove('tutor_finished_at')
+          ..remove('tutee_finished_at')
           ..remove('meeting_link')
           ..remove('meeting_venue')
           ..remove('meeting_venue_detail'),
@@ -123,6 +150,10 @@ void main() {
       expect(session.scheduledStart, isNull);
       expect(session.startedAt, isNull);
       expect(session.endedAt, isNull);
+      expect(session.tutorCheckedInAt, isNull);
+      expect(session.tuteeCheckedInAt, isNull);
+      expect(session.tutorFinishedAt, isNull);
+      expect(session.tuteeFinishedAt, isNull);
       expect(session.meetingLink, isNull);
       expect(session.venueLabel, isNull);
     });
@@ -136,6 +167,10 @@ void main() {
           ..['scheduled_start'] = null
           ..['started_at'] = null
           ..['ended_at'] = null
+          ..['tutor_checked_in_at'] = null
+          ..['tutee_checked_in_at'] = null
+          ..['tutor_finished_at'] = null
+          ..['tutee_finished_at'] = null
           ..['meeting_link'] = null
           ..['meeting_venue'] = null
           ..['meeting_venue_detail'] = null,
@@ -144,6 +179,8 @@ void main() {
       expect(session.scheduledStart, isNull);
       expect(session.startedAt, isNull);
       expect(session.endedAt, isNull);
+      expect(session.tutorCheckedInAt, isNull);
+      expect(session.tuteeCheckedInAt, isNull);
       expect(session.meetingLink, isNull);
       expect(session.venueLabel, isNull);
       // A null in one optional field does not take the rest of the record with it.

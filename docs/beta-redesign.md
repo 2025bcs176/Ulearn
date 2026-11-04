@@ -222,8 +222,12 @@ Kept current so the plan and the code do not drift apart.
       push remains deferred until the in-app inbox is in the beta build.
 - [x] **Sessions backend.** Mutual check-in and finish endpoints, the four
       attendance timestamps, a reversible migration, database constraints for
-      both halves of the handshake, and notifications when a session starts and
+      both halves of the pass, and notifications when a session starts and
       completes. Minutes are the overlap both parties attended.
-- [ ] Sessions client: check-in/finish timeline, rating with tags.
+- [x] **Sessions client.** The check-in/finish pass replaces the PIN form: each
+      party records their own arrival and departure, the card names who is
+      still to tap, and finishing asks before it records a time that cannot be
+      changed. The detail screen no longer offers a status transition.
+- [ ] Rating with tags, from the fixed vocabulary.
 - [ ] Tutor HQ.
 - [ ] Hardening, validation, dry run, launch.

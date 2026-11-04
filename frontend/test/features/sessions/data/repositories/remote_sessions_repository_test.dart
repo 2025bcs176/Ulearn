@@ -94,7 +94,6 @@ Map<String, dynamic> _session({
     'is_rated': false,
     'created_at': '2026-03-01T08:00:00Z',
     'scheduled_start': '2026-03-04T09:00:00Z',
-    'session_pin': '654321',
     'meeting_link': null,
   };
 }
@@ -115,7 +114,7 @@ Map<String, dynamic> _rating({int score = 5, String? feedback}) {
 Map<String, dynamic> _problem({
   int status = 422,
   String title = 'Validation failed',
-  String detail = 'The session PIN is incorrect.',
+  String detail = 'The server refused that change.',
   Map<String, String>? errors,
 }) {
   return {
@@ -205,87 +204,73 @@ void main() {
     );
   });
 
-  group('the handshake', () {
-    test(
-      'posts the pin to the pin endpoint and adopts what comes back',
-      () async {
-        server.reply(200, _session(status: 'in_progress'));
+  group('checking in', () {
+    test('posts to the check-in endpoint with no body', () async {
+      server.reply(200, _session(status: 'in_progress'));
 
-        final session = await repository.verifyPin(
-          sessionId: 'session-1',
-          pin: '654321',
+      final session = await repository.checkIn(sessionId: 'session-1');
+
+      expect(server.calls.single.method, 'POST');
+      expect(server.calls.single.path, '/v1/sessions/session-1/check-in');
+      // The token identifies the party. A body naming a user would be a client
+      // able to check in for someone else.
+      expect(server.calls.single.body, isNull);
+      expect(session.status, TutoringSessionStatus.inProgress);
+    });
+
+    test(
+      'a session that is no longer open surfaces the API sentence',
+      () async {
+        server.reply(
+          409,
+          _problem(
+            status: 409,
+            detail: 'This session is no longer open for check-in.',
+          ),
         );
 
-        expect(server.calls.single.method, 'POST');
-        expect(server.calls.single.path, '/v1/sessions/session-1/verify-pin');
-        expect(server.calls.single.body, {'pin': '654321'});
-        expect(session.status, TutoringSessionStatus.inProgress);
-      },
-    );
-
-    test(
-      'a wrong pin keeps the API sentence and the field it blames',
-      () async {
-        // The tutor's screen needs both halves: which field was wrong, and that the
-        // session did *not* start. Losing the field list would leave the error under
-        // the PIN box with nothing tying it to the box.
-        server.reply(422, _problem(errors: {'pin': 'incorrect'}));
-
         await expectLater(
-          repository.verifyPin(sessionId: 'session-1', pin: '41'),
+          repository.checkIn(sessionId: 'session-1'),
           throwsA(
-            isA<ValidationFailure>()
-                .having(
-                  (f) => f.message,
-                  'message',
-                  'The session PIN is incorrect.',
-                )
-                .having(
-                  (f) => f.fieldErrors,
-                  'fieldErrors',
-                  containsPair('pin', 'incorrect'),
-                ),
+            isA<ConflictFailure>().having(
+              (f) => f.message,
+              'message',
+              'This session is no longer open for check-in.',
+            ),
           ),
         );
       },
     );
   });
 
-  group('ending a session', () {
-    test('transitions to completed and takes what the API says back', () async {
+  group('finishing', () {
+    test('posts to the finish endpoint with no body', () async {
       server.reply(200, _session(status: 'completed'));
 
-      final session = await repository.endSession('session-1');
+      final session = await repository.finish(sessionId: 'session-1');
 
       expect(server.calls.single.method, 'POST');
-      expect(server.calls.single.path, '/v1/sessions/session-1/transition');
-      expect(server.calls.single.body, {'status': 'completed'});
-      // The client does not stamp its own end time: the API records the hours, and
-      // a duration the client invented is one the certificate maths would trust.
+      expect(server.calls.single.path, '/v1/sessions/session-1/finish');
+      expect(server.calls.single.body, isNull);
+      // The client does not stamp its own end time: the API records the hours,
+      // and a duration the client invented is one the certificate maths would
+      // trust.
       expect(session.status, TutoringSessionStatus.completed);
     });
 
-    test('a refused transition surfaces the API sentence', () async {
-      // 409 is a conflict rather than a server fault, and the sentence is the
-      // whole point: "this session is already cancelled" is actionable and a
-      // generic "something went wrong" is not.
+    test('finishing before the session is live is a conflict', () async {
       server.reply(
         409,
         _problem(
           status: 409,
-          detail: 'A cancelled session cannot be completed.',
+          detail:
+              'Only a session both parties have checked in to can be finished.',
         ),
       );
 
       await expectLater(
-        repository.endSession('session-1'),
-        throwsA(
-          isA<ConflictFailure>().having(
-            (f) => f.message,
-            'message',
-            'A cancelled session cannot be completed.',
-          ),
-        ),
+        repository.finish(sessionId: 'session-1'),
+        throwsA(isA<ConflictFailure>()),
       );
     });
   });

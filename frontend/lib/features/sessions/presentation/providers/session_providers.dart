@@ -95,10 +95,9 @@ SessionModel? activeSessionFrom(List<SessionModel> sessions) {
 ///
 /// The state object rather than an `AsyncValue` of the session, because this
 /// screen has two independent things to say: whether the session loaded, and
-/// whether the *last action* on it worked. A wrong PIN has to appear under the
-/// input that caused it with the session still on screen, so the two cannot share
-/// one value -- an [AsyncError] would throw the session away to report a rejected
-/// six-digit guess.
+/// whether the *last action* on it worked. A refused check-in has to appear with
+/// the session still on screen, so the two cannot share one value -- an
+/// [AsyncError] would throw the session away to report a failed tap.
 ///
 /// A submitted rating is held here so the tutee can see it immediately after
 /// submission. Tutors read their received feedback through the scoped provider
@@ -113,7 +112,6 @@ class SessionDetailState {
     this.submitting = false,
     this.actionFailure,
     this.ratingGiven,
-    this.completionCode,
   });
 
   final SessionModel? session;
@@ -123,7 +121,7 @@ class SessionDetailState {
   /// Why the session could not be read.
   ///
   /// Kept apart from [actionFailure] because the two call for different remedies:
-  /// a load that failed is worth retrying, and a wrong PIN is not.
+  /// a load that failed is worth retrying, and a refused check-in is not.
   final Failure? loadFailure;
 
   /// Whether an action on this session is in flight.
@@ -134,17 +132,6 @@ class SessionDetailState {
 
   /// The rating this client submitted for this session, when it submitted one.
   final RatingModel? ratingGiven;
-  final SessionPinModel? completionCode;
-
-  /// Whether the last refusal was about the handshake pin.
-  ///
-  /// Read off the failure rather than remembered separately, so the two cannot
-  /// disagree. The API answers a wrong pin with a 400 naming `pin` and nothing
-  /// else, and that is the only rejection that belongs under the input rather
-  /// than in a banner.
-  bool get pinRejected =>
-      actionFailure is ValidationFailure &&
-      (actionFailure! as ValidationFailure).fieldErrors.containsKey('pin');
 
   SessionDetailState copyWith({
     SessionModel? session,
@@ -153,7 +140,6 @@ class SessionDetailState {
     bool? submitting,
     Failure? actionFailure,
     RatingModel? ratingGiven,
-    SessionPinModel? completionCode,
     bool clearLoadFailure = false,
     bool clearActionFailure = false,
   }) {
@@ -168,7 +154,6 @@ class SessionDetailState {
           ? null
           : (actionFailure ?? this.actionFailure),
       ratingGiven: ratingGiven ?? this.ratingGiven,
-      completionCode: completionCode ?? this.completionCode,
     );
   }
 
@@ -181,8 +166,7 @@ class SessionDetailState {
           other.loadFailure == loadFailure &&
           other.submitting == submitting &&
           other.actionFailure == actionFailure &&
-          other.ratingGiven == ratingGiven &&
-          other.completionCode == completionCode;
+          other.ratingGiven == ratingGiven;
 
   @override
   int get hashCode => Object.hash(
@@ -192,7 +176,6 @@ class SessionDetailState {
     submitting,
     actionFailure,
     ratingGiven,
-    completionCode,
   );
 }
 
@@ -236,23 +219,20 @@ class SessionDetailController extends Notifier<SessionDetailState> {
     await _load();
   }
 
-  /// Submits the handshake pin, returning whether the session started.
+  /// Records this user's arrival, returning whether the tap was accepted.
   ///
-  /// The value is checked by the API and by nothing else: no attempt counter, no
-  /// lock-out, no client-side guess at how close the pin was. A student on a bad
-  /// connection who mistypes twice must be able to try a third time, and a lock
-  /// the device enforces is a lock they clear by reinstalling the app.
-  Future<bool> submitPin(String pin) async {
+  /// A second tap is idempotent on the server, so the screen does not need to
+  /// remember whether it already asked. The session still only goes live when
+  /// the other account checks in, and this returns the row either way so the
+  /// screen can say who it is waiting for.
+  Future<bool> checkIn() async {
     if (state.submitting) return false;
     state = state.copyWith(submitting: true, clearActionFailure: true);
 
     try {
-      final started = await _repository.verifyPin(
-        sessionId: sessionId,
-        pin: pin,
-      );
+      final checkedIn = await _repository.checkIn(sessionId: sessionId);
       if (!ref.mounted) return false;
-      _adopt(started);
+      _adopt(checkedIn);
       return true;
     } on Object catch (error) {
       if (!ref.mounted) return false;
@@ -264,56 +244,18 @@ class SessionDetailController extends Notifier<SessionDetailState> {
     }
   }
 
-  /// Ends a live session, returning whether it ended.
-  Future<bool> endSession() async {
+  /// Records this user's departure, returning whether the tap was accepted.
+  ///
+  /// The first finish leaves the session in progress: the other party has not
+  /// said they are done, and the API will not complete it on one person's word.
+  Future<bool> finish() async {
     if (state.submitting) return false;
     state = state.copyWith(submitting: true, clearActionFailure: true);
 
     try {
-      final completed = await _repository.requestCompletion(
-        sessionId: sessionId,
-      );
+      final finished = await _repository.finish(sessionId: sessionId);
       if (!ref.mounted) return false;
-      _adopt(completed);
-      return true;
-    } on Object catch (error) {
-      if (!ref.mounted) return false;
-      state = state.copyWith(
-        submitting: false,
-        actionFailure: failureFor(error),
-      );
-      return false;
-    }
-  }
-
-  Future<bool> revealCompletionCode() async {
-    if (state.submitting) return false;
-    state = state.copyWith(submitting: true, clearActionFailure: true);
-    try {
-      final code = await _repository.revealCompletionCode(sessionId: sessionId);
-      if (!ref.mounted) return false;
-      state = state.copyWith(submitting: false, completionCode: code);
-      return true;
-    } on Object catch (error) {
-      if (!ref.mounted) return false;
-      state = state.copyWith(
-        submitting: false,
-        actionFailure: failureFor(error),
-      );
-      return false;
-    }
-  }
-
-  Future<bool> verifyCompletionCode(String code) async {
-    if (state.submitting) return false;
-    state = state.copyWith(submitting: true, clearActionFailure: true);
-    try {
-      final completed = await _repository.verifyCompletionCode(
-        sessionId: sessionId,
-        code: code,
-      );
-      if (!ref.mounted) return false;
-      _adopt(completed);
+      _adopt(finished);
       return true;
     } on Object catch (error) {
       if (!ref.mounted) return false;
