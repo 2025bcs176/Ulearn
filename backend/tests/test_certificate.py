@@ -138,6 +138,12 @@ async def _session(
     )
     db_session.add_all([university, subject, unit, student])
     await db_session.flush()
+    # The mutual check-in constraints are part of the schema now, so a row that
+    # claims to be live has to carry both arrivals and a completed row both
+    # departures. Tests that are about the certificate read, not attendance,
+    # still need rows the schema accepts.
+    live = status in {SessionStatus.IN_PROGRESS, SessionStatus.COMPLETED}
+    attendance_start = started_at or datetime.now(UTC)
     session = Session(
         tutee_id=student.id,
         tutor_id=tutor.id,
@@ -146,6 +152,14 @@ async def _session(
         status=status,
         started_at=started_at,
         ended_at=ended_at,
+        tutor_checked_in_at=attendance_start if live else None,
+        tutee_checked_in_at=attendance_start if live else None,
+        tutor_finished_at=(ended_at or datetime.now(UTC))
+        if status is SessionStatus.COMPLETED
+        else None,
+        tutee_finished_at=(ended_at or datetime.now(UTC))
+        if status is SessionStatus.COMPLETED
+        else None,
         duration_minutes=duration_minutes,
     )
     db_session.add(session)
@@ -498,16 +512,8 @@ async def test_the_session_lifecycle_is_what_banks_the_minutes(client, db_sessio
 
     tutee = await db_session.scalar(select(User).where(User.id == session.tutee_id))
     assert tutee is not None
-    await session_service.request_completion_pin(db_session, tutor, session.public_id)
-    completion = await session_service.reveal_completion_pin(
-        db_session, tutee, session.public_id
-    )
-    completed = await session_service.verify_completion_pin(
-        db_session,
-        tutor,
-        session.public_id,
-        completion.session_pin,
-    )
+    await session_service.finish(db_session, tutor, session.public_id)
+    completed = await session_service.finish(db_session, tutee, session.public_id)
     assert completed.duration_minutes == 90
 
     payload = (

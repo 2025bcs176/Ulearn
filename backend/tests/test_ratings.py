@@ -75,6 +75,10 @@ async def _seed_session(db_session):
         started_at=datetime.now(UTC),
         ended_at=datetime.now(UTC),
         duration_minutes=60,
+        tutor_checked_in_at=datetime.now(UTC),
+        tutee_checked_in_at=datetime.now(UTC),
+        tutor_finished_at=datetime.now(UTC),
+        tutee_finished_at=datetime.now(UTC),
     )
     db_session.add_all([profile, session])
     await db_session.flush()
@@ -182,6 +186,10 @@ async def test_submit_rating_reduces_standing_when_average_falls_below_bar(db_se
         started_at=datetime.now(UTC),
         ended_at=datetime.now(UTC),
         duration_minutes=60,
+        tutor_checked_in_at=datetime.now(UTC),
+        tutee_checked_in_at=datetime.now(UTC),
+        tutor_finished_at=datetime.now(UTC),
+        tutee_finished_at=datetime.now(UTC),
     )
     db_session.add_all([profile, session])
     await db_session.flush()
@@ -324,6 +332,10 @@ async def test_rating_through_the_router_promotes_and_serialises(
         started_at=datetime.now(UTC),
         ended_at=datetime.now(UTC),
         duration_minutes=60,
+        tutor_checked_in_at=datetime.now(UTC),
+        tutee_checked_in_at=datetime.now(UTC),
+        tutor_finished_at=datetime.now(UTC),
+        tutee_finished_at=datetime.now(UTC),
     )
     db_session.add_all([profile, session])
     await db_session.commit()

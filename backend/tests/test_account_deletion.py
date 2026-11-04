@@ -268,6 +268,10 @@ class TestEvidenceSurvives:
             status=SessionStatus.COMPLETED,
             started_at=datetime.now(UTC),
             ended_at=datetime.now(UTC),
+            tutor_checked_in_at=datetime.now(UTC),
+            tutee_checked_in_at=datetime.now(UTC),
+            tutor_finished_at=datetime.now(UTC),
+            tutee_finished_at=datetime.now(UTC),
         )
         db_session.add(session)
         await db_session.commit()
@@ -323,6 +327,10 @@ class TestEvidenceSurvives:
             status=SessionStatus.COMPLETED,
             started_at=datetime.now(UTC),
             ended_at=datetime.now(UTC),
+            tutor_checked_in_at=datetime.now(UTC),
+            tutee_checked_in_at=datetime.now(UTC),
+            tutor_finished_at=datetime.now(UTC),
+            tutee_finished_at=datetime.now(UTC),
         )
         db_session.add(session)
         await db_session.flush()
@@ -364,6 +372,10 @@ class TestEvidenceSurvives:
             status=SessionStatus.COMPLETED,
             started_at=datetime.now(UTC),
             ended_at=datetime.now(UTC),
+            tutor_checked_in_at=datetime.now(UTC),
+            tutee_checked_in_at=datetime.now(UTC),
+            tutor_finished_at=datetime.now(UTC),
+            tutee_finished_at=datetime.now(UTC),
         )
         db_session.add(session)
         await db_session.flush()

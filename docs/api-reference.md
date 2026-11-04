@@ -875,10 +875,7 @@ response does not confirm that someone else's session exists.
 ### `POST /v1/sessions`
 
 Confirms a selected help request and creates the scheduled session. 201 with the
-session, and a six-digit one-time handshake code is issued.
-
-The PIN is **not** in the response. It belongs to the tutor and is read from
-`GET /v1/sessions/{session_id}/pin`; see below for why it is not shared.
+session. No code is issued: attendance is two check-ins, not a PIN.
 
 ```json
 {
@@ -916,86 +913,73 @@ than `""` so it cannot collide with `GET /v1/sessions/{session_id}`.
 
 ### `GET /v1/sessions/{session_id}`
 
-One session, by public id.
+One session, by public id. The response carries the four attendance timestamps,
+so each party can see whether they are waiting on the other.
+
+### `POST /v1/sessions/{session_id}/check-in`
+
+No request body. Records the caller's own arrival.
+
+One check-in leaves the session `scheduled`. The second moves it to
+`in_progress` and sets `started_at`. Neither account can do this alone, which is
+the whole difference from the retired PIN: there is no code one person can read
+to another, only two accounts independently saying they are present.
+
+Idempotent. A retried tap leaves the recorded timestamp where it is and answers
+200, because a phone on a slow connection retrying a check-in is ordinary and
+must not be shown a failure for a state it already reached.
+
+| Status | `detail`                                            |
+| ------ | --------------------------------------------------- |
+| 401    | Sign-in required.                                   |
+| 403    | You do not have access to that session.             |
+| 404    | That session could not be found.                    |
+| 409    | This session is no longer open for check-in.        |
+
+### `POST /v1/sessions/{session_id}/finish`
+
+No request body. Records the caller's own departure.
+
+The first finish leaves the session `in_progress`; the second moves it to
+`completed`, sets `ended_at`, banks the minutes, and notifies the tutee to rate.
+The elapsed window runs from `started_at` to the **earlier** of the two finishes:
+time after one participant left is not time that participant can confirm, so a
+party who forgets to tap finish an hour later cannot extend the session. The
+floor is one minute.
+
+Finishing before both parties have checked in is a 409. Finishing an already
+completed session is idempotent and does not bank anything a second time.
 
 ### `POST /v1/sessions/{session_id}/transition`
 
-`{"status": "..."}` to advance or cancel. The legal moves are enforced in the
-service, not here: requested → accepted → completed, and cancellation from
-anything that has not completed. An illegal move is a 409.
+`{"status": "cancelled", "cancellation_reason": "…"}` or
+`{"status": "no_show"}`. Used to cancel a booked session or record that it did
+not happen.
+
+Starting and completing are **not** transitions. `in_progress` and `completed`
+are refused with a 422 pointing at `check-in` and `finish`, so no single account
+can move a session to a state that claims the other person was present. An
+illegal move within the remaining states is a 409.
 
 `completed` has an **empty** allowed set, so a session can only be completed
-once. That is what makes the accrual below happen exactly once rather than once
-per retry: the session's minutes and the tutor's `completed_sessions` are written
-after the status is assigned, and a second `completed` transition is refused
-before either write is reached.
+once. The accrual happens under `finish`, after both departures are recorded and
+the status is assigned; a second completion is refused before either write is
+reached.
 
-The minute accrual runs on this transition, not on the status column. Nothing
-else can reach it, and the ordering matters: a transition that handed the row to
-the accrual before recording `completed` banked nothing at all, silently, on
-every call.
+### Attendance evidence
 
-### `POST /v1/sessions/{session_id}/verify-pin`
+The session response carries:
 
-`{"pin": "123456"}` — **the tutee submits the code the tutor shared.** Moves the
-session to `in_progress` when the code matches.
+- `tutor_checked_in_at`, `tutee_checked_in_at`
+- `tutor_finished_at`, `tutee_finished_at`
+- `started_at` — when the second check-in made the session live
+- `ended_at` — the earlier of the two finishes
+- `duration_minutes` — the overlap both parties were present, at least one
 
-The tutee only. A tutor asking here gets a 403: they are the one reading the
-digits aloud, so entering them would prove nothing, and it would let a tutor
-start a session on behalf of a student who never arrived.
-
-Six-digit and stored only as a SHA-256 digest. The code expires after **20
-minutes**. After **5** wrong entries the tutee is put on a **15 minute** cooldown
-and every further attempt — including the correct one — is a **429** carrying
-`retry_after_seconds`. The counter is on the session row, not in process memory,
-so it survives a restart and is shared across workers; it is committed on the
-failure path, and reset by a success. A **missing stored PIN is refused**, never
-treated as a match.
-
-### `GET /v1/sessions/{session_id}/pin`
-
-The tutor's half of the handshake: the six digits to share. **403 for the
-tutee**, because a tutee who could read their own code would have nothing to
-prove. Unavailable once the session has started.
-
-```json
-{
-  "session_id": "9f35…",
-  "session_pin": "123456",
-  "attempts_remaining": 5
-}
-```
-
-`attempts_remaining` is advisory, and exists so a tutor can stop a student
-guessing in a room where they are trying to learn. The lockout itself is the
-API's: a ceiling counted on a device is one a student clears by reinstalling the
-app.
-
-### Starting a session
-
-Starting is reachable **only** through `verify-pin`. `POST
-/v1/sessions/{id}/transition` used to accept a `pin` field and check it inline
-with no attempt counter, which made all 100 candidates walkable without touching
-the cooldown; it now refuses `in_progress` and points here. One path means the
-ceiling cannot be circumvented.
-
-### `POST /v1/sessions/{session_id}/request-completion`
-
-The tutor requests a second six-digit one-time code after the session has
-started. This marks the session as waiting for completion confirmation; it does
-not reveal a code.
-
-### `POST /v1/sessions/{session_id}/reveal-completion`
-
-The tutee reveals a fresh six-digit code after the tutor requests completion.
-The code expires after 20 minutes and is shown only in the tutee response.
-
-### `POST /v1/sessions/{session_id}/verify-completion`
-
-The tutor submits the second code revealed by the tutee. A successful verification records the end
-timestamp, calculates session minutes, and moves the session to `completed`.
-Direct `completed` transitions are rejected. An expired or exhausted code leaves
-the session in progress for operator review.
+The database refuses a live session with fewer than two check-ins and a
+completed session with fewer than two finishes. Session records are the source of
+truth for hours and certificates, so the evidence is enforced below the service
+as well as in it.
 
 ## Ratings
 
@@ -1087,8 +1071,8 @@ the token.
 | `request_received` | A student chooses a tutor | `help_request` |
 | `request_accepted` | The chosen tutor confirms and a session is created | `session` |
 | `request_declined` | The chosen tutor declines | `help_request` |
-| `session_started` | The tutee enters the handshake PIN | `session` |
-| `session_completed` | The tutor confirms completion | `session` |
+| `session_started` | The second party checks in and the session goes live | `session` |
+| `session_completed` | The second party finishes and the session completes | `session` |
 | `session_cancelled` | Either party cancels an upcoming or live session | `session` |
 | `rating_received` | A tutee rates a completed session | `rating` |
 | `promotion` | A tutor's standing moves to Verified | — |

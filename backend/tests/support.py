@@ -227,8 +227,8 @@ async def scheduled_session(
 ) -> dict:
     """Drive matching all the way to a created session, and return its payload.
 
-    Stops at the handshake: the session comes back `scheduled` with a PIN issued,
-    which is the state the PIN tests need to start from.
+    Stops at attendance: the session comes back `scheduled` with neither party
+    checked in, which is the state the check-in tests need to start from.
     """
     client = env.client
     request = await client.post(

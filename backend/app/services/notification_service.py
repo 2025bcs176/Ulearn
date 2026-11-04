@@ -166,18 +166,19 @@ async def request_declined(
 async def session_started(
     db: AsyncSession,
     *,
-    tutor_id: uuid.UUID,
-    tutee: User | None,
+    recipient_id: uuid.UUID,
+    checked_in: User | None,
     topic: str,
     session_id: uuid.UUID,
 ) -> None:
-    """Tell the tutor their student checked in and the session is live."""
+    """Tell the party who was already waiting that both are now present."""
     await notify(
         db,
-        tutor_id,
+        recipient_id,
         type=NotificationType.SESSION_STARTED,
         title="Session started",
-        body=f"{_display_name(tutee, 'Your student')} checked in for {topic}.",
+        body=f"{_display_name(checked_in, 'The other party')} checked in for "
+        f"{topic}. You are both here.",
         data={"kind": "session", "session_id": str(session_id)},
         dedupe_key=f"session-started:{session_id}",
     )

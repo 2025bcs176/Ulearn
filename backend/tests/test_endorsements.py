@@ -76,6 +76,10 @@ async def _seed(db_session, *, unit_code: str = "CSC 121") -> tuple:
         started_at=datetime.now(UTC),
         ended_at=datetime.now(UTC),
         duration_minutes=60,
+        tutor_checked_in_at=datetime.now(UTC),
+        tutee_checked_in_at=datetime.now(UTC),
+        tutor_finished_at=datetime.now(UTC),
+        tutee_finished_at=datetime.now(UTC),
     )
     db_session.add(session)
     await db_session.flush()
@@ -496,6 +500,10 @@ async def test_the_aggregate_counts_each_session_once_across_raters(db_session) 
         started_at=datetime.now(UTC),
         ended_at=datetime.now(UTC),
         duration_minutes=60,
+        tutor_checked_in_at=datetime.now(UTC),
+        tutee_checked_in_at=datetime.now(UTC),
+        tutor_finished_at=datetime.now(UTC),
+        tutee_finished_at=datetime.now(UTC),
     )
     db_session.add(second_session)
     await db_session.flush()
@@ -590,6 +598,10 @@ async def test_the_aggregate_is_ordered_and_stable(db_session) -> None:
             started_at=datetime.now(UTC),
             ended_at=datetime.now(UTC),
             duration_minutes=60,
+            tutor_checked_in_at=datetime.now(UTC),
+            tutee_checked_in_at=datetime.now(UTC),
+            tutor_finished_at=datetime.now(UTC),
+            tutee_finished_at=datetime.now(UTC),
         )
         db_session.add(rated_session)
         await db_session.flush()
@@ -697,6 +709,10 @@ async def _seed_for_the_wire(client, db_session, *, tag: str) -> tuple:
         started_at=datetime.now(UTC),
         ended_at=datetime.now(UTC),
         duration_minutes=60,
+        tutor_checked_in_at=datetime.now(UTC),
+        tutee_checked_in_at=datetime.now(UTC),
+        tutor_finished_at=datetime.now(UTC),
+        tutee_finished_at=datetime.now(UTC),
     )
     db_session.add(session)
     await db_session.flush()

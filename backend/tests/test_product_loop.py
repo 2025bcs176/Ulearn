@@ -121,42 +121,33 @@ async def test_the_full_tutoring_loop_records_everything_it_promises(
     assert session.status_code == 201, session.text
     session_id = session.json()["id"]
 
-    # --- the handshake starts the session --------------------------------
-    # The PIN is fetched from the tutor-only endpoint rather than read off the
-    # session payload. It used to be a field on `SessionResponse`, which meant
-    # the tutee could read their own PIN and start the session alone; the tutor
-    # revealing it is what makes the handshake mean anything.
-    pin_response = await client.get(
-        f"/v1/sessions/{session_id}/pin", headers=bearer(tutor)
+    # --- both parties check in, which starts the session ------------------
+    # Attendance is two independent taps, not a code one person reads to the
+    # other. Neither account can make the session live alone.
+    tutor_check_in = await client.post(
+        f"/v1/sessions/{session_id}/check-in", headers=bearer(tutor)
     )
-    assert pin_response.status_code == 200, pin_response.text
-    pin = pin_response.json()["session_pin"]
-    assert pin, "a session must be issued a handshake PIN"
-    started = await client.post(
-        f"/v1/sessions/{session_id}/verify-pin",
-        headers=bearer(student),
-        json={"pin": pin},
-    )
-    assert started.status_code == 200, started.text
-    assert started.json()["status"] == "in_progress"
+    assert tutor_check_in.status_code == 200, tutor_check_in.text
+    assert tutor_check_in.json()["status"] == "scheduled"
 
-    # --- the completion handshake closes the session ----------------------
-    requested = await client.post(
-        f"/v1/sessions/{session_id}/request-completion",
-        headers=bearer(tutor),
+    student_check_in = await client.post(
+        f"/v1/sessions/{session_id}/check-in", headers=bearer(student)
     )
-    assert requested.status_code == 200, requested.text
-    completion = await client.post(
-        f"/v1/sessions/{session_id}/reveal-completion",
-        headers=bearer(student),
+    assert student_check_in.status_code == 200, student_check_in.text
+    assert student_check_in.json()["status"] == "in_progress"
+
+    # --- both parties finish, which closes the session -------------------
+    tutor_finish = await client.post(
+        f"/v1/sessions/{session_id}/finish", headers=bearer(tutor)
     )
-    assert completion.status_code == 200, completion.text
+    assert tutor_finish.status_code == 200, tutor_finish.text
+    assert tutor_finish.json()["status"] == "in_progress"
+
     completed = await client.post(
-        f"/v1/sessions/{session_id}/verify-completion",
-        headers=bearer(tutor),
-        json={"pin": completion.json()["session_pin"]},
+        f"/v1/sessions/{session_id}/finish", headers=bearer(student)
     )
     assert completed.status_code == 200, completed.text
+    assert completed.json()["status"] == "completed"
 
     # --- the rating that closes the loop ---------------------------------
     rating = await client.post(

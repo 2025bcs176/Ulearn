@@ -370,7 +370,7 @@ matching. This prevents a degree name such as Medicine and Surgery from being
 mistaken for a matchable course unit.
 
 **Help_Requests** | `tutee_id`, `course_unit_id`, `topic`, `status`                | What was asked for, before a tutor was matched                                          |
-| **Sessions**      | `tutee_id`, `tutor_id`, `course_unit_id`, `status`, `duration_minutes`, handshake hashes/expiry, `meeting_link`, `meeting_venue`, `meeting_venue_detail` | A session that happened; the source for tutor hours and certificates. Start and completion codes are six-digit, one-time values stored only as hashes and never appear in shared session responses |
+| **Sessions**      | `tutee_id`, `tutor_id`, `course_unit_id`, `status`, `duration_minutes`, `started_at`, `ended_at`, per-party check-in/finish timestamps, `meeting_link`, `meeting_venue`, `meeting_venue_detail` | A session that happened; the source for tutor hours and certificates. Attendance is two independent check-ins and two independent finishes, one from each account; a session is live only while both parties have checked in, and completes only when both have finished |
 | **Ratings**       | `session_id`, `rater_id`, `ratee_id`, `score`, `comprehension_helped`, `feedback_text` | Immutable post-session tutee feedback; low ratings reduce matching priority. Tutor-to-tutee ratings are not accepted |
 | **Session_Reports** | `session_id`, `reporter_id`, `category`, `description`, `status` | Safeguarding reports routed to operators without exposing them to the other participant |
 | **Unit_Endorsements** | `session_id`, `rater_id`, `ratee_id`, `course_unit_id` | "This tutor knows this unit", scoped to the session's own course unit. Separate from `ratings` so subject coverage never moves promotion. Unique on `(session_id, rater_id, course_unit_id)` so a corrected submission replaces rather than accumulates |
@@ -863,8 +863,11 @@ Tutor confirms → POST /v1/sessions
 Session Scheduled (in-app)
       │
       ▼
-PIN Handshake: tutor shares a six-digit one-time code, tutee submits it
-      │   (a missing PIN fails closed — never treated as a match)
+Mutual check-in: each party taps check-in; the session goes live
+      │   only when both accounts have recorded an arrival
+      ▼
+Mutual finish: each party taps finish; the session completes only
+      │   when both have left, and minutes are the window both were present
       ▼
 Session Completed  (status assigned first, then the accrual —
                    so minutes bank exactly once)
@@ -876,19 +879,32 @@ Rating Submitted → ValidationService updates tutor status
 IncentiveService logs hours → certificate eligibility
 ```
 
-### 8.1 The PIN handshake is attendance evidence
+### 8.1 Mutual check-in is attendance evidence
 
-A six-digit one-time code is not an authentication credential. It exists to make attendance
-a *mutual* claim rather than the tutee's word alone: the tutor shows a code
-generated at acceptance, the tutee types it in to confirm they met. A tutee who
-fabricates attendance needs the tutor's code, not just a `completed` transition.
+Attendance is a *mutual* claim, not the tutee's word alone. The old design used a
+six-digit code the tutor read out and the tutee typed in. A code proves two people
+met, but it is also a secret one party can read to the other, and the server
+cannot tell a real meeting from a code shared over WhatsApp. The beta replaces it
+with two independent timestamps per party, one at the start and one at the end:
 
-The consequence is that the code is compared for **presence**, not for
-authenticity, so verification fails closed when `sessions.session_pin` is null.
-A row that never received a PIN cannot be verified by an empty submission, and
-the transition and verification paths both refuse it. The column is
-`VARCHAR(2)` with a length check constraint rather than a 4-digit code, because
-a peer reads the number aloud across a table and a longer one gets mistyped.
+- `tutor_checked_in_at`, `tutee_checked_in_at`
+- `tutor_finished_at`, `tutee_finished_at`
+
+A session is `in_progress` only when both check-in timestamps exist, and
+`completed` only when both finish timestamps exist. The database enforces both
+(`live_session_has_both_check_ins`, `completed_session_has_both_finishes`), so a
+future code path cannot mark a session live on one person's word.
+
+The recorded duration is the window both parties were present: from the later
+check-in to the **earlier** finish. A party who forgets to tap finish an hour
+later must not extend the tutor's hours, because the time after the other person
+left is not time that person can confirm. The floor is one minute, so a
+same-minute session still contributes something to a certificate even though it
+counts towards promotion.
+
+A retried check-in or finish is idempotent. Mobiles retry on a metered
+connection, and a second tap must neither move the timestamp nor report a failure
+for a state the caller already reached.
 
 ### 8.2 Unit endorsements are not ratings
 
@@ -1001,15 +1017,14 @@ called yet:
 
 ### 9.3 Rate limiting
 
-Sign-in, sign-up and the PIN handshake are all bounded. Argon2id makes each guess
+Sign-in and sign-up are bounded. Argon2id makes each guess
 expensive, which sets the *cost* of an attempt; these counters set how many
 attempts are allowed, which is the half that cost does not provide.
 
 **The counters are rows in `rate_limit_counters`, not entries in a dictionary.**
 An in-process counter is per worker process, so with four workers an attacker gets
 four times the configured budget for free, and a restart wipes the history —
-weakest exactly when the service is busiest and most worth attacking. The PIN
-throttle on the session row is the same decision at a smaller scale.
+weakest exactly when the service is busiest and most worth attacking.
 
 **One row per (scope, key), and the increment is a single statement.**
 `INSERT ... ON CONFLICT (scope, key) DO UPDATE SET attempts = attempts + 1

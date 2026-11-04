@@ -224,6 +224,10 @@ async def _endorse(
             started_at=datetime.now(UTC),
             ended_at=datetime.now(UTC),
             duration_minutes=60,
+            tutor_checked_in_at=datetime.now(UTC),
+            tutee_checked_in_at=datetime.now(UTC),
+            tutor_finished_at=datetime.now(UTC),
+            tutee_finished_at=datetime.now(UTC),
         )
         db_session.add(session)
         await db_session.flush()

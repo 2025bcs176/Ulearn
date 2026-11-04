@@ -7,10 +7,8 @@ from fastapi import APIRouter, status
 from app.api.deps import CurrentUser, DatabaseSession
 from app.schemas.session import (
     SessionCreate,
-    SessionPinResponse,
     SessionResponse,
     SessionTransitionRequest,
-    VerifyPinRequest,
 )
 from app.services import session_service
 
@@ -62,7 +60,7 @@ async def get_session(
 @router.post(
     "/{session_id}/transition",
     response_model=SessionResponse,
-    summary="Move the session through its lifecycle",
+    summary="Cancel or mark a session as a no-show",
 )
 async def transition_session(
     session_id: uuid.UUID,
@@ -70,7 +68,12 @@ async def transition_session(
     caller: CurrentUser,
     db: DatabaseSession,
 ) -> SessionResponse:
-    """Advance or cancel a session, with server-side validation controls."""
+    """Cancel a session or record that it did not happen.
+
+    Starting and completing are deliberately not transitions: they are
+    `check-in` and `finish`, called by both parties, so no single account can
+    move a session to a state that claims the other person was present.
+    """
     return await session_service.transition_session(
         db,
         caller.user,
@@ -80,80 +83,38 @@ async def transition_session(
 
 
 @router.post(
-    "/{session_id}/verify-pin",
+    "/{session_id}/check-in",
     response_model=SessionResponse,
-    summary="Verify the six-digit session handshake code",
+    summary="Record your arrival for a session",
 )
-async def verify_session_pin(
+async def check_in(
     session_id: uuid.UUID,
-    payload: VerifyPinRequest,
     caller: CurrentUser,
     db: DatabaseSession,
 ) -> SessionResponse:
-    """Server-side handshake: the tutor reveals the pin; the tutee enters it."""
-    return await session_service.verify_session_pin(
-        db, caller.user, session_id, payload.pin
-    )
+    """One party's half of the start handshake.
 
-
-@router.get(
-    "/{session_id}/pin",
-    response_model=SessionPinResponse,
-    summary="Read the handshake pin (tutor only)",
-)
-async def reveal_session_pin(
-    session_id: uuid.UUID,
-    caller: CurrentUser,
-    db: DatabaseSession,
-) -> SessionPinResponse:
-    """The tutor's half of the handshake: the digits to read out.
-
-    Separate from `GET /{session_id}` so the PIN is not part of a payload both
-    parties can fetch. The tutee asking here gets a 403: if they could read their
-    own PIN the handshake would prove nothing.
+    The session goes live when both parties have called this. Repeating the
+    call is harmless: it does not move the timestamp a second time and does not
+    report an error for a check-in that already happened.
     """
-    return await session_service.reveal_session_pin(db, caller.user, session_id)
+    return await session_service.check_in(db, caller.user, session_id)
 
 
 @router.post(
-    "/{session_id}/request-completion",
+    "/{session_id}/finish",
     response_model=SessionResponse,
-    summary="Request a completion confirmation code",
+    summary="Record your departure from a session",
 )
-async def request_completion_pin(
+async def finish(
     session_id: uuid.UUID,
     caller: CurrentUser,
     db: DatabaseSession,
 ) -> SessionResponse:
-    """Ask the tutee to reveal a one-time completion code."""
-    return await session_service.request_completion_pin(db, caller.user, session_id)
+    """One party's half of the completion handshake.
 
-
-@router.post(
-    "/{session_id}/reveal-completion",
-    response_model=SessionPinResponse,
-    summary="Reveal the completion confirmation code to the tutee",
-)
-async def reveal_completion_pin(
-    session_id: uuid.UUID,
-    caller: CurrentUser,
-    db: DatabaseSession,
-) -> SessionPinResponse:
-    return await session_service.reveal_completion_pin(db, caller.user, session_id)
-
-
-@router.post(
-    "/{session_id}/verify-completion",
-    response_model=SessionResponse,
-    summary="Verify the completion confirmation code",
-)
-async def verify_completion_pin(
-    session_id: uuid.UUID,
-    payload: VerifyPinRequest,
-    caller: CurrentUser,
-    db: DatabaseSession,
-) -> SessionResponse:
-    """Confirm the session and record its end timestamp."""
-    return await session_service.verify_completion_pin(
-        db, caller.user, session_id, payload.pin
-    )
+    The session completes when both parties have called this, and only then are
+    the minutes banked. The elapsed time is the window both were present, so one
+    party cannot extend the session after the other has left.
+    """
+    return await session_service.finish(db, caller.user, session_id)

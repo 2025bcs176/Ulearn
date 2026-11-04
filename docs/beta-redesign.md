@@ -80,6 +80,14 @@ timestamps from two accounts. A tutee can no longer fabricate a session alone,
 and a tutor can no longer bank hours without the student confirming. The rating
 gate is unchanged.
 
+The recorded duration is the window both were present: `started_at` is the
+second check-in, `ended_at` is the **earlier** of the two finishes. Time after
+one person left is not time that person can confirm, so a late finish tap cannot
+extend the session. The floor is one minute, and a retried tap is idempotent.
+The database enforces “live means both checked in” and “completed means both
+finished”, so a future service path cannot claim attendance on one account's
+word.
+
 ### 4.2 Notifications
 
 New tables:
@@ -212,6 +220,10 @@ Kept current so the plan and the code do not drift apart.
 - [x] **Notifications client.** An inbox screen, unread badge on a fourth shell
       destination, mark-one and mark-all, paging, and a deep link per type. FCM
       push remains deferred until the in-app inbox is in the beta build.
-- [ ] Sessions: mutual check-in, timeline, rating with tags.
+- [x] **Sessions backend.** Mutual check-in and finish endpoints, the four
+      attendance timestamps, a reversible migration, database constraints for
+      both halves of the handshake, and notifications when a session starts and
+      completes. Minutes are the overlap both parties attended.
+- [ ] Sessions client: check-in/finish timeline, rating with tags.
 - [ ] Tutor HQ.
 - [ ] Hardening, validation, dry run, launch.
