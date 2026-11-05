@@ -21,7 +21,6 @@ class TutorRail extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
     final rail = ref.watch(topTutorsProvider(courseUnitId));
     final failure = rail.hasError ? failureFor(rail.error!) : null;
     return Column(
@@ -50,9 +49,6 @@ class TutorRail extends ConsumerWidget {
                           'to recommend yet.',
                     )
                   : _TutorCards(tutors: loaded),
-            // Nothing at all while it loads. A rail-shaped hole that fills in a
-            // moment later is honest; a spinner over the top of the home screen
-            // would stall a dashboard whose other contents are already true.
             null => const LoadingView(
               message: 'Loading tutors',
               variant: LoadingViewVariant.cards,
@@ -65,12 +61,9 @@ class TutorRail extends ConsumerWidget {
 }
 
 class _CourseUnitSearch extends ConsumerWidget {
+  const _CourseUnitSearch({required this.onUnitSelected});
 
-  const _CourseUnitSearch({
-    required this.onUnitSelected,
-    super.key,
-  });
-  final Function(String?) onUnitSelected;
+  final void Function(String?) onUnitSelected;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -109,7 +102,9 @@ class _CourseUnitSearch extends ConsumerWidget {
 
 class _TutorCards extends StatelessWidget {
   const _TutorCards({required this.tutors});
+
   final List<TutorRailEntry> tutors;
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
@@ -117,8 +112,10 @@ class _TutorCards extends StatelessWidget {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: tutors.length,
-        separatorBuilder: (context, index) => const SizedBox(width: AppDimens.md),
-        itemBuilder: (context, index) => TutorCard(entry: tutors[index], width: _cardWidth),
+        separatorBuilder: (context, index) =>
+            const SizedBox(width: AppDimens.md),
+        itemBuilder: (context, index) =>
+            TutorCard(entry: tutors[index], width: _cardWidth),
       ),
     );
   }
@@ -126,8 +123,10 @@ class _TutorCards extends StatelessWidget {
 
 class TutorCard extends StatelessWidget {
   const TutorCard({required this.entry, required this.width, super.key});
+
   final TutorRailEntry entry;
   final double width;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
