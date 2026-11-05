@@ -74,6 +74,9 @@ class Rating(Base, TimestampMixin):
     )
 
     score: Mapped[int] = mapped_column(Integer, nullable=False)
+    comprehension_helped: Mapped[bool] = mapped_column(
+        nullable=False, default=False, server_default="false"
+    )
 
     #: Optional free text from the rater. A tutor suspended on a low average is
     #: entitled to know which session drove it, which is why this is kept rather

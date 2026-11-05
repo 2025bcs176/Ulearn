@@ -7,7 +7,7 @@ decision. A green local test suite alone is not a production approval.
 ## Verified in the hardening pass
 
 - [x] Backend Ruff `check` and `format --check` pass.
-- [x] Backend suite passes on in-memory SQLite: 543 passed.
+- [x] Backend suite passes on in-memory SQLite: 583 passed.
 - [x] Migrations build the schema on an otherwise empty database
       (`alembic upgrade head`), `alembic check` reports no drift from the models,
       and `alembic downgrade base` followed by `upgrade head` succeeds.
@@ -23,8 +23,8 @@ decision. A green local test suite alone is not a production approval.
 - [x] Every request carries one `X-Request-ID`, validated when supplied inbound,
       echoed in the response, and attached to every log record for that request,
       including the unhandled-error path.
-- [x] Flutter mobile `analyze` passes and the suite passes (431 tests).
-- [x] Admin web `analyze` passes and the suite passes (42 tests).
+- [x] Flutter mobile `analyze` passes and the suite passes (494 tests).
+- [x] Admin web `analyze` passes and the suite passes (100 tests).
 - [x] CI runs backend SQLite and PostgreSQL jobs, applies and checks migrations,
       runs frontend and admin-widget tests, builds the web target, and asserts
       the Android release-signing gate fires without material while debug still
@@ -37,17 +37,17 @@ decision. A green local test suite alone is not a production approval.
 
 ## PostgreSQL suite status
 
-The full suite passes repeatedly against a real PostgreSQL, including runs of
-the current tree with the request-id and rate-limit changes. The suite builds
-its own schema from the models with `create_all`, so it cannot detect a
-migration that disagrees with them; the scratch-database `alembic` checks above
-close that specific gap.
+The full suite passes against a real PostgreSQL: 583 tests passed on the clean
+local database after the complete migration cycle. The suite builds its own
+schema from the models with `create_all`, so it cannot detect a migration that
+disagrees with them; the scratch-database `alembic` checks above close that
+specific gap.
 
 An intermittent full-suite failure was observed once historically, at roughly
 one in fifteen runs, after a genuinely flaky concurrent test had already been
 replaced with deterministic coverage. No traceback was captured. A dedicated
-hunt then ran the full suite **25 consecutive times** against PostgreSQL, the
-last 21 of them on the current tree (543 tests each), and reproduced nothing.
+25-run hunt covered the earlier 543-test suite; the current suite has 583 tests
+and passed on the clean PostgreSQL run recorded above.
 It is recorded as **unexplained, not resolved**: the failure is rare enough that
 25 clean runs cannot rule it out, and a reproduction is the only thing that
 would close it. The default suite is treated as trustworthy but not proven
@@ -57,8 +57,9 @@ than retried away.
 ## Required staging evidence
 
 - [ ] Build a PostgreSQL database from empty using `alembic upgrade head`,
-      then run `alembic check`, in the target environment. Proven on a scratch
-      database locally; not yet on the deployed one.
+      then run `alembic check`, in the target environment. Proven on the
+      disposable local database at migration head `a7b8c9d0e1f2`; not yet on the
+      deployed one.
 - [ ] Exercise registration, onboarding, matching, tutor response, session
       completion, and mandatory rating through the real deployed router.
 - [ ] Repeat tutor response, session completion, rating, and token refresh

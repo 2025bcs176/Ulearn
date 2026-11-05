@@ -39,6 +39,8 @@ dependencies:
 
   # Declarative routing with a redirect-based auth guard.
   go_router: ^18.0.1
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
 
   # Date and number formatting for session times and rating aggregates.
   intl: ^0.20.3

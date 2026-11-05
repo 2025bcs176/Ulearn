@@ -28,12 +28,11 @@ MAX_CANCELLATION_REASON_LENGTH = 500
 
 MIN_DURATION_MINUTES = 1
 MAX_DURATION_MINUTES = 480
-
-#: The handshake pin is exactly two digits, matching `sessions.session_pin`'s
-#: `String(2)` and its `session_pin_length` check constraint. Bounded here so an
-#: oversized candidate is a validation error naming the field rather than a wrong
-#: PIN the tutee is told to try again with.
-MAX_PIN_LENGTH = 2
+MAX_VENUE_LENGTH = 160
+ON_CAMPUS_CUSTOM_VENUE = "Other on-campus"
+APPROVED_ON_CAMPUS_VENUES = frozenset(
+    {"FCI Lab 1", "FCI Lab 2", "University Library", "Canteen", ON_CAMPUS_CUSTOM_VENUE}
+)
 
 
 class HelpRequestCreate(RequestSchema):
@@ -115,6 +114,22 @@ class SessionCreate(RequestSchema):
         max_length=500,
         description="Optional Google Meet / Zoom link the tutor shares.",
     )
+    meeting_venue: Trimmed | None = Field(
+        default=None,
+        max_length=MAX_VENUE_LENGTH,
+        description=(
+            "Default on-campus venue, for example FCI Lab 1, University Library, "
+            "or Canteen."
+        ),
+    )
+    meeting_venue_detail: Trimmed | None = Field(
+        default=None,
+        max_length=MAX_VENUE_LENGTH,
+        description=(
+            "Room-level detail for campus locations. Required when "
+            "meeting_venue is 'Other on-campus'."
+        ),
+    )
 
     @model_validator(mode="after")
     def start_is_in_the_future(self) -> Self:
@@ -133,6 +148,18 @@ class SessionCreate(RequestSchema):
                 <= datetime.now(self.scheduled_start.tzinfo).timestamp()
             ):
                 raise ValueError("scheduled_start must be in the future")
+        if self.meeting_venue == ON_CAMPUS_CUSTOM_VENUE and not (
+            self.meeting_venue_detail and self.meeting_venue_detail.strip()
+        ):
+            raise ValueError(
+                "meeting_venue_detail is required for an 'Other on-campus' venue"
+            )
+        if self.meeting_venue and self.meeting_venue not in APPROVED_ON_CAMPUS_VENUES:
+            raise ValueError("meeting_venue must be an approved on-campus venue")
+        if self.meeting_venue_detail and not self.meeting_venue:
+            raise ValueError(
+                "meeting_venue is required when meeting_venue_detail is provided"
+            )
         return self
 
 
@@ -211,9 +238,18 @@ class SessionResponse(OrmSchema):
     scheduled_start: datetime | None = None
     started_at: datetime | None = None
     ended_at: datetime | None = None
+    completion_requested_at: datetime | None = None
     duration_minutes: int = Field(ge=0)
     meeting_link: str | None = Field(
         default=None, description="Shared meeting link for the session."
+    )
+    meeting_venue: str | None = Field(
+        default=None,
+        description="On-campus venue label selected for the session.",
+    )
+    meeting_venue_detail: str | None = Field(
+        default=None,
+        description="Room-level on-campus venue detail.",
     )
     is_rated: bool = Field(
         description=(
@@ -226,17 +262,16 @@ class SessionResponse(OrmSchema):
 
 
 class SessionPinResponse(OrmSchema):
-    """The handshake pin, for the tutor who has to read it aloud.
+    """The handshake pin, for the tutee to reveal to the tutor.
 
     Split out from `SessionResponse` rather than added there as an optional field
-    because the pin belongs to one party. In the shared response it was readable
-    by the tutee as well, which made the handshake something the tutee could
-    simply skip: there was no secret left to prove knowledge of.
+    because the code belongs to one party. The tutee reveals it and the tutor
+    submits it, proving both participants are present.
     """
 
     session_id: uuid.UUID
     session_pin: str = Field(
-        description="The two digits the tutor reads out for the tutee to enter."
+        description="The six-digit code the tutee reads out for the tutor to enter."
     )
     attempts_remaining: int = Field(
         ge=0,
@@ -249,7 +284,7 @@ class SessionPinResponse(OrmSchema):
 
 
 class VerifyPinRequest(RequestSchema):
-    """The digits the tutee is entering.
+    """The digits the tutor is entering.
 
     A schema rather than the `dict[str, str]` the route used to accept: an
     untyped body means a missing `pin` arrives as `""` and fails later as an
@@ -257,6 +292,6 @@ class VerifyPinRequest(RequestSchema):
     """
 
     pin: str = Field(
-        pattern=r"^[0-9]{2}$",
-        description="The two digits the tutor read out.",
+        pattern=r"^[0-9]{6}$",
+        description="The six-digit one-time handshake code.",
     )

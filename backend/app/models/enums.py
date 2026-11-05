@@ -39,6 +39,20 @@ class VerificationSource(StrEnum):
     MANUAL = "manual"
 
 
+class ReportCategory(StrEnum):
+    SAFETY = "safety"
+    HARASSMENT = "harassment"
+    FRAUD = "fraud"
+    VENUE = "venue"
+    OTHER = "other"
+
+
+class ReportStatus(StrEnum):
+    OPEN = "open"
+    REVIEWING = "reviewing"
+    RESOLVED = "resolved"
+
+
 class CompetencyStatus(StrEnum):
     """Verification state of one grade in one course unit.
 

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:peerpass/app/app.dart';
 import 'package:peerpass/core/config/app_config.dart';
 import 'package:peerpass/core/network/api_client.dart';
+import 'package:peerpass/core/storage/session_cache.dart';
 import 'package:peerpass/core/storage/token_store.dart';
 import 'package:peerpass/features/auth/data/datasources/remote_academics_datasource.dart';
 import 'package:peerpass/features/auth/data/datasources/remote_auth_datasource.dart';
@@ -24,9 +25,21 @@ import 'package:peerpass/features/tutors/data/datasources/remote_tutors_datasour
 import 'package:peerpass/features/tutors/data/repositories/remote_tutors_repository.dart';
 import 'package:peerpass/features/tutors/data/repositories/tutors_repository.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   final config = AppConfig.fromEnvironment();
   final tokenStore = SecureTokenStore();
+  SessionCache? sessionCache;
+  try {
+    final cache = SessionCache();
+    await cache.open();
+    sessionCache = cache;
+  } on Exception {
+    // History is an optional enhancement. A corrupt encrypted cache must not
+    // prevent the online sign-in flow from rendering; the next successful
+    // session can recreate it through the normal cache path.
+    sessionCache = null;
+  }
 
   // The refresh callback and the repository refer to each other: the
   // interceptor needs to be able to refresh, and refreshing is a repository
@@ -55,7 +68,7 @@ void main() {
   );
 
   final sessionsRepository = RemoteSessionsRepository(
-    RemoteSessionsDatasource(dio),
+    RemoteSessionsDatasource(dio, cache: sessionCache),
   );
 
   // One `Dio` for every datasource, so the token, the refresh and the retry
@@ -64,7 +77,7 @@ void main() {
   // its own idea of whether the user is signed in.
   final tutorsRepository = RemoteTutorsRepository(RemoteTutorsDatasource(dio));
   final matchingRepository = RemoteMatchingRepository(
-    RemoteMatchingDatasource(dio),
+    RemoteMatchingDatasource(dio, cache: sessionCache),
   );
   final incentivesRepository = RemoteIncentivesRepository(
     RemoteIncentivesDatasource(dio),
@@ -87,6 +100,7 @@ void main() {
       // the failure is immediate and names the missing override.
       overrides: [
         authRepositoryProvider.overrideWithValue(repository),
+        sessionCacheProvider.overrideWithValue(sessionCache),
         sessionsRepositoryProvider.overrideWithValue(sessionsRepository),
         tutorsRepositoryProvider.overrideWithValue(tutorsRepository),
         matchingRepositoryProvider.overrideWithValue(matchingRepository),

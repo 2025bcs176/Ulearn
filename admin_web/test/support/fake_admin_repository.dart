@@ -2,10 +2,12 @@ import 'package:dio/dio.dart';
 import 'package:peerpass_admin/core/models/admin_competency.dart';
 import 'package:peerpass_admin/core/models/admin_page.dart';
 import 'package:peerpass_admin/core/models/admin_session.dart';
+import 'package:peerpass_admin/core/models/admin_session_report.dart';
 import 'package:peerpass_admin/core/models/admin_tutor_standing.dart';
 import 'package:peerpass_admin/core/models/admin_user.dart';
 import 'package:peerpass_admin/core/models/audit_event.dart';
 import 'package:peerpass_admin/core/models/competency_status.dart';
+import 'package:peerpass_admin/core/models/topic_heatmap.dart';
 import 'package:peerpass_admin/features/admin/data/repositories/admin_repository.dart';
 
 /// One recorded review, so a test can assert what was asked for.
@@ -67,6 +69,23 @@ class FakeAdminRepository implements AdminRepository {
   final List<AdminPageRequest> tutorStandingRequests = <AdminPageRequest>[];
   final List<RecordedReview> reviews = <RecordedReview>[];
   int signOutCount = 0;
+
+  @override
+  Future<TopicHeatmap> topicHeatmap() async =>
+      const TopicHeatmap(minimumCohortSize: 5, entries: <TopicHeatmapEntry>[]);
+
+  @override
+  Future<AdminSessionReportPage> sessionReports(
+    AdminPageRequest request,
+  ) async => const AdminSessionReportPage.empty();
+
+  @override
+  Future<void> updateSessionReport(
+    AdminSessionReport report, {
+    required String status,
+    bool suspendTutor = false,
+    String? suspensionReason,
+  }) async {}
 
   @override
   Future<AdminSession> signIn(String email, String password) async {

@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import (
     AuthorizationProblem,
+    ConflictProblem,
     NotFoundProblem,
     ValidationProblem,
 )
@@ -31,6 +32,9 @@ from app.schemas.rating import (
 
 PROMOTION_MIN_SESSIONS = 3
 PROMOTION_MIN_AVERAGE = Decimal("4.10")
+DEMOTION_MIN_RATED_SESSIONS = 5
+REDUCED_BELOW_AVERAGE = Decimal("3.50")
+SUSPENDED_BELOW_AVERAGE = Decimal("3.00")
 
 
 async def submit_rating(
@@ -55,6 +59,8 @@ async def submit_rating(
 
     if user.id not in {session.tutee_id, session.tutor_id}:
         raise AuthorizationProblem("You are not part of this session.")
+    if user.id != session.tutee_id:
+        raise AuthorizationProblem("Only the tutee can submit session feedback.")
 
     ratee_id = session.tutor_id if user.id == session.tutee_id else session.tutee_id
     # Resolved before anything is written, so a rejected endorsement cannot leave
@@ -79,6 +85,7 @@ async def submit_rating(
             rater_id=user.id,
             ratee_id=ratee_id,
             score=payload.score,
+            comprehension_helped=payload.comprehension_helped,
             feedback_text=payload.feedback_text,
         )
         db.add(rating)
@@ -99,26 +106,7 @@ async def submit_rating(
         await db.refresh(rating)
         return RatingResponse.model_validate(rating)
 
-    previous_score = Decimal(str(existing.score))
-    existing.score = payload.score
-    existing.feedback_text = payload.feedback_text
-    await _replace_endorsements(
-        db,
-        session=session,
-        rater_id=user.id,
-        ratee_id=ratee_id,
-        course_unit_ids=endorsed_course_unit_ids,
-    )
-    profile = await _tutor_profile_for_ratee(db, session, ratee_id)
-    if profile is not None:
-        profile.rating_total = (
-            profile.rating_total - previous_score + Decimal(str(payload.score))
-        )
-        await _recompute_standing(db, profile)
-    await db.flush()
-    await db.commit()
-    await db.refresh(existing)
-    return RatingResponse.model_validate(existing)
+    raise ConflictProblem("Feedback has already been submitted and cannot be changed.")
 
 
 async def _resolve_endorsed_course_units(
@@ -401,17 +389,39 @@ async def _get_or_create_tutor_profile(
 
 
 async def _recompute_standing(db: AsyncSession, profile: TutorProfile) -> None:
-    if (
-        profile.completed_sessions < PROMOTION_MIN_SESSIONS
-        or profile.average_rating is None
-    ):
+    if profile.operator_suspended:
+        profile.standing = TutorStanding.SUSPENDED
+        return
+    if profile.rating_count < PROMOTION_MIN_SESSIONS or profile.average_rating is None:
         profile.standing = TutorStanding.PROBATIONARY
         return
 
-    if profile.average_rating >= PROMOTION_MIN_AVERAGE:
+    # Compare totals rather than a rounded average so 4.10 is exactly in and
+    # 4.099... is exactly out.
+    promotion_bar = profile.rating_total * 100 >= 410 * profile.rating_count
+    if promotion_bar:
         profile.standing = TutorStanding.VERIFIED
-    else:
+        profile.suspended_reason = None
+        return
+
+    if profile.rating_count < DEMOTION_MIN_RATED_SESSIONS:
+        profile.standing = TutorStanding.PROBATIONARY
+        return
+
+    if profile.average_rating < SUSPENDED_BELOW_AVERAGE:
+        profile.standing = TutorStanding.SUSPENDED
+        profile.suspended_reason = "Rating average below 3.0"
+    elif profile.average_rating < REDUCED_BELOW_AVERAGE:
         profile.standing = TutorStanding.REDUCED
+        profile.suspended_reason = None
+    elif profile.standing is TutorStanding.VERIFIED:
+        # A verified tutor keeps the badge until the explicit demotion bar is
+        # crossed; a single average below the promotion bar is not a demotion.
+        profile.standing = TutorStanding.VERIFIED
+        profile.suspended_reason = None
+    else:
+        profile.standing = TutorStanding.PROBATIONARY
+        profile.suspended_reason = None
 
 
 async def record_completion(db: AsyncSession, session: Session) -> None:

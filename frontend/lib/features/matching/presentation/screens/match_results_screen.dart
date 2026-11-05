@@ -170,7 +170,10 @@ class _MatchResultsScreenState extends ConsumerState<MatchResultsScreen> {
                         askingTutorId: _askingTutorId,
                         onAsk: _askTutor,
                       ),
-                      null => const LoadingView(message: 'Finding tutors'),
+                      null => const LoadingView(
+                        message: 'Finding tutors',
+                        variant: LoadingViewVariant.cards,
+                      ),
                     },
                   },
                 ),
