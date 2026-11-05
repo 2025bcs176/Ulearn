@@ -243,6 +243,7 @@ class FakeSessionsRepository implements SessionsRepository {
     required int score,
     required bool comprehensionHelped,
     String? feedbackText,
+    List<String> tags = const [],
     List<String> endorsedCourseUnitIds = const [],
   }) async {
     final session = _require(sessionId);
@@ -258,6 +259,7 @@ class FakeSessionsRepository implements SessionsRepository {
       score: score,
       comprehensionHelped: comprehensionHelped,
       feedbackText: feedbackText,
+      tags: List<String>.unmodifiable(tags),
       createdAt: DateTime.utc(2026, 3, 4, 9),
     );
     submittedRatings.add(rating);

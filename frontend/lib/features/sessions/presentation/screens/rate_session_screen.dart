@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:peerpass/core/constants/app_dimens.dart';
+import 'package:peerpass/core/models/rating_tag.dart';
 import 'package:peerpass/core/state/session.dart';
 import 'package:peerpass/core/widgets/content_width_limiter.dart';
 import 'package:peerpass/core/widgets/failure_view.dart';
@@ -149,6 +150,37 @@ class _Form extends ConsumerWidget {
                         controller.chooseComprehension(helped: selection.first);
                       }
                     },
+            ),
+            const SizedBox(height: AppDimens.lg),
+            Text('What was it like?', style: theme.textTheme.titleSmall),
+            const SizedBox(height: AppDimens.xxs),
+            Text(
+              "Optional. Pick up to $maxRatingTags. These show on the tutor's "
+              'profile beside your initials; your note stays between you both.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: AppDimens.sm),
+            Wrap(
+              spacing: AppDimens.sm,
+              runSpacing: AppDimens.sm,
+              children: [
+                for (final tag in RatingTag.values)
+                  FilterChip(
+                    label: Text(tag.label),
+                    selected: form.selectedTags.contains(tag),
+                    // Disabled at the cap rather than allowed and refused: the
+                    // API rejects a fifth, and a chip that fails on tap is a
+                    // form that argued with a student.
+                    onSelected:
+                        form.submitting ||
+                            (!form.selectedTags.contains(tag) &&
+                                !form.canAddTag)
+                        ? null
+                        : (_) => controller.toggleTag(tag),
+                  ),
+              ],
             ),
             const SizedBox(height: AppDimens.lg),
             Text('Add a note (optional)', style: theme.textTheme.titleSmall),

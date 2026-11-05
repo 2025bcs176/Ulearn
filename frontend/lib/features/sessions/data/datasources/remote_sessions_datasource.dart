@@ -123,6 +123,7 @@ class RemoteSessionsDatasource {
     required int score,
     required bool comprehensionHelped,
     String? feedbackText,
+    List<String> tags = const [],
     List<String> endorsedCourseUnitIds = const [],
   }) async {
     final data = <String, dynamic>{
@@ -133,6 +134,10 @@ class RemoteSessionsDatasource {
     // read as "clear whatever was stored", which is not what an untouched field
     // on a re-submit means.
     if (feedbackText != null) data['feedback_text'] = feedbackText;
+    // Sent only when tags were picked. A rating with no tags and a rating whose
+    // tags were never offered are the same submission, and an empty list would
+    // be a client asserting that the student chose none when nobody asked.
+    if (tags.isNotEmpty) data['tags'] = tags;
     // The endorsements are sent as the API wants them: a list, absent when there is
     // nothing to claim. Note that "absent" and "empty" are the *same request* here
     // -- `RatingCreate.endorsed_course_unit_ids` defaults to an empty list, so

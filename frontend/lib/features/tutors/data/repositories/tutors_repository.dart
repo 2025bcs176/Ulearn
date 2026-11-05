@@ -3,6 +3,7 @@ import 'package:peerpass/core/error/failures.dart';
 import 'package:peerpass/core/models/course_unit.dart';
 import 'package:peerpass/features/tutors/data/models/tutor_detail.dart';
 import 'package:peerpass/features/tutors/data/models/tutor_rail_entry.dart';
+import 'package:peerpass/features/tutors/data/models/tutor_review.dart';
 
 /// The tutor-discovery contract the screens depend on.
 ///
@@ -29,6 +30,14 @@ abstract interface class TutorsRepository {
   /// exist. The API answers both the same way on purpose, and the client does
   /// not distinguish them either.
   Future<TutorDetail> tutor(String userId);
+
+  /// What other students said about one tutor, newest first.
+  ///
+  /// [limit] is the page size; omitting it takes the API's default. The list is
+  /// what a profile publishes -- score, tags, the rater's initials and the date
+  /// -- so an empty list is a normal answer for a new tutor rather than a
+  /// failure.
+  Future<List<TutorReview>> reviews(String userId, {int? limit});
 
   /// The course units endorsements are recorded against.
   ///

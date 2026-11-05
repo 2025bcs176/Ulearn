@@ -170,10 +170,7 @@ void main() {
         },
       ]);
 
-      await expectLater(
-        repository.topTutors(),
-        throwsA(isA<ServerFailure>()),
-      );
+      await expectLater(repository.topTutors(), throwsA(isA<ServerFailure>()));
     });
 
     test('a dropped connection is a NetworkFailure', () async {
@@ -185,10 +182,7 @@ void main() {
         ),
       );
 
-      await expectLater(
-        repository.topTutors(),
-        throwsA(isA<NetworkFailure>()),
-      );
+      await expectLater(repository.topTutors(), throwsA(isA<NetworkFailure>()));
     });
   });
 
@@ -214,14 +208,87 @@ void main() {
     });
 
     test('a malformed detail becomes a ServerFailure', () async {
-      server.reply(200, {
-        'profile': null,
-        'endorsement_count': 0,
-      });
+      server.reply(200, {'profile': null, 'endorsement_count': 0});
 
       await expectLater(
         repository.tutor('tutor-1'),
         throwsA(isA<ServerFailure>()),
+      );
+    });
+  });
+
+  group('reviews', () {
+    test('asks for the tutor own review path and parses the list', () async {
+      server.reply(200, [
+        {
+          'id': 'review-1',
+          'score': 5,
+          'rater_initials': 'AO',
+          'tags': ['patient'],
+          'created_at': '2026-03-04T11:00:00Z',
+        },
+      ]);
+
+      final reviews = await repository.reviews('tutor-1');
+
+      final call = server.calls.single;
+      expect(call.method, 'GET');
+      expect(call.path, '/v1/tutors/tutor-1/reviews');
+      // No limit sent means the API's own page size; the client does not pick
+      // one on the caller's behalf when the caller did not ask.
+      expect(call.query, isEmpty);
+      expect(reviews.single.score, 5);
+      expect(reviews.single.raterInitials, 'AO');
+    });
+
+    test('passes the page size straight through when one is given', () async {
+      server.reply(200, const []);
+
+      await repository.reviews('tutor-1', limit: 3);
+
+      expect(server.calls.single.query, {'limit': 3});
+    });
+
+    test('no reviews is an empty list, not a failure', () async {
+      // A new tutor is a normal state, and the profile says so plainly rather
+      // than looking like the request broke.
+      server.reply(200, const []);
+
+      expect(await repository.reviews('tutor-1'), isEmpty);
+    });
+
+    test('a non-tutor is a NotFoundFailure, as the profile is', () async {
+      server.reply(404, _problem());
+
+      await expectLater(
+        repository.reviews('student-1'),
+        throwsA(isA<NotFoundFailure>()),
+      );
+    });
+
+    test('a malformed review becomes a ServerFailure', () async {
+      server.reply(200, [
+        {'id': 'review-1', 'score': 5},
+      ]);
+
+      await expectLater(
+        repository.reviews('tutor-1'),
+        throwsA(isA<ServerFailure>()),
+      );
+    });
+
+    test('a dropped connection is a NetworkFailure', () async {
+      server.fail(
+        DioException(
+          requestOptions: RequestOptions(path: '/v1/tutors/tutor-1/reviews'),
+          type: DioExceptionType.connectionError,
+          error: 'connection refused',
+        ),
+      );
+
+      await expectLater(
+        repository.reviews('tutor-1'),
+        throwsA(isA<NetworkFailure>()),
       );
     });
   });

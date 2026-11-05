@@ -45,10 +45,26 @@ class RemoteTutorsDatasource {
   /// 404 for a user who does not exist and for one who is not a tutor, which the
   /// repository turns into the same `NotFoundFailure` either way.
   Future<Map<String, dynamic>> tutor(String userId) async {
-    final response = await _dio.get<Map<String, dynamic>>(
-      '/v1/tutors/$userId',
-    );
+    final response = await _dio.get<Map<String, dynamic>>('/v1/tutors/$userId');
     return response.data!;
+  }
+
+  /// What other students said about one tutor, newest first.
+  ///
+  /// A page size rather than a pager. The profile shows the newest handful and
+  /// the rating count beside it says how much evidence is behind them; there is
+  /// no offset to send because the API does not offer one.
+  Future<List<Map<String, dynamic>>> reviews(
+    String userId, {
+    int? limit,
+  }) async {
+    final response = await _dio.get<List<dynamic>>(
+      '/v1/tutors/$userId/reviews',
+      queryParameters: {'limit': ?limit},
+    );
+    return (response.data ?? const <dynamic>[])
+        .whereType<Map<String, dynamic>>()
+        .toList();
   }
 
   /// The course units a tutor's endorsements are recorded against.

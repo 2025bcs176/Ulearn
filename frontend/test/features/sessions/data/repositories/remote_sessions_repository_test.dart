@@ -98,7 +98,11 @@ Map<String, dynamic> _session({
   };
 }
 
-Map<String, dynamic> _rating({int score = 5, String? feedback}) {
+Map<String, dynamic> _rating({
+  int score = 5,
+  String? feedback,
+  List<String> tags = const [],
+}) {
   return {
     'id': 'rating-1',
     'session_id': 'session-1',
@@ -106,6 +110,7 @@ Map<String, dynamic> _rating({int score = 5, String? feedback}) {
     'ratee_id': 'tutor-1',
     'score': score,
     'feedback_text': ?feedback,
+    'tags': tags,
     'created_at': '2026-03-04T11:00:00Z',
   };
 }
@@ -343,6 +348,38 @@ void main() {
         'endorsed_course_unit_ids': ['unit-1'],
       });
     });
+
+    test(
+      'sends the tags in the order they were picked, and none when empty',
+      () async {
+        server.reply(201, _rating(tags: ['made_it_click', 'patient']));
+        final rated = await repository.rateSession(
+          sessionId: 'session-1',
+          score: 5,
+          comprehensionHelped: true,
+          tags: ['made_it_click', 'patient'],
+        );
+        server.reply(201, _rating());
+        await repository.rateSession(
+          sessionId: 'session-1',
+          score: 5,
+          comprehensionHelped: true,
+        );
+
+        expect(server.calls.first.body, {
+          'score': 5,
+          'comprehension_helped': true,
+          'tags': ['made_it_click', 'patient'],
+        });
+        // No tags is an absence, not an assertion that the student chose none
+        // from a list -- the same reasoning as the blank note above.
+        expect(server.calls.last.body, {
+          'score': 5,
+          'comprehension_helped': true,
+        });
+        expect(rated.tags, ['made_it_click', 'patient']);
+      },
+    );
 
     test('a score the API refuses is a validation failure', () async {
       server.reply(

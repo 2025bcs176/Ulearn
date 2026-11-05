@@ -1,5 +1,30 @@
+import 'package:intl/intl.dart';
 import 'package:peerpass/core/models/course_unit.dart';
 import 'package:peerpass/features/tutors/data/models/tutor_detail.dart';
+
+/// The date a review was left, without a time.
+///
+/// A review is a day, not a moment: "4 Mar 2026" is what a browsing student is
+/// deciding with, and the hour it was submitted at says nothing about the
+/// session. Local time, because the reader is the one comparing it to now.
+String reviewDateLabel(DateTime date) =>
+    DateFormat('d MMM yyyy').format(date.toLocal());
+
+/// The API's initials, as a byline is written.
+///
+/// The server sends letters only (`AS`); a byline reads `A.S.`. An account with
+/// no usable name has no initials at all, and "A student" is a truer byline than
+/// a lone question mark.
+String initialsLabel(String initials) {
+  final trimmed = initials.trim();
+  if (trimmed.isEmpty || trimmed == '?') return 'A student';
+  final letters = [
+    for (final letter in trimmed.split(''))
+      if (letter.trim().isNotEmpty) letter.toUpperCase(),
+  ];
+  if (letters.isEmpty) return 'A student';
+  return '${letters.join('.')}.';
+}
 
 /// How many sessions a tutor has taught, as a student reads it.
 ///

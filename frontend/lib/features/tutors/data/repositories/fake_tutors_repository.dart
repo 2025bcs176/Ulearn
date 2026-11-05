@@ -2,6 +2,7 @@ import 'package:peerpass/core/error/failures.dart';
 import 'package:peerpass/core/models/course_unit.dart';
 import 'package:peerpass/features/tutors/data/models/tutor_detail.dart';
 import 'package:peerpass/features/tutors/data/models/tutor_rail_entry.dart';
+import 'package:peerpass/features/tutors/data/models/tutor_review.dart';
 import 'package:peerpass/features/tutors/data/repositories/tutors_repository.dart';
 
 /// In-memory stand-in for the tutor discovery endpoints.
@@ -20,13 +21,22 @@ class FakeTutorsRepository implements TutorsRepository {
     List<TutorRailEntry> tutors = const [],
     List<TutorDetail> profiles = const [],
     List<CourseUnit> courseUnits = const [],
+    List<TutorReview> reviews = const [],
   }) : _tutors = List<TutorRailEntry>.of(tutors),
        _profiles = List<TutorDetail>.of(profiles),
-       _courseUnits = List<CourseUnit>.of(courseUnits);
+       _courseUnits = List<CourseUnit>.of(courseUnits),
+       _reviews = List<TutorReview>.of(reviews);
 
   final List<TutorRailEntry> _tutors;
   final List<TutorDetail> _profiles;
   final List<CourseUnit> _courseUnits;
+  final List<TutorReview> _reviews;
+
+  /// The tutor ids the reviews endpoint was asked about, in order.
+  ///
+  /// Kept so a screen test can prove the profile asked for *its* tutor rather
+  /// than showing one fixed list to everybody.
+  final List<String> reviewRequests = [];
 
   /// The course units the detail screen resolves endorsed ids against.
   List<CourseUnit> get catalogue => List<CourseUnit>.unmodifiable(_courseUnits);
@@ -72,6 +82,18 @@ class FakeTutorsRepository implements TutorsRepository {
     // does this: a student must not be able to learn which accounts hold the
     // tutor role from the shape of the refusal.
     throw const NotFoundFailure('That tutor could not be found.');
+  }
+
+  @override
+  Future<List<TutorReview>> reviews(String userId, {int? limit}) async {
+    reviewRequests.add(userId);
+    // The reviews endpoint 404s for a non-tutor exactly as the profile does. A
+    // fake that returned an empty list instead would let a screen show a
+    // plausible "no reviews yet" for an id the API rejects.
+    await tutor(userId);
+    return List<TutorReview>.unmodifiable(
+      limit == null ? _reviews : _reviews.take(limit),
+    );
   }
 
   @override

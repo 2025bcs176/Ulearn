@@ -56,7 +56,6 @@ SessionModel completed({bool isRated = false}) {
     'created_at': '2026-03-01T08:00:00Z',
     'scheduled_start': '2026-03-04T09:00:00Z',
     'ended_at': '2026-03-04T10:00:00Z',
-    'session_pin': '654321',
   });
 }
 
@@ -147,6 +146,7 @@ class _RefusingSessionsRepository extends FakeSessionsRepository {
     required int score,
     bool comprehensionHelped = false,
     String? feedbackText,
+    List<String> tags = const [],
     List<String> endorsedCourseUnitIds = const [],
   }) async {
     throw const ValidationFailure(
@@ -209,6 +209,107 @@ void main() {
     expect(second.submittedRatings.single.feedbackText, isNull);
   });
 
+  group('the tags', () {
+    Future<void> pick(WidgetTester tester, String label) async {
+      final chip = find.widgetWithText(FilterChip, label);
+      await tester.ensureVisible(chip);
+      await tester.tap(chip);
+      await _settle(tester);
+    }
+
+    bool isPicked(WidgetTester tester, String label) => tester
+        .widget<FilterChip>(find.widgetWithText(FilterChip, label))
+        .selected;
+
+    testWidgets('go out as wire values in the order they were picked', (
+      tester,
+    ) async {
+      final sessions = await _pumpRate(tester, _tutee);
+
+      await tester.tap(find.bySemanticsLabel('5 of 5'));
+      await _settle(tester);
+      await _chooseHelped(tester);
+      await pick(tester, 'Patient');
+      await pick(tester, 'Explained clearly');
+      await _submit(tester);
+
+      // The order is the student's, and the API stores the list as sent: a set
+      // would reorder what they chose to say first.
+      expect(sessions.submittedRatings.single.tags, [
+        'patient',
+        'clear_explanation',
+      ]);
+    });
+
+    testWidgets('are optional, and none is sent when none is picked', (
+      tester,
+    ) async {
+      final sessions = await _pumpRate(tester, _tutee);
+
+      await tester.tap(find.bySemanticsLabel('4 of 5'));
+      await _settle(tester);
+      await _chooseHelped(tester);
+      await _submit(tester);
+
+      // A student who wants to leave a score and go is not made to describe the
+      // tutor to get past the form.
+      expect(sessions.submittedRatings.single.tags, isEmpty);
+    });
+
+    testWidgets('a picked tag can be taken back', (tester) async {
+      final sessions = await _pumpRate(tester, _tutee);
+
+      await tester.tap(find.bySemanticsLabel('5 of 5'));
+      await _settle(tester);
+      await _chooseHelped(tester);
+      await pick(tester, 'On time');
+      expect(isPicked(tester, 'On time'), isTrue);
+      await pick(tester, 'On time');
+      expect(isPicked(tester, 'On time'), isFalse);
+      await _submit(tester);
+
+      expect(sessions.submittedRatings.single.tags, isEmpty);
+    });
+
+    testWidgets('stop at four, and the rest are disabled rather than refused', (
+      tester,
+    ) async {
+      final sessions = await _pumpRate(tester, _tutee);
+
+      await tester.tap(find.bySemanticsLabel('5 of 5'));
+      await _settle(tester);
+      await _chooseHelped(tester);
+      for (final label in [
+        'Explained clearly',
+        'Patient',
+        'Well prepared',
+        'Made it click',
+      ]) {
+        await pick(tester, label);
+      }
+
+      // The API rejects a fifth. A chip that fails on tap is a form arguing with
+      // a student, so the remaining chips are visibly unavailable instead.
+      final fifth = tester.widget<FilterChip>(
+        find.widgetWithText(FilterChip, 'Real examples'),
+      );
+      expect(fifth.onSelected, isNull);
+
+      await _submit(tester);
+      expect(sessions.submittedRatings.single.tags, hasLength(4));
+    });
+
+    testWidgets('are not offered to a tutor, who is not the one rating', (
+      tester,
+    ) async {
+      // Only the tutee submits feedback, and the profile publishes tags about a
+      // tutor. A tutor rating a student is not a review anybody can read.
+      await _pumpRate(tester, _tutor);
+
+      expect(find.byType(FilterChip), findsNothing);
+    });
+  });
+
   group('the endorsement', () {
     testWidgets('is off by default, and off means nothing is endorsed', (
       tester,
@@ -234,11 +335,16 @@ void main() {
     testWidgets('names the session own unit when it is ticked', (tester) async {
       final sessions = await _pumpRate(tester, _tutee);
 
-      await tester.tap(find.byType(CheckboxListTile));
-      await _settle(tester);
       await tester.tap(find.bySemanticsLabel('5 of 5'));
       await _settle(tester);
       await _chooseHelped(tester);
+
+      // The tag chips sit above the checkbox, so the endorsement is below the
+      // fold once the form has grown. Scrolling to it first keeps the tap on the
+      // row rather than on empty space above the list.
+      await tester.ensureVisible(find.byType(CheckboxListTile));
+      await tester.tap(find.byType(CheckboxListTile));
+      await _settle(tester);
       await _submit(tester);
 
       // Exactly the unit the session was booked for. The API's service refuses any

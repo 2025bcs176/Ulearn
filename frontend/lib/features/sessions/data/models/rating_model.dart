@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:peerpass/core/models/rating_tag.dart';
 
 /// A rating one person gave another for a session.
 ///
@@ -17,6 +18,7 @@ class RatingModel {
     required this.comprehensionHelped,
     required this.createdAt,
     this.feedbackText,
+    this.tags = const [],
   });
 
   /// Reads the wire form.
@@ -45,7 +47,9 @@ class RatingModel {
         score is! num ||
         comprehensionHelped is! bool ||
         createdAt is! String) {
-      throw const FormatException('rating response was missing a required field');
+      throw const FormatException(
+        'rating response was missing a required field',
+      );
     }
 
     final feedback = json['feedback_text'];
@@ -57,6 +61,7 @@ class RatingModel {
       score: score.toInt(),
       comprehensionHelped: comprehensionHelped,
       feedbackText: feedback is String && feedback.isNotEmpty ? feedback : null,
+      tags: readRatingTags(json['tags']),
       createdAt: DateTime.parse(createdAt),
     );
   }
@@ -76,6 +81,13 @@ class RatingModel {
 
   final String? feedbackText;
 
+  /// What the rater said the session was like, from the API's fixed vocabulary.
+  ///
+  /// Wire values rather than [RatingTag]s: a value this build predates is still
+  /// a tag the rater chose, and `ratingTagLabel` can name it without a member
+  /// existing for it.
+  final List<String> tags;
+
   final DateTime createdAt;
 
   /// The score as a student reads it back.
@@ -92,6 +104,7 @@ class RatingModel {
           other.score == score &&
           other.comprehensionHelped == comprehensionHelped &&
           other.feedbackText == feedbackText &&
+          listEquals(other.tags, tags) &&
           other.createdAt == createdAt;
 
   @override
@@ -103,6 +116,7 @@ class RatingModel {
     score,
     comprehensionHelped,
     feedbackText,
+    Object.hashAll(tags),
     createdAt,
   );
 

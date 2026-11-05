@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:peerpass/core/error/failures.dart';
+import 'package:peerpass/core/models/rating_tag.dart';
 import 'package:peerpass/core/state/session.dart';
 import 'package:peerpass/features/sessions/data/models/rating_model.dart';
 import 'package:peerpass/features/sessions/data/models/session_model.dart';
@@ -320,6 +321,7 @@ class RatingFormState {
     this.comprehensionHelped,
     this.feedback = '',
     this.endorsing = false,
+    this.selectedTags = const [],
     this.submitting = false,
     this.failure,
   });
@@ -339,9 +341,22 @@ class RatingFormState {
   /// against.
   final bool endorsing;
 
+  /// The tags chosen so far, in the order they were picked.
+  ///
+  /// A list rather than a set because the order is sent to the API and shown on
+  /// the profile: "patient, explained clearly" is what the student chose to say
+  /// first, and a set would reorder it arbitrarily.
+  final List<RatingTag> selectedTags;
+
   final bool submitting;
 
   final Failure? failure;
+
+  /// Whether one more tag can be added.
+  ///
+  /// The API refuses a fifth. The form disables the remaining chips instead of
+  /// letting the tap be rejected, so nobody types their way into an error.
+  bool get canAddTag => selectedTags.length < maxRatingTags;
 
   /// Whether the submit button does anything.
   ///
@@ -356,6 +371,7 @@ class RatingFormState {
     bool? comprehensionHelped,
     String? feedback,
     bool? endorsing,
+    List<RatingTag>? selectedTags,
     bool? submitting,
     Failure? failure,
     bool clearFailure = false,
@@ -365,6 +381,7 @@ class RatingFormState {
       comprehensionHelped: comprehensionHelped ?? this.comprehensionHelped,
       feedback: feedback ?? this.feedback,
       endorsing: endorsing ?? this.endorsing,
+      selectedTags: selectedTags ?? this.selectedTags,
       submitting: submitting ?? this.submitting,
       failure: clearFailure ? null : (failure ?? this.failure),
     );
@@ -378,6 +395,7 @@ class RatingFormState {
           other.comprehensionHelped == comprehensionHelped &&
           other.feedback == feedback &&
           other.endorsing == endorsing &&
+          listEquals(other.selectedTags, selectedTags) &&
           other.submitting == submitting &&
           other.failure == failure;
 
@@ -387,6 +405,7 @@ class RatingFormState {
     comprehensionHelped,
     feedback,
     endorsing,
+    Object.hashAll(selectedTags),
     submitting,
     failure,
   );
@@ -429,6 +448,29 @@ class RatingFormController extends Notifier<RatingFormState> {
     state = state.copyWith(endorsing: value, clearFailure: true);
   }
 
+  /// Adds a tag, or removes one that is already chosen.
+  ///
+  /// A fifth tag is ignored rather than replaced: swapping the oldest for the
+  /// newest would make the chip the student did not tap disappear. The chips are
+  /// disabled at the cap, so this guard is for a tap that raced a rebuild.
+  void toggleTag(RatingTag tag) {
+    if (state.submitting) return;
+    final selected = List<RatingTag>.of(state.selectedTags);
+    if (selected.remove(tag)) {
+      state = state.copyWith(
+        selectedTags: List<RatingTag>.unmodifiable(selected),
+        clearFailure: true,
+      );
+      return;
+    }
+    if (selected.length >= maxRatingTags) return;
+    selected.add(tag);
+    state = state.copyWith(
+      selectedTags: List<RatingTag>.unmodifiable(selected),
+      clearFailure: true,
+    );
+  }
+
   /// Sends the rating, returning it when the API accepted one.
   ///
   /// Null means the API refused it, and [RatingFormState.failure] says why. The
@@ -463,6 +505,7 @@ class RatingFormController extends Notifier<RatingFormState> {
             // note, and sending `''` would be a client asserting that the field
             // is empty rather than that it has nothing to say.
             feedbackText: note.isEmpty ? null : note,
+            tags: [for (final tag in state.selectedTags) tag.wireValue],
             endorsedCourseUnitIds: endorsedCourseUnitIds,
           );
       if (!ref.mounted) return rating;

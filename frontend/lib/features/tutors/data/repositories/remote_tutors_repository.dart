@@ -5,6 +5,7 @@ import 'package:peerpass/core/network/network_exceptions.dart';
 import 'package:peerpass/features/tutors/data/datasources/remote_tutors_datasource.dart';
 import 'package:peerpass/features/tutors/data/models/tutor_detail.dart';
 import 'package:peerpass/features/tutors/data/models/tutor_rail_entry.dart';
+import 'package:peerpass/features/tutors/data/models/tutor_review.dart';
 import 'package:peerpass/features/tutors/data/repositories/tutors_repository.dart';
 
 /// [TutorsRepository] over the real API.
@@ -35,6 +36,14 @@ class RemoteTutorsRepository implements TutorsRepository {
   @override
   Future<TutorDetail> tutor(String userId) =>
       _guard(() async => TutorDetail.fromJson(await _remote.tutor(userId)));
+
+  @override
+  Future<List<TutorReview>> reviews(String userId, {int? limit}) {
+    return _guard(() async {
+      final bodies = await _remote.reviews(userId, limit: limit);
+      return bodies.map(TutorReview.fromJson).toList();
+    });
+  }
 
   @override
   Future<List<CourseUnit>> courseUnits({String? universityId}) =>

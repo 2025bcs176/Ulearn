@@ -68,6 +68,10 @@ abstract interface class SessionsRepository {
   /// a second rating, so a student who changes their mind does not need a second
   /// screen to correct the first.
   ///
+  /// [tags] is optional and comes from the API's fixed vocabulary. Empty is a
+  /// real submission and not a missing one: a student who only wants to give a
+  /// score is not made to describe the tutor to get past the form.
+  ///
   /// [endorsedCourseUnitIds] is the other half of the same submission: a claim
   /// that the tutor actually covered those units, as separate from the score. It
   /// is optional and empty by default on purpose -- an empty list is a legitimate
@@ -80,6 +84,7 @@ abstract interface class SessionsRepository {
     required int score,
     required bool comprehensionHelped,
     String? feedbackText,
+    List<String> tags = const [],
     List<String> endorsedCourseUnitIds = const [],
   });
 

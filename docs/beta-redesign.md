@@ -13,15 +13,15 @@ This document is the plan of record for the redesign. The design language is in
 
 ## 1. Decisions locked
 
-| Decision | Choice |
-| --- | --- |
-| Visual direction | Campus Energy |
-| Session start/finish | One-tap mutual check-in; the six-digit PIN is retired |
-| Notifications | In-app inbox plus FCM push |
-| Tutor profiles | Bio, availability, optional avatar and contact |
-| Avatar for beta | Generated illustrated avatars; photo upload pipeline built behind config |
-| Distribution | Signed APK, not the Play Store |
-| Timeline | 10–12 weeks |
+| Decision             | Choice                                                                   |
+| -------------------- | ------------------------------------------------------------------------ |
+| Visual direction     | Campus Energy                                                            |
+| Session start/finish | One-tap mutual check-in; the six-digit PIN is retired                    |
+| Notifications        | In-app inbox plus FCM push                                               |
+| Tutor profiles       | Bio, availability, optional avatar and contact                           |
+| Avatar for beta      | Generated illustrated avatars; photo upload pipeline built behind config |
+| Distribution         | Signed APK, not the Play Store                                           |
+| Timeline             | 10–12 weeks                                                              |
 
 ## 2. What changes for the student
 
@@ -155,19 +155,19 @@ units so a student taps instead of typing.
 
 ## 5. Delivery sequence
 
-| Week | Phase | Output |
-| --- | --- | --- |
-| 1 | Foundation | Tokens, typography, components, shell, auth restyle, design docs |
-| 2 | Onboarding + Home | Faster wizard, Home composer, live session hero |
-| 3 | Find + request | Course chips, tutor cards, request sheet, topic chips |
-| 4 | Tutor profile | Bio, reviews, accept-time scheduling |
-| 5 | Notifications | Backend, inbox, badge, FCM, deep links |
-| 6 | Sessions | Mutual check-in, timeline, rating with tags |
-| 7 | Tutor HQ | Requests, progress ring, certificate, availability |
-| 8 | Hardening | Offline cache, error copy, analytics, crash reporting, safety |
-| 9 | Validation | Integration tests, PostgreSQL and migration checks, performance |
-| 10 | Dry run | 5–10 students, 5 tutors, real feedback |
-| 11–12 | Launch | Fixes, signed APK, content, runbook |
+| Week  | Phase             | Output                                                           |
+| ----- | ----------------- | ---------------------------------------------------------------- |
+| 1     | Foundation        | Tokens, typography, components, shell, auth restyle, design docs |
+| 2     | Onboarding + Home | Faster wizard, Home composer, live session hero                  |
+| 3     | Find + request    | Course chips, tutor cards, request sheet, topic chips            |
+| 4     | Tutor profile     | Bio, reviews, accept-time scheduling                             |
+| 5     | Notifications     | Backend, inbox, badge, FCM, deep links                           |
+| 6     | Sessions          | Mutual check-in, timeline, rating with tags                      |
+| 7     | Tutor HQ          | Requests, progress ring, certificate, availability               |
+| 8     | Hardening         | Offline cache, error copy, analytics, crash reporting, safety    |
+| 9     | Validation        | Integration tests, PostgreSQL and migration checks, performance  |
+| 10    | Dry run           | 5–10 students, 5 tutors, real feedback                           |
+| 11–12 | Launch            | Fixes, signed APK, content, runbook                              |
 
 ## 6. Beta launch checklist
 
@@ -211,8 +211,16 @@ Kept current so the plan and the code do not drift apart.
       request sheet is on the app's buttons and inputs. Backend tutor profile
       fields are in place, and matching excludes a paused tutor with
       `not_accepting_requests`.
+- [x] **Tutor profile.** Bio, public reviews and endorsed units, each section
+      with its own failure and retry so a failed review query does not replace a
+      readable profile. A review publishes the score, the tags and the rater's
+      initials; the note each student wrote stays private to the tutor. An
+      availability calendar and accept-time scheduling remain.
 - [ ] Topic chips on the request sheet, from the seeded unit topic lists.
-- [ ] Tutor profile: bio, reviews, availability, accept-time scheduling.
+- [x] **Rating with tags.** The form offers the API's fixed six-value vocabulary,
+      sends at most four in the order they were picked, and an empty list is a
+      real submission. Unknown tags still display on a profile, so an older APK
+      does not drop a newer server's vocabulary.
 - [x] **Notifications backend.** `notifications` and `device_tokens`, a
       reversible migration, the inbox and device endpoints, and a producer for
       every event the enum carries. Writes share the transaction of the action
@@ -228,6 +236,5 @@ Kept current so the plan and the code do not drift apart.
       party records their own arrival and departure, the card names who is
       still to tap, and finishing asks before it records a time that cannot be
       changed. The detail screen no longer offers a status transition.
-- [ ] Rating with tags, from the fixed vocabulary.
 - [ ] Tutor HQ.
 - [ ] Hardening, validation, dry run, launch.

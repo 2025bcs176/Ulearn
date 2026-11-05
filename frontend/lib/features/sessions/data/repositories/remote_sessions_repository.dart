@@ -74,6 +74,7 @@ class RemoteSessionsRepository implements SessionsRepository {
     required int score,
     required bool comprehensionHelped,
     String? feedbackText,
+    List<String> tags = const [],
     List<String> endorsedCourseUnitIds = const [],
   }) {
     return _guard(
@@ -83,6 +84,7 @@ class RemoteSessionsRepository implements SessionsRepository {
           score: score,
           comprehensionHelped: comprehensionHelped,
           feedbackText: feedbackText,
+          tags: tags,
           endorsedCourseUnitIds: endorsedCourseUnitIds,
         ),
       ),
