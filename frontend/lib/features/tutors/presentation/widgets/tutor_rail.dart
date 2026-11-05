@@ -58,12 +58,12 @@ class TutorRail extends ConsumerWidget {
 }
 
 class _CourseUnitSearch extends ConsumerWidget {
-  final Function(String?) onUnitSelected;
 
   const _CourseUnitSearch({
     required this.onUnitSelected,
     super.key,
   });
+  final Function(String?) onUnitSelected;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -73,7 +73,7 @@ class _CourseUnitSearch extends ConsumerWidget {
       controller: searchController,
       decoration: InputDecoration(
         hintText: 'Search course unit code (e.g. BCE2102)',
-        border: OutlineInputBorder(),
+        border: const OutlineInputBorder(),
         suffixIcon: searchController.text.isNotEmpty
             ? IconButton(
                 icon: const Icon(Icons.clear),
