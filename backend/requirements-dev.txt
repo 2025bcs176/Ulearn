@@ -1256,4 +1256,4 @@ websockets==17.1 \
     # via uvicorn
 
 # Added for multipart upload support
-python-multipart
+python-multipart==0.0.33
