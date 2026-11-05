@@ -2412,6 +2412,111 @@ COURSE_UNITS: tuple[tuple[str, str, str], ...] = (
         "PHY3114",
         "Introduction to Space Physics and Technology",
     ),
+    (
+        "Faculty of Science",
+        "MTH7104",
+        "Numerial Analysis",
+    ),
+    (
+        "Faculty of Science",
+        "MTH7105",
+        "Computational and Research Methods",
+    ),
+    (
+        "Faculty of Science",
+        "MTH7107",
+        "Combinatorial Design Theory",
+    ),
+    (
+        "Faculty of Science",
+        "PHY1101",
+        "Introduction to Physics Practical",
+    ),
+    (
+        "Faculty of Science",
+        "PHY1102",
+        "Mathematical Physics",
+    ),
+    (
+        "Faculty of Science",
+        "PHY1103",
+        "Classical Mechanics I",
+    ),
+    (
+        "Faculty of Science",
+        "PHY1104",
+        "Properties of Matter THEORY",
+    ),
+    (
+        "Faculty of Science",
+        "PHY1105",
+        "Heat and Thermodynamics",
+    ),
+    (
+        "Faculty of Science",
+        "PHY2101",
+        "Practical Physics I",
+    ),
+    (
+        "Faculty of Science",
+        "PHY2102",
+        "Mathematical Physics",
+    ),
+    (
+        "Faculty of Science",
+        "PHY2103",
+        "Classical Mechanics II",
+    ),
+    (
+        "Faculty of Science",
+        "PHY2104",
+        "Solid State Physics I",
+    ),
+    (
+        "Faculty of Science",
+        "PHY2107",
+        "Electromagnetism I",
+    ),
+    (
+        "Faculty of Science",
+        "PHY3101",
+        "Physics Practical III",
+    ),
+    (
+        "Faculty of Science",
+        "PHY3103",
+        "Classical Mechanics III",
+    ),
+    (
+        "Faculty of Science",
+        "PHY3104",
+        "Solid State Physics II",
+    ),
+    (
+        "Faculty of Science",
+        "PHY3108",
+        "Electronics II",
+    ),
+    (
+        "Faculty of Science",
+        "PHY3109",
+        "Stellar Stracture and Evolution",
+    ),
+    (
+        "Faculty of Science",
+        "PHY3111",
+        "Computational Physics II",
+    ),
+    (
+        "Faculty of Science",
+        "PHY3112",
+        "Communication Systems and Instrumentation",
+    ),
+    (
+        "Faculty of Science",
+        "PHY3114",
+        "Introduction to Space Physics and Technology",
+    ),
         ("Faculty of Applied Sciences and Technology",
         "BCE2104",
         "Signals and Systems"),

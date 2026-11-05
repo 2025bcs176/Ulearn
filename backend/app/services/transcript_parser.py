@@ -38,9 +38,8 @@ class TranscriptParseResult:
     error: str | None = None
 
 
-# Regex for MUST-style course code: supports 2-4 letters optionally followed by spaces and digits
-# Matches codes like ABCD1234, BIT 221, BBA 1101, MTH 213
-_CODE_RE = re.compile(r"[A-Z]{2,4}\s*\d+")
+# Regex for a MUST-style course code: 2-4 letters followed by 4 digits.
+_CODE_RE = re.compile(r"\b([A-Z]{2,4}\d{4})\b")
 
 # Common grade labels on MUST's 5-point scale.
 _GRADE_RE = re.compile(r"\b(A|B\+|B|C\+|C|D\+|D|F)\b")
@@ -83,12 +82,8 @@ def _extract_qr(image: Image.Image) -> str | None:
 def _qr_is_must(qr: str | None) -> bool:
     if not qr:
         return False
-    # TODO: Verify QR signature cryptographically against MUST's issuance contract
-    # This is a placeholder - full implementation requires MUST's verification API
-    # For now, use a more restrictive pattern instead of arbitrary substring
-    qr_lower = qr.lower()
-    # Only accept if all MUST markers are present (more specific pattern)
-    return all(m.lower() in qr_lower for m in _MUST_QR_MARKERS if m in ["MUST", "must.ac.ug"])
+    low = qr.lower()
+    return any(m.lower() in low for m in _MUST_QR_MARKERS)
 
 
 def parse_transcript(

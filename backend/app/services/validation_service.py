@@ -241,7 +241,7 @@ async def upload_evidence(
                 import re as _re
 
                 reg_pattern = _re.compile(
-                    r"\b" + re.escape(user.reg_no.strip()) + r"\b"
+                    r"\\b" + _re.escape(user.reg_no.strip()) + r"\\b"
                 )
                 if not reg_pattern.search(parsed.raw_text):
                     rejection = (
