@@ -43,8 +43,8 @@ UNITS_URL = "/v1/academics/course-units"
 
 OWN_FACULTY = "Faculty of Computing and Informatics Sciences"
 OTHER_FACULTY = "Faculty of Science"
-OWN_UNIT_CODE = "BIT 221"
-OTHER_UNIT_CODE = "SCH 211"
+OWN_UNIT_CODE = "BIT1101"
+OTHER_UNIT_CODE = "PHY1101"
 
 
 @pytest.fixture
@@ -182,7 +182,7 @@ async def test_the_catalogue_offers_only_your_own_faculty(
 
     units = (await committed_env.client.get(UNITS_URL, headers=bearer(body))).json()
 
-    assert {unit["code"] for unit in units} == {"BIT 221", "BIT 223", "BIT 225"}
+    assert {unit["code"] for unit in units} == {"BIT1101", "BIT1103", "BIT1104"}
 
 
 async def test_a_faculty_with_no_course_units_is_offered_none(
@@ -430,7 +430,7 @@ async def test_changing_faculty_drops_modules_that_are_now_out_of_scope(
 ) -> None:
     """The consequence of making faculty editable, so it is asserted here.
 
-    Moving from Computing to Science leaves BIT 221 behind as a primary module the
+    Moving from Computing to Science leaves BIT1101 behind as a primary module the
     account can no longer act on. Kept, the profile would be making a claim about
     itself that is false; dropped, the onboarding gate asks for the new ones. The
     same rule as a university change clearing the faculty one step up.
