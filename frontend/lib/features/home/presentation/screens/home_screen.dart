@@ -102,6 +102,7 @@ class HomeScreen extends ConsumerWidget {
               if (profile?.hasRole(UserRole.tutor) ?? false) ...[
                 const SizedBox(height: AppDimens.md),
                 _FeatureEntry(
+                  key: const ValueKey('waiting_entry'),
                   icon: Icons.mark_email_unread_outlined,
                   title: 'Waiting on you',
                   body:
@@ -111,6 +112,7 @@ class HomeScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: AppDimens.md),
                 _FeatureEntry(
+                  key: const ValueKey('certificate_entry'),
                   icon: Icons.workspace_premium_outlined,
                   title: 'My certificate',
                   body:
@@ -171,6 +173,7 @@ class HomeScreen extends ConsumerWidget {
 /// of them is a feature nobody can find.
 class _FeatureEntry extends StatelessWidget {
   const _FeatureEntry({
+    super.key,
     required this.icon,
     required this.title,
     required this.body,
