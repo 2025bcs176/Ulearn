@@ -173,11 +173,11 @@ class HomeScreen extends ConsumerWidget {
 /// of them is a feature nobody can find.
 class _FeatureEntry extends StatelessWidget {
   const _FeatureEntry({
-    super.key,
     required this.icon,
     required this.title,
     required this.body,
     required this.onTap,
+    super.key,
   });
 
   final IconData icon;
