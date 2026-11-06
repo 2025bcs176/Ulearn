@@ -906,7 +906,7 @@ async def test_seed_exposes_only_the_provisional_pilot_course_units(
             ("BIO1103", "Protist & Invertebrate Systematics"),
             (
                 "BIO1104",
-                "Practical one: Instrumentation, Cytology & invertebrates' identification",
+                "Practical one: Instrumentation, Cytology & invertebrates' identification",  # noqa: E501
             ),
             ("BIO2101", "Fundamentals of Ecology"),
             ("BIO2102", "Plant Physiology"),
@@ -914,7 +914,7 @@ async def test_seed_exposes_only_the_provisional_pilot_course_units(
             ("BIO2104", "Ichthyology & Herpetology"),
             (
                 "BIO2105",
-                "Practical three: Microorganisms' identification & Plant/Animals structures",
+                "Practical three: Microorganisms' identification & Plant/Animals structures",  # noqa: E501
             ),
             ("BIO3101", "Hydrobiology"),
             ("BIO3102", "Animal Histology"),
@@ -922,7 +922,7 @@ async def test_seed_exposes_only_the_provisional_pilot_course_units(
             ("BIO3104", "Plant Breeding & Crop Improvement"),
             (
                 "BIO3105",
-                "Practical five: Water quality and Animal's Physiology & histological investigations",
+                "Practical five: Water quality and Animal's Physiology & histological investigations",  # noqa: E501
             ),
             ("CHE1101", "Basic inorganic chemistry THEORY"),
             ("CHE1102", "Basic Physical Chemistry"),
