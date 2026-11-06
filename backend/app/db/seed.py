@@ -94,86 +94,47 @@ FACULTIES: tuple[tuple[str, str], ...] = (
 
 PROGRAMS: tuple[tuple[str, str, str], ...] = (
     ("Faculty of Medicine", "undergraduate", "Medicine and Surgery (MBChB)"),
-    ("Faculty of Medicine", "undergraduate", "Pharmacy"),
-    ("Faculty of Medicine", "undergraduate", "Nursing Science"),
-    ("Faculty of Medicine", "undergraduate", "Medical Laboratory Science"),
-    ("Faculty of Medicine", "undergraduate", "Physiotherapy"),
+    
+
+    
+
+    
+
+    
+
     ("Faculty of Medicine", "postgraduate", "Master of Medicine (MMed)"),
-    ("Faculty of Science", "undergraduate", "Bachelor of Science with Education"),
-    ("Faculty of Science", "postgraduate", "MSc and PhD in Biology"),
-    ("Faculty of Science", "postgraduate", "MSc and PhD in Chemistry"),
-    ("Faculty of Science", "postgraduate", "MSc and PhD in Mathematics"),
-    ("Faculty of Science", "postgraduate", "MSc and PhD in Physics"),
+    
+
+    
+
+    
+
+    
+
+    
+
     (
         "Faculty of Computing and Informatics Sciences",
         "undergraduate",
         "Computer Science",
     ),
-    (
-        "Faculty of Computing and Informatics Sciences",
-        "undergraduate",
-        "Information Technology",
-    ),
+    
     (
         "Faculty of Computing and Informatics Sciences",
         "postgraduate",
         "Health Information Technology",
     ),
-    (
-        "Faculty of Computing and Informatics Sciences",
-        "postgraduate",
-        "Information Systems",
-    ),
-    (
-        "Faculty of Applied Sciences and Technology",
-        "undergraduate",
-        "Biomedical Engineering",
-    ),
-    (
-        "Faculty of Applied Sciences and Technology",
-        "undergraduate",
-        "Electrical and Electronics Engineering",
-    ),
-    (
-        "Faculty of Applied Sciences and Technology",
-        "undergraduate",
-        "Petroleum Engineering",
-    ),
-    (
-        "Faculty of Applied Sciences and Technology",
-        "undergraduate",
-        "Environmental Management",
-    ),
-    (
-        "Faculty of Interdisciplinary Studies",
-        "undergraduate",
-        "Gender and Applied Women Health",
-    ),
-    (
-        "Faculty of Interdisciplinary Studies",
-        "undergraduate",
-        "Planning and Community Development",
-    ),
-    (
-        "Faculty of Interdisciplinary Studies",
-        "undergraduate",
-        "Agricultural Livelihoods",
-    ),
-    (
-        "Faculty of Business and Management Sciences",
-        "undergraduate",
-        "Business Administration",
-    ),
-    (
-        "Faculty of Business and Management Sciences",
-        "undergraduate",
-        "Accounting and Finance",
-    ),
-    (
-        "Faculty of Business and Management Sciences",
-        "undergraduate",
-        "Procurement and Supply Chain Management",
-    ),
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 )
 
 #: The provisional MUST pilot catalogue: `(faculty, code, name)`.
@@ -2412,111 +2373,27 @@ COURSE_UNITS: tuple[tuple[str, str, str], ...] = (
         "PHY3114",
         "Introduction to Space Physics and Technology",
     ),
-    (
-        "Faculty of Science",
-        "MTH7104",
-        "Numerial Analysis",
-    ),
-    (
-        "Faculty of Science",
-        "MTH7105",
-        "Computational and Research Methods",
-    ),
-    (
-        "Faculty of Science",
-        "MTH7107",
-        "Combinatorial Design Theory",
-    ),
-    (
-        "Faculty of Science",
-        "PHY1101",
-        "Introduction to Physics Practical",
-    ),
-    (
-        "Faculty of Science",
-        "PHY1102",
-        "Mathematical Physics",
-    ),
-    (
-        "Faculty of Science",
-        "PHY1103",
-        "Classical Mechanics I",
-    ),
-    (
-        "Faculty of Science",
-        "PHY1104",
-        "Properties of Matter THEORY",
-    ),
-    (
-        "Faculty of Science",
-        "PHY1105",
-        "Heat and Thermodynamics",
-    ),
-    (
-        "Faculty of Science",
-        "PHY2101",
-        "Practical Physics I",
-    ),
-    (
-        "Faculty of Science",
-        "PHY2102",
-        "Mathematical Physics",
-    ),
-    (
-        "Faculty of Science",
-        "PHY2103",
-        "Classical Mechanics II",
-    ),
-    (
-        "Faculty of Science",
-        "PHY2104",
-        "Solid State Physics I",
-    ),
-    (
-        "Faculty of Science",
-        "PHY2107",
-        "Electromagnetism I",
-    ),
-    (
-        "Faculty of Science",
-        "PHY3101",
-        "Physics Practical III",
-    ),
-    (
-        "Faculty of Science",
-        "PHY3103",
-        "Classical Mechanics III",
-    ),
-    (
-        "Faculty of Science",
-        "PHY3104",
-        "Solid State Physics II",
-    ),
-    (
-        "Faculty of Science",
-        "PHY3108",
-        "Electronics II",
-    ),
-    (
-        "Faculty of Science",
-        "PHY3109",
-        "Stellar Stracture and Evolution",
-    ),
-    (
-        "Faculty of Science",
-        "PHY3111",
-        "Computational Physics II",
-    ),
-    (
-        "Faculty of Science",
-        "PHY3112",
-        "Communication Systems and Instrumentation",
-    ),
-    (
-        "Faculty of Science",
-        "PHY3114",
-        "Introduction to Space Physics and Technology",
-    ),
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     ("Faculty of Applied Sciences and Technology", "BCE2104", "Signals and Systems"),
     (
         "Faculty of Applied Sciences and Technology",
