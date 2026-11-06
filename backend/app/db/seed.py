@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session_factory
 from app.models.course_unit import CourseUnit, Program, Subject, University
+from app.models.course_unit_topic import CourseUnitTopic
 from app.models.grading_scale import Grade, GradingScale
 
 UNIVERSITY_NAME = "Mbarara University of Science and Technology"
@@ -254,6 +255,68 @@ COURSE_UNITS: tuple[tuple[str, str, str], ...] = (
     ),
 )
 
+#: Suggested questions for the six pilot units, by unit code.
+#:
+#: **Provisional until MUST confirms the launch catalogue.** These are the units a
+#: first- or second-year student is most likely to ask for help with, and the
+#: labels are phrased as the student would say them rather than as syllabus
+#: headings. A label becomes the request's topic verbatim when tapped, so it has
+#: to read like a question somebody would actually send: "SQL SELECT queries",
+#: not "SQL/DQL". Adjusting a list is a data change, not a code change.
+COURSE_UNIT_TOPICS: dict[str, tuple[str, ...]] = {
+    "BIT1101": (
+        "Computer hardware and peripherals",
+        "Operating system basics",
+        "Word processing and spreadsheets",
+        "Internet and email",
+        "Computer lab practicals",
+        "ICT terminology",
+    ),
+    "BIT1103": (
+        "Pointers and memory",
+        "Arrays and strings",
+        "Loops and conditionals",
+        "Functions and recursion",
+        "Structures and typedef",
+        "File handling in C",
+        "Debugging a C program",
+    ),
+    "BIT1105": (
+        "Matrices and determinants",
+        "Sets and logic",
+        "Functions and graphs",
+        "Sequences and series",
+        "Probability basics",
+        "Number bases",
+    ),
+    "BIT1106": (
+        "Lists and dictionaries",
+        "Loops and conditionals",
+        "Functions and modules",
+        "Classes and objects",
+        "Exceptions and debugging",
+        "File handling in Python",
+    ),
+    "BIT2103": (
+        "ER diagrams",
+        "Normalisation",
+        "SQL SELECT queries",
+        "Joins and subqueries",
+        "Transactions and ACID",
+        "Indexes and query plans",
+        "Database design project",
+    ),
+    "BIT2107": (
+        "Requirements gathering",
+        "Use case and UML diagrams",
+        "Agile and Scrum",
+        "Software testing",
+        "Design patterns",
+        "Version control with Git",
+        "Project documentation",
+    ),
+}
+
 
 async def _seed_grading_scale(db: AsyncSession) -> GradingScale:
     """MUST's scale and its grade catalogue, created if absent."""
@@ -378,6 +441,58 @@ async def _seed_course_units(
     return added, sorted(orphans)
 
 
+async def _seed_course_unit_topics(
+    db: AsyncSession, university: University
+) -> tuple[int, list[str]]:
+    """The pilot units' suggested questions. Returns the count and any miss.
+
+    Idempotent: a label the unit already has is left in place, and only its order
+    is corrected. A unit code that is not in the catalogue is reported rather than
+    skipped silently, because a topic list attached to nothing is invisible from
+    the student's side and has no other symptom.
+    """
+    added = 0
+    missing: list[str] = []
+    for code, labels in COURSE_UNIT_TOPICS.items():
+        unit = await db.scalar(
+            select(CourseUnit).where(
+                CourseUnit.university_id == university.id,
+                CourseUnit.code == code,
+            )
+        )
+        if unit is None:
+            missing.append(code)
+            continue
+
+        existing = {
+            topic.label: topic
+            for topic in (
+                await db.execute(
+                    select(CourseUnitTopic).where(
+                        CourseUnitTopic.course_unit_id == unit.id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        }
+        for order, label in enumerate(labels):
+            topic = existing.get(label)
+            if topic is None:
+                db.add(
+                    CourseUnitTopic(
+                        course_unit_id=unit.id,
+                        label=label,
+                        sort_order=order,
+                    )
+                )
+                added += 1
+            elif topic.sort_order != order:
+                topic.sort_order = order
+    await db.flush()
+    return added, sorted(missing)
+
+
 async def _seed_programs(
     db: AsyncSession,
     university: University,
@@ -417,6 +532,7 @@ async def seed(db: AsyncSession) -> None:
         subject.university_id = university.id
     await db.flush()
     added, orphans = await _seed_course_units(db, university, subjects)
+    topics_added, topic_orphans = await _seed_course_unit_topics(db, university)
     programs_added = await _seed_programs(db, university, subjects)
     await db.commit()
 
@@ -429,11 +545,14 @@ async def seed(db: AsyncSession) -> None:
     print(f"  faculties     : {len(subjects)}")
     print(f"  programs      : {programs_added} added")
     print(f"  course units  : {added} added")
+    print(f"  unit topics   : {topics_added} added")
     if orphans:
         # Loud rather than silent: a unit with no faculty is invisible in the
         # wizard's faculty filter, which looks like a bug from the student's
         # side and has no other symptom.
         print(f"  WARNING: no faculty row for {', '.join(orphans)}")
+    if topic_orphans:
+        print(f"  WARNING: topics named for missing units {', '.join(topic_orphans)}")
 
 
 def main() -> None:

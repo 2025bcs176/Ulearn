@@ -364,6 +364,84 @@ void main() {
     });
   });
 
+  group('the suggested topics for a unit', () {
+    test('is read from the unit own path and keeps the order', () async {
+      server.reply(200, [
+        {'id': 'topic-1', 'label': 'SQL SELECT queries', 'sort_order': 0},
+        {'id': 'topic-2', 'label': 'Joins and subqueries', 'sort_order': 1},
+      ]);
+
+      final topics = await repository.courseUnitTopics('unit-1');
+
+      expect(server.calls.single.method, 'GET');
+      expect(
+        server.calls.single.path,
+        '/v1/academics/course-units/unit-1/topics',
+      );
+      expect(topics.map((topic) => topic.label), [
+        'SQL SELECT queries',
+        'Joins and subqueries',
+      ]);
+      expect(topics.first.publicId, 'topic-1');
+    });
+
+    test('an absent order is zero, not a dropped suggestion', () async {
+      server.reply(200, [
+        {'id': 'topic-1', 'label': 'Normalisation'},
+      ]);
+
+      final topics = await repository.courseUnitTopics('unit-1');
+
+      expect(topics.single.sortOrder, 0);
+    });
+
+    test('a unit with no suggestions is a list, not a failure', () async {
+      server.reply(200, const []);
+
+      expect(await repository.courseUnitTopics('unit-1'), isEmpty);
+    });
+
+    test('a malformed suggestion becomes a ServerFailure', () async {
+      server.reply(200, [
+        {'id': 'topic-1'},
+      ]);
+
+      await expectLater(
+        repository.courseUnitTopics('unit-1'),
+        throwsA(isA<ServerFailure>()),
+      );
+    });
+
+    test('another faculty unit is a NotFoundFailure', () async {
+      server.reply(
+        404,
+        _problem(status: 404, detail: 'That course unit could not be found.'),
+      );
+
+      await expectLater(
+        repository.courseUnitTopics('other-unit'),
+        throwsA(isA<NotFoundFailure>()),
+      );
+    });
+
+    test('a dropped connection is a NetworkFailure', () async {
+      server.fail(
+        DioException(
+          requestOptions: RequestOptions(
+            path: '/v1/academics/course-units/unit-1/topics',
+          ),
+          type: DioExceptionType.connectionError,
+          error: 'connection refused',
+        ),
+      );
+
+      await expectLater(
+        repository.courseUnitTopics('unit-1'),
+        throwsA(isA<NetworkFailure>()),
+      );
+    });
+  });
+
   group('asking a tutor to take a request', () {
     test('posts the unit and the topic, and nothing else', () async {
       server.reply(201, _helpResponse());

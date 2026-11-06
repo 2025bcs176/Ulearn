@@ -249,6 +249,7 @@ Primary tables (see Section 5 for details):
 | `grades`            | The grade catalogue for a scale                                   |
 | `subjects`          | Faculty or department grouping for course units                   |
 | `course_units`      | University curriculum mapping                                     |
+| `course_unit_topics` | Suggested questions a request sheet offers for a unit            |
 | `competencies`      | Tutor eligibility per course unit (grade + verification status)   |
 | `tutor_profiles`    | A tutor's standing and the counters it is derived from            |
 | `help_requests`     | What a student asked for, before any tutor was matched            |
@@ -442,6 +443,24 @@ distinct, so a nullable university would let two unscoped units share a code. It
 is also required by matching, which only pairs people at one institution.
 Scoping the code is what lets `MAT 221` exist at two universities as two
 different courses, graded on two different scales.
+
+**Course_Unit_Topics**
+
+- `id` (PK), `course_unit_id` (FK → course_units, `ON DELETE CASCADE`)
+- `label`, `sort_order`
+- Unique on (`course_unit_id`, `label`)
+
+Suggested questions, not a taxonomy. A unit is too broad to type into one box and
+a first-year may not know the word for what they are stuck on, so the request
+sheet offers the unit's own labels as chips. Tapping one sends the **label** as
+the help request's free-text `topic`; nothing is matched on it and a topic outside
+the list is a normal request. The table is reference data with the unit's own
+lifetime and no user foreign key.
+
+`GET /v1/academics/course-units/{id}/topics` applies the same faculty scope as the
+catalogue: another faculty's unit is a 404, while a visible unit with no
+suggestions is a 200 with `[]`. Separating those two answers is what lets the
+sheet fall back to typing without telling a student their unit does not exist.
 
 **Competencies**
 

@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:peerpass/core/error/failures.dart';
 import 'package:peerpass/core/models/course_unit.dart';
 import 'package:peerpass/core/state/session.dart';
+import 'package:peerpass/features/matching/data/models/course_unit_topic.dart';
 import 'package:peerpass/features/matching/data/models/help_request.dart';
 import 'package:peerpass/features/matching/data/models/match_result.dart';
 import 'package:peerpass/features/matching/data/repositories/matching_repository.dart';
@@ -36,6 +37,20 @@ final courseUnitOptionsProvider = FutureProvider<List<CourseUnit>>((ref) {
         subjectId: profile?.facultyId,
       );
 }, retry: (retryCount, error) => null);
+
+/// The suggested questions for one course unit, for the request sheet.
+///
+/// A family keyed by unit, because asking about `CSC 121` and then `MAT 221`
+/// are two answers rather than one slot each overwriting the other. A failed
+/// query is not retried underneath the sheet: the sheet offers a small retry of
+/// its own, and a query re-firing while the student types would rebuild the form
+/// for a reason they did not cause.
+final FutureProviderFamily<List<CourseUnitTopic>, String>
+courseUnitTopicsProvider = FutureProvider.family<List<CourseUnitTopic>, String>(
+  (ref, courseUnitId) =>
+      ref.watch(matchingRepositoryProvider).courseUnitTopics(courseUnitId),
+  retry: (retryCount, error) => null,
+);
 
 /// The tutors the API will propose for one query.
 ///

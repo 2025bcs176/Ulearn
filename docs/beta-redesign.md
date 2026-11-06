@@ -153,6 +153,13 @@ never in a list response, and never on a public profile.
 `GET /v1/academics/course-units/{id}/topics`. Seeded for the six MUST pilot
 units so a student taps instead of typing.
 
+The six-unit list is **provisional** until MUST confirms the launch catalogue:
+the units most likely to be asked about in years one and two, each with six or
+seven student-phrased questions. Changing a list is a seed edit, not a code
+change. The chips sit under the request sheet's topic field so the field does not
+move while suggestions load; a failed query is said and offers a retry, and the
+free-text field is always the way through.
+
 ## 5. Delivery sequence
 
 | Week  | Phase             | Output                                                           |
@@ -216,7 +223,11 @@ Kept current so the plan and the code do not drift apart.
       readable profile. A review publishes the score, the tags and the rater's
       initials; the note each student wrote stays private to the tutor. An
       availability calendar and accept-time scheduling remain.
-- [ ] Topic chips on the request sheet, from the seeded unit topic lists.
+- [x] **Topic chips.** The request sheet reads its unit's suggestions, offers
+      them under the topic field, and sends the tapped phrase as the student's
+      own free text. An empty list, a failed query, and a typed topic all leave
+      the form usable; the six-unit seed is provisional pending MUST's launch
+      catalogue.
 - [x] **Rating with tags.** The form offers the API's fixed six-value vocabulary,
       sends at most four in the order they were picked, and an empty list is a
       real submission. Unknown tags still display on a profile, so an older APK

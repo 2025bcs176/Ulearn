@@ -90,6 +90,7 @@ class _MatchResultsScreenState extends ConsumerState<MatchResultsScreen> {
   Future<void> _askTutor(MatchCandidate candidate) async {
     final draft = await showRequestTopicSheet(
       context,
+      courseUnitId: widget.courseUnitId,
       initialTopic: widget.topic,
     );
     if (draft == null || !mounted) return;

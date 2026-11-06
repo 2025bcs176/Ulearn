@@ -17,6 +17,7 @@ from app.models.base import TimestampMixin, public_id_column
 
 if TYPE_CHECKING:
     from app.models.competency import Competency
+    from app.models.course_unit_topic import CourseUnitTopic
     from app.models.grading_scale import Grade, GradingScale
 
 
@@ -202,6 +203,14 @@ class CourseUnit(Base, TimestampMixin):
     #: so the database will remove these without the ORM loading them first.
     competencies: Mapped[list[Competency]] = relationship(
         back_populates="course_unit", passive_deletes=True
+    )
+
+    #: Suggested questions for the request sheet. Reference data with the unit's
+    #: own lifetime, so they leave when it does.
+    topics: Mapped[list[CourseUnitTopic]] = relationship(
+        back_populates="course_unit",
+        passive_deletes=True,
+        order_by="CourseUnitTopic.sort_order, CourseUnitTopic.label",
     )
 
     #: Public ids of referenced resources, for response schemas. See the note in

@@ -18,10 +18,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, DatabaseSession
+from app.core.exceptions import NotFoundProblem
 from app.models.course_unit import CourseUnit, Program, Subject, University
+from app.models.course_unit_topic import CourseUnitTopic
 from app.models.grading_scale import Grade, GradingScale
 from app.schemas.academic import (
     CourseUnitResponse,
+    CourseUnitTopicResponse,
     GradeResponse,
     GradingScaleResponse,
     ProgramResponse,
@@ -195,6 +198,43 @@ async def list_course_units(
 
     result = await db.execute(query.order_by(CourseUnit.university_id, CourseUnit.code))
     return [CourseUnitResponse.model_validate(row) for row in result.scalars()]
+
+
+@router.get(
+    "/course-units/{course_unit_id}/topics",
+    response_model=list[CourseUnitTopicResponse],
+    summary="List a course unit's suggested topics",
+)
+async def list_course_unit_topics(
+    course_unit_id: uuid.UUID,
+    db: DatabaseSession,
+    caller: CurrentUser,
+) -> list[CourseUnitTopicResponse]:
+    """The questions a request sheet offers for one unit.
+
+    Authenticated and faculty-scoped for the same reason the catalogue is: the
+    suggestions describe a unit only one faculty's students may act on. A unit in
+    another faculty answers 404 rather than an empty list, because an empty list
+    would say "this unit has no suggestions" -- a normal state -- when the truth
+    is that the caller may not see it at all.
+
+    A unit with no suggestions is the normal empty state, not a failure: the
+    catalogue can be loaded before its topics are, and a student must still be
+    able to type their own topic.
+    """
+    query = faculty_scope.visible_to(select(CourseUnit.id), caller.user).where(
+        CourseUnit.public_id == course_unit_id
+    )
+    unit_id = (await db.execute(query)).scalar_one_or_none()
+    if unit_id is None:
+        raise NotFoundProblem("That course unit could not be found.")
+
+    result = await db.execute(
+        select(CourseUnitTopic)
+        .where(CourseUnitTopic.course_unit_id == unit_id)
+        .order_by(CourseUnitTopic.sort_order, CourseUnitTopic.label)
+    )
+    return [CourseUnitTopicResponse.model_validate(row) for row in result.scalars()]
 
 
 async def _subject_uuid(db: AsyncSession, public_id: uuid.UUID) -> uuid.UUID | None:

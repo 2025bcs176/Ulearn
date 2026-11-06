@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:peerpass/core/constants/app_dimens.dart';
 import 'package:peerpass/core/theme/app_palette.dart';
 import 'package:peerpass/core/widgets/app_button.dart';
+import 'package:peerpass/features/matching/presentation/providers/matching_providers.dart';
 
 /// What a student wrote when asking for help.
 typedef RequestDraft = ({String topic, String? description});
@@ -19,6 +21,7 @@ typedef RequestDraft = ({String topic, String? description});
 /// and collapsing them would create the second request out of a cancelled sheet.
 Future<RequestDraft?> showRequestTopicSheet(
   BuildContext context, {
+  required String courseUnitId,
   String? initialTopic,
 }) {
   return showModalBottomSheet<RequestDraft>(
@@ -31,7 +34,10 @@ Future<RequestDraft?> showRequestTopicSheet(
       // a desk, which is a form nobody can read comfortably.
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
-        child: _RequestTopicForm(initialTopic: initialTopic),
+        child: _RequestTopicForm(
+          courseUnitId: courseUnitId,
+          initialTopic: initialTopic,
+        ),
       ),
     ),
   );
@@ -48,8 +54,12 @@ const int minTopicLength = 3;
 const int maxTopicLength = 200;
 const int maxDescriptionLength = 2000;
 
-class _RequestTopicForm extends StatefulWidget {
-  const _RequestTopicForm({this.initialTopic});
+class _RequestTopicForm extends ConsumerStatefulWidget {
+  const _RequestTopicForm({required this.courseUnitId, this.initialTopic});
+
+  /// The unit whose suggestions are offered. The API scopes them to the caller's
+  /// faculty, so this is a public id the screen already holds.
+  final String courseUnitId;
 
   /// What the student typed on the home composer, if they came from there.
   ///
@@ -59,10 +69,10 @@ class _RequestTopicForm extends StatefulWidget {
   final String? initialTopic;
 
   @override
-  State<_RequestTopicForm> createState() => _RequestTopicFormState();
+  ConsumerState<_RequestTopicForm> createState() => _RequestTopicFormState();
 }
 
-class _RequestTopicFormState extends State<_RequestTopicForm> {
+class _RequestTopicFormState extends ConsumerState<_RequestTopicForm> {
   late final TextEditingController _topic = TextEditingController(
     text: widget.initialTopic,
   );
@@ -87,6 +97,20 @@ class _RequestTopicFormState extends State<_RequestTopicForm> {
     return topic.length >= minTopicLength &&
         topic.length <= maxTopicLength &&
         _topicError == null;
+  }
+
+  /// Uses a suggestion as the topic.
+  ///
+  /// Replaces what is in the field rather than appending: a suggestion is an
+  /// alternative to typing, and "how do I find eigenvalues, Eigenvalues" is not
+  /// a better question than either half of it. The student can still edit the
+  /// result before sending.
+  void _useSuggestion(String label) {
+    _topic.value = TextEditingValue(
+      text: label,
+      selection: TextSelection.collapsed(offset: label.length),
+    );
+    setState(() => _topicError = null);
   }
 
   void _submit() {
@@ -171,6 +195,12 @@ class _RequestTopicFormState extends State<_RequestTopicForm> {
               },
             ),
             const SizedBox(height: AppDimens.md),
+            _Suggestions(
+              courseUnitId: widget.courseUnitId,
+              chosen: _topic.text.trim(),
+              onPick: _useSuggestion,
+            ),
+            const SizedBox(height: AppDimens.md),
             TextField(
               controller: _description,
               maxLines: 3,
@@ -199,6 +229,93 @@ class _RequestTopicFormState extends State<_RequestTopicForm> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The unit's suggested questions, offered as chips under the topic field.
+///
+/// Below the field so the field does not move when the suggestions arrive: the
+/// sheet opens with the keyboard up and the student already typing, and a form
+/// that reflows under a thumb is how a tap lands on the wrong control. Loading
+/// renders nothing for the same reason -- a spinner in this slot would push the
+/// description and button down for a request that usually answers before the
+/// student finishes their first word.
+///
+/// A failure is said and does not block: free text is the whole feature, and the
+/// chips are an aid. It is not retried automatically, so the student gets a
+/// small retry they can press rather than a query firing under the form.
+class _Suggestions extends ConsumerWidget {
+  const _Suggestions({
+    required this.courseUnitId,
+    required this.chosen,
+    required this.onPick,
+  });
+
+  final String courseUnitId;
+
+  /// What is currently in the topic field, so the matching chip reads as chosen.
+  final String chosen;
+
+  final ValueChanged<String> onPick;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final palette = AppPalette.of(context);
+    final topics = ref.watch(courseUnitTopicsProvider(courseUnitId));
+
+    if (topics.hasError) {
+      return Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Common questions could not be loaded. You can still write '
+              'your own.',
+              style: theme.textTheme.bodySmall?.copyWith(color: palette.muted),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Retry suggestions',
+            icon: const Icon(Icons.refresh),
+            onPressed: () =>
+                ref.invalidate(courseUnitTopicsProvider(courseUnitId)),
+          ),
+        ],
+      );
+    }
+
+    final suggestions = topics.value;
+    if (suggestions == null || suggestions.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Common questions in this unit',
+          style: theme.textTheme.titleSmall,
+        ),
+        const SizedBox(height: AppDimens.xxs),
+        Text(
+          'Tap one to use it as your topic, or write your own above.',
+          style: theme.textTheme.bodySmall?.copyWith(color: palette.muted),
+        ),
+        const SizedBox(height: AppDimens.sm),
+        Wrap(
+          spacing: AppDimens.sm,
+          runSpacing: AppDimens.sm,
+          children: [
+            for (final topic in suggestions)
+              ChoiceChip(
+                label: Text(topic.label),
+                selected: chosen == topic.label,
+                onSelected: (_) => onPick(topic.label),
+              ),
+          ],
+        ),
+      ],
     );
   }
 }

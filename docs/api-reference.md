@@ -466,6 +466,32 @@ catalogue has not been loaded — which the app must still let such a student
 leave onboarding past — see
 [A faculty with no course units](#a-faculty-with-no-course-units).
 
+### `GET /v1/academics/course-units/{id}/topics`
+
+**Requires authentication.** The suggested questions for one course unit, in the
+publisher's order. Offered as chips on the request sheet: a label becomes the
+request's `topic` verbatim when tapped, so it is free text in the student's words
+and not an id the tutor has to resolve.
+
+```json
+[
+  { "id": "…", "label": "SQL SELECT queries", "sort_order": 0 },
+  { "id": "…", "label": "Joins and subqueries", "sort_order": 1 }
+]
+```
+
+The same faculty scope as the catalogue applies. A unit in another faculty, or an
+unknown id, is a **404**; a unit the caller may see but that has no suggestions
+is a **200** with `[]`. The two are different claims and must not look alike: an
+empty list says the unit is published with no suggestions yet, and the sheet
+falls back to its free-text field. Suggestions are advisory; a topic outside the
+list is a normal request.
+
+| Status | When                                                              |
+| ------ | ----------------------------------------------------------------- |
+| 401    | No token.                                                         |
+| 404    | Unknown unit, or a unit outside the caller's own faculty.         |
+
 ### A faculty with no course units
 
 A student whose faculty publishes nothing can never declare a primary course
