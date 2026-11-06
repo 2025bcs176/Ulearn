@@ -94,47 +94,17 @@ FACULTIES: tuple[tuple[str, str], ...] = (
 
 PROGRAMS: tuple[tuple[str, str, str], ...] = (
     ("Faculty of Medicine", "undergraduate", "Medicine and Surgery (MBChB)"),
-    
-
-    
-
-    
-
-    
-
     ("Faculty of Medicine", "postgraduate", "Master of Medicine (MMed)"),
-    
-
-    
-
-    
-
-    
-
-    
-
     (
         "Faculty of Computing and Informatics Sciences",
         "undergraduate",
         "Computer Science",
     ),
-    
     (
         "Faculty of Computing and Informatics Sciences",
         "postgraduate",
         "Health Information Technology",
     ),
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
 )
 
 #: The provisional MUST pilot catalogue: `(faculty, code, name)`.
@@ -2373,27 +2343,6 @@ COURSE_UNITS: tuple[tuple[str, str, str], ...] = (
         "PHY3114",
         "Introduction to Space Physics and Technology",
     ),
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     ("Faculty of Applied Sciences and Technology", "BCE2104", "Signals and Systems"),
     (
         "Faculty of Applied Sciences and Technology",

@@ -220,7 +220,6 @@ def _register_exception_handlers(application: FastAPI) -> None:
 app = create_app()
 
 
-
 @app.get("/", include_in_schema=False)
 async def root_redirect():
     # Automatically bounces anyone visiting the bare URL to the API docs
