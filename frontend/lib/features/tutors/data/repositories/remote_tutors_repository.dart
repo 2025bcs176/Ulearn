@@ -4,6 +4,7 @@ import 'package:peerpass/core/models/course_unit.dart';
 import 'package:peerpass/core/network/network_exceptions.dart';
 import 'package:peerpass/features/tutors/data/datasources/remote_tutors_datasource.dart';
 import 'package:peerpass/features/tutors/data/models/tutor_detail.dart';
+import 'package:peerpass/features/tutors/data/models/tutor_hq.dart';
 import 'package:peerpass/features/tutors/data/models/tutor_rail_entry.dart';
 import 'package:peerpass/features/tutors/data/models/tutor_review.dart';
 import 'package:peerpass/features/tutors/data/repositories/tutors_repository.dart';
@@ -32,6 +33,15 @@ class RemoteTutorsRepository implements TutorsRepository {
       return bodies.map(TutorRailEntry.fromJson).toList();
     });
   }
+
+  @override
+  Future<TutorHq> myHq() =>
+      _guard(() async => TutorHq.fromJson(await _remote.myHq()));
+
+  @override
+  Future<TutorHq> setAcceptingRequests(bool accepting) => _guard(
+    () async => TutorHq.fromJson(await _remote.setAcceptingRequests(accepting)),
+  );
 
   @override
   Future<TutorDetail> tutor(String userId) =>

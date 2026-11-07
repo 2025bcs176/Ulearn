@@ -9,14 +9,15 @@ import 'package:peerpass/features/tutors/data/repositories/remote_tutors_reposit
 
 /// A recorded request, so a test can assert on what the client actually sent.
 class _Call {
-  _Call(this.method, this.path, this.query);
+  _Call(this.method, this.path, this.query, this.body);
 
   final String method;
   final String path;
   final Map<String, dynamic> query;
+  final Object? body;
 
   @override
-  String toString() => '$method $path?$query';
+  String toString() => '$method $path?$query ($body)';
 }
 
 /// Answers requests from a script, and records what it was asked.
@@ -41,6 +42,7 @@ class _FakeServer implements HttpClientAdapter {
         options.queryParameters.map(
           (key, value) => MapEntry(key, value as Object),
         ),
+        options.data,
       ),
     );
 
@@ -99,6 +101,31 @@ Map<String, dynamic> _detail({
     },
     'endorsed_course_unit_ids': ids,
     'endorsement_count': count,
+  };
+}
+
+Map<String, dynamic> _hq({bool accepting = true}) {
+  return {
+    'has_tutor_profile': true,
+    'standing': 'probationary',
+    'completed_sessions': 14,
+    'average_rating': '4.80',
+    'rating_count': 2,
+    'certified_minutes': 600,
+    'certificate_required_minutes': 2400,
+    'certificate_remaining_minutes': 1800,
+    'certificate_eligible': false,
+    'certificate_progress': 0.25,
+    'accepting_requests': accepting,
+    'promotion': {
+      'verified': false,
+      'rated_sessions': 1,
+      'sessions_required': 3,
+      'sessions_remaining': 2,
+      'minimum_average': '4.10',
+      'meets_average': true,
+      'progress': 0.3333333333333333,
+    },
   };
 }
 
@@ -183,6 +210,64 @@ void main() {
       );
 
       await expectLater(repository.topTutors(), throwsA(isA<NetworkFailure>()));
+    });
+  });
+
+  group('the tutor HQ', () {
+    test('reads the self-scoped endpoint and parses the summary', () async {
+      server.reply(200, _hq());
+
+      final hq = await repository.myHq();
+
+      final call = server.calls.single;
+      expect(call.method, 'GET');
+      expect(call.path, '/v1/tutors/me');
+      expect(call.query, isEmpty);
+      expect(hq.hasTutorProfile, isTrue);
+      expect(hq.averageRating, 4.8);
+      expect(hq.promotion.sessionsRemaining, 2);
+      expect(hq.acceptingRequests, isTrue);
+    });
+
+    test('saves availability with the body the API documents', () async {
+      server.reply(200, _hq(accepting: false));
+
+      final hq = await repository.setAcceptingRequests(false);
+
+      final call = server.calls.single;
+      expect(call.method, 'PATCH');
+      expect(call.path, '/v1/tutors/me');
+      expect(call.body, {'accepting_requests': false});
+      // The API returns the whole summary, so the saved flag is read from the
+      // response rather than patched into a stale local copy.
+      expect(hq.acceptingRequests, isFalse);
+    });
+
+    test('a malformed summary becomes a ServerFailure', () async {
+      server.reply(200, {'has_tutor_profile': true});
+
+      await expectLater(repository.myHq(), throwsA(isA<ServerFailure>()));
+    });
+
+    test('a dropped connection is a NetworkFailure', () async {
+      server.fail(
+        DioException(
+          requestOptions: RequestOptions(path: '/v1/tutors/me'),
+          type: DioExceptionType.connectionError,
+          error: 'connection refused',
+        ),
+      );
+
+      await expectLater(repository.myHq(), throwsA(isA<NetworkFailure>()));
+    });
+
+    test('a rejected availability save is translated too', () async {
+      server.reply(403, _problem(status: 403, detail: 'Not a tutor.'));
+
+      await expectLater(
+        repository.setAcceptingRequests(false),
+        throwsA(isA<AuthFailure>()),
+      );
     });
   });
 

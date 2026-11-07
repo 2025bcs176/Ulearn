@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:peerpass/core/models/course_unit.dart';
 import 'package:peerpass/features/tutors/data/models/tutor_detail.dart';
+import 'package:peerpass/features/tutors/data/models/tutor_hq.dart';
 import 'package:peerpass/features/tutors/data/models/tutor_rail_entry.dart';
 import 'package:peerpass/features/tutors/data/models/tutor_review.dart';
 import 'package:peerpass/features/tutors/data/repositories/tutors_repository.dart';
@@ -105,6 +106,40 @@ class TutorReviewsNotifier extends AsyncNotifier<List<TutorReview>> {
   @override
   Future<List<TutorReview>> build() =>
       ref.read(tutorsRepositoryProvider).reviews(userId);
+}
+
+/// The signed-in user's own tutor dashboard.
+///
+/// Self-scoped and not a family: the API answers only about the caller, so a
+/// key would imply a view of somebody else's numbers that does not exist. An
+/// [AsyncNotifier] because [AsyncValue] already carries the three states the HQ
+/// widgets render: loading, the summary, and the reason there isn't one.
+///
+/// Retried only by invalidating, for the reason the other tutors providers are:
+/// a card that offers "Try again" must not also be re-requesting underneath the
+/// user's finger.
+final tutorHqProvider = AsyncNotifierProvider<TutorHqNotifier, TutorHq>(
+  TutorHqNotifier.new,
+  retry: (retryCount, error) => null,
+);
+
+class TutorHqNotifier extends AsyncNotifier<TutorHq> {
+  @override
+  Future<TutorHq> build() => ref.read(tutorsRepositoryProvider).myHq();
+
+  /// Saves the availability flag and adopts the dashboard the API returns.
+  ///
+  /// Errors are deliberately not caught: the toggle needs to know the save
+  /// failed so it can leave the switch where it was and show the reason. Turning
+  /// that into an [AsyncError] here would replace the whole dashboard with an
+  /// error for one failed setting.
+  // ignore: avoid_positional_boolean_parameters
+  Future<void> setAcceptingRequests(bool accepting) async {
+    final updated = await ref
+        .read(tutorsRepositoryProvider)
+        .setAcceptingRequests(accepting);
+    state = AsyncData(updated);
+  }
 }
 
 /// The course units, so an endorsed id on the detail screen can be named.

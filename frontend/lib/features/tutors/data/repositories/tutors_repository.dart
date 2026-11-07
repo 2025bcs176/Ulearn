@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:peerpass/core/error/failures.dart';
 import 'package:peerpass/core/models/course_unit.dart';
 import 'package:peerpass/features/tutors/data/models/tutor_detail.dart';
+import 'package:peerpass/features/tutors/data/models/tutor_hq.dart';
 import 'package:peerpass/features/tutors/data/models/tutor_rail_entry.dart';
 import 'package:peerpass/features/tutors/data/models/tutor_review.dart';
 
@@ -23,6 +24,21 @@ abstract interface class TutorsRepository {
   /// `university_id`, because the rail is defined as their own university's
   /// tutors and there is nothing sensible to fall back to.
   Future<List<TutorRailEntry>> topTutors({String? courseUnitId});
+
+  /// The signed-in user's own tutor dashboard.
+  ///
+  /// Self-scoped by the API: there is no user parameter, because a method that
+  /// could be handed somebody else's id would be a method whose safety depended
+  /// on every caller. A caller with no tutor profile is a normal answer with
+  /// `hasTutorProfile == false`, not a failure.
+  Future<TutorHq> myHq();
+
+  /// Sets whether the caller is shown to students searching for a tutor.
+  ///
+  /// Returns the whole updated dashboard, so the caller never has to patch a
+  /// cached copy and wonder which of its totals the save also changed.
+  // ignore: avoid_positional_boolean_parameters
+  Future<TutorHq> setAcceptingRequests(bool accepting);
 
   /// One tutor's public profile, by public id.
   ///

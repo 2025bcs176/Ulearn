@@ -285,4 +285,53 @@ void main() {
     expect(find.text('Waiting screen here'), findsOneWidget);
     expect(find.byType(HomeScreen), findsNothing);
   });
+
+  testWidgets('a tutor is offered the HQ, and a student is not', (tester) async {
+    // The dashboard is the one entry that summarises the tutor's whole standing,
+    // so a tutor must be able to find it and a student must not be sent to a
+    // screen whose honest answer is "you are not a tutor yet".
+    await _pumpHome(tester, _harness(_enrolled));
+
+    expect(find.text('Your tutor HQ'), findsNothing);
+
+    await _pumpHome(tester, _harness(_tutor));
+
+    expect(find.text('Your tutor HQ'), findsOneWidget);
+    expect(
+      find.text('Progress, requests, and availability'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('tapping the HQ entry opens the dashboard', (tester) async {
+    // Asserted through a real router, because the claim under test is a
+    // navigation. The route itself is registered in the shell; this pins the
+    // entry that is supposed to reach it.
+    final harness = _harness(_tutor);
+    final router = GoRouter(
+      initialLocation: '/',
+      routes: [
+        GoRoute(path: '/', builder: (_, _) => const HomeScreen()),
+        GoRoute(
+          path: AppRoutes.tutorHq,
+          builder: (_, _) => const Scaffold(body: Text('Tutor HQ here')),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: harness.container,
+        child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+      ),
+    );
+    await _settle(tester);
+
+    await tester.tap(find.text('Your tutor HQ'));
+    await _settle(tester);
+
+    expect(find.text('Tutor HQ here'), findsOneWidget);
+    expect(find.byType(HomeScreen), findsNothing);
+  });
 }

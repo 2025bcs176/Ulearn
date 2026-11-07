@@ -576,11 +576,116 @@ verification process loses the people it is meant to be checking.
 
 ## Tutors
 
-Two read-only, student-facing views of a tutor. Both require a signed-in user, and
-**neither creates a `tutor_profiles` row.** The row belongs to a user holding the
-tutor role and is created when the role is granted, so a browse that minted one
-would hand every signed-in student a `probationary` standing and zero counters
-merely by opening the screen.
+One caller-scoped view and two read-only, student-facing views of a tutor. All
+require a signed-in user, and **none creates a `tutor_profiles` row.** The row
+belongs to a user holding the tutor role and is created when the role is granted,
+so a browse that minted one would hand every signed-in student a `probationary`
+standing and zero counters merely by opening the screen.
+
+### `GET /v1/tutors/me`
+
+The caller's own Tutor HQ: standing, counters, certificate progress, and whether
+they are taking new requests. *Auth.* No parameters — and no parameter can name
+another account. A tutor's hours, average, and availability are their own
+business, and there is deliberately no route that answers about someone else's
+HQ.
+
+```json
+{
+  "has_tutor_profile": true,
+  "standing": "probationary",
+  "completed_sessions": 4,
+  "average_rating": "5.00",
+  "rating_count": 1,
+  "certified_minutes": 600,
+  "certificate_required_minutes": 2400,
+  "certificate_remaining_minutes": 1800,
+  "certificate_eligible": false,
+  "certificate_progress": 0.25,
+  "accepting_requests": true,
+  "promotion": {
+    "verified": false,
+    "rated_sessions": 1,
+    "sessions_required": 3,
+    "sessions_remaining": 2,
+    "minimum_average": "4.10",
+    "meets_average": true,
+    "progress": 0.3333333333333333
+  }
+}
+```
+
+`has_tutor_profile` is sent rather than inferred from the caller's role. Holding
+the tutor role and having a profile can disagree for a moment — the role is
+granted before the first competency is verified — so a signed-in student who is
+not a tutor yet gets `200` with `has_tutor_profile: false`, `standing: null`,
+`accepting_requests: null`, `average_rating: null`, and zeroed counters. That is a
+real state with its own next step (apply to teach), not a screen in an error
+state. The certificate threshold is still the configured value and
+`certificate_remaining_minutes` equals it, because the certificate reading answers
+for any signed-in user too.
+
+**Promotion has two conditions, and both travel.** A tutor needs at least
+`sessions_required` (currently 3) rated sessions *and* an average of at least
+`minimum_average` (`"4.10"`). `rated_sessions` is the rating count, **not**
+`completed_sessions`: completion and rating are separate actions, and a completed
+session whose student has not rated it yet is ordinary, so it must not advance the
+ring. `sessions_remaining` counts rated sessions still needed.
+
+`verified` is read from the stored standing rather than recomputed from the two
+thresholds. A verified tutor keeps the badge until the explicit demotion bar is
+crossed, so `meets_average` can be `false` while `verified` is `true`; a
+recomputed badge would show a tutor as un-promoted while the API still offers them
+as verified. `meets_average` is the current average against `minimum_average`, and
+is `false` with no ratings at all — absence of evidence is not a pass.
+
+`progress` is the rated-session fraction, clamped to `1.0`, and is display only:
+`verified` and `meets_average` are the verdicts. A tutor already `verified` reads
+`1.0` regardless, because the badge is the verdict and a completed tutor must not
+read as incomplete. The thresholds are in the payload so the client renders the
+rule the server applied rather than a hardcoded copy of it.
+
+`average_rating` is `null` with no ratings and is a JSON string otherwise, like
+every decimal; see
+[Decimals are JSON strings](#decimals-are-json-strings-not-numbers).
+
+The certificate fields are produced by the same service as
+`GET /v1/incentives/certificate`, so the HQ and the certificate screen cannot
+disagree about the threshold, the remaining minutes, or the clamp.
+
+`accepting_requests` is the beta's availability switch, not a calendar. Matching
+reads it per query and leaves a paused tutor out with `not_accepting_requests`, so
+pausing is immediate and real rather than a label the next deploy honours.
+
+This read never creates a `TutorProfile`; profile rows are created when the tutor
+role is granted.
+
+| Status | `detail`             | `errors` |
+| ------ | -------------------- | -------- |
+| 401    | Sign-in required.    |          |
+
+### `PATCH /v1/tutors/me`
+
+Pause or resume new requests: `{"accepting_requests": false}`. *Auth.* Returns the
+same `TutorHqResponse` as the read, computed after the write, so the client paints
+one payload rather than merging a response into stale state. Repeating the same
+value is a no-op and still a `200`; a double tap must not fail.
+
+A body rather than a query parameter because this changes state: a PATCH that a
+browser can trigger by following a link is a switch a student can flip by
+accident. `accepting_requests` is the only tutor setting the beta exposes.
+
+A caller with no tutor profile gets `404`, unlike the read. There is no setting to
+change, and pretending otherwise would tell a student they had paused something
+they were never offered. Unknown fields are a `422` rather than silently dropped,
+so a misspelled setting never looks applied.
+
+| Status | `detail`                                       | `errors`                                                              |
+| ------ | ---------------------------------------------- | --------------------------------------------------------------------- |
+| 200    | The caller's HQ with the new setting.          |                                                                       |
+| 401    | Sign-in required.                              |                                                                       |
+| 404    | You are not a tutor yet.                       |                                                                       |
+| 422    | Some of the details you entered are not valid. | `accepting_requests` — required boolean; unknown fields are rejected. |
 
 ### `GET /v1/tutors/top`
 

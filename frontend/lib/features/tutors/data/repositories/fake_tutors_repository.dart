@@ -1,6 +1,8 @@
 import 'package:peerpass/core/error/failures.dart';
 import 'package:peerpass/core/models/course_unit.dart';
+import 'package:peerpass/core/models/tutor_standing.dart';
 import 'package:peerpass/features/tutors/data/models/tutor_detail.dart';
+import 'package:peerpass/features/tutors/data/models/tutor_hq.dart';
 import 'package:peerpass/features/tutors/data/models/tutor_rail_entry.dart';
 import 'package:peerpass/features/tutors/data/models/tutor_review.dart';
 import 'package:peerpass/features/tutors/data/repositories/tutors_repository.dart';
@@ -22,15 +24,64 @@ class FakeTutorsRepository implements TutorsRepository {
     List<TutorDetail> profiles = const [],
     List<CourseUnit> courseUnits = const [],
     List<TutorReview> reviews = const [],
+    TutorHq? hq,
+    this.failure,
   }) : _tutors = List<TutorRailEntry>.of(tutors),
        _profiles = List<TutorDetail>.of(profiles),
        _courseUnits = List<CourseUnit>.of(courseUnits),
-       _reviews = List<TutorReview>.of(reviews);
+       _reviews = List<TutorReview>.of(reviews),
+       _currentHq = hq ?? _zeroHq;
 
   final List<TutorRailEntry> _tutors;
   final List<TutorDetail> _profiles;
   final List<CourseUnit> _courseUnits;
   final List<TutorReview> _reviews;
+
+  /// The failure both HQ calls throw, when a test wants the error path.
+  final Failure? failure;
+
+  /// A tutor who is on the platform and has no evidence yet.
+  ///
+  /// The sensible default for a widget test: the loaded card renders, rather
+  /// than the no-profile branch, without the test having to spell out a whole
+  /// summary it does not care about.
+  static const TutorHq _zeroHq = TutorHq(
+    hasTutorProfile: true,
+    standingWire: 'probationary',
+    standing: TutorStanding.probationary,
+    completedSessions: 0,
+    averageRating: null,
+    ratingCount: 0,
+    certifiedMinutes: 0,
+    certificateRequiredMinutes: 2400,
+    certificateRemainingMinutes: 2400,
+    certificateEligible: false,
+    certificateProgress: 0,
+    acceptingRequests: true,
+    promotion: TutorPromotionProgress(
+      verified: false,
+      ratedSessions: 0,
+      sessionsRequired: 3,
+      sessionsRemaining: 3,
+      minimumAverage: 4.1,
+      meetsAverage: false,
+      progress: 0,
+    ),
+  );
+
+  TutorHq _currentHq;
+
+  /// How many times [myHq] has been called.
+  int hqCalls = 0;
+
+  /// The availability values [setAcceptingRequests] was asked to save, in order.
+  ///
+  /// Kept so a widget test can prove the switch sent the value it showed rather
+  /// than a hardcoded one.
+  final List<bool> acceptingRequestsCalls = [];
+
+  /// The dashboard as it stands after any accepted availability change.
+  TutorHq get currentHq => _currentHq;
 
   /// The tutor ids the reviews endpoint was asked about, in order.
   ///
@@ -46,6 +97,24 @@ class FakeTutorsRepository implements TutorsRepository {
   /// Kept so a test can prove the rail narrowed rather than being handed the
   /// whole list by a screen that ignored its input.
   final List<String?> railFilters = [];
+
+  @override
+  Future<TutorHq> myHq() async {
+    hqCalls++;
+    final thrown = failure;
+    if (thrown != null) throw thrown;
+    return _currentHq;
+  }
+
+  @override
+  Future<TutorHq> setAcceptingRequests(bool accepting) async {
+    acceptingRequestsCalls.add(accepting);
+    final thrown = failure;
+    if (thrown != null) throw thrown;
+    final updated = _currentHq.copyWith(acceptingRequests: accepting);
+    _currentHq = updated;
+    return updated;
+  }
 
   @override
   Future<List<TutorRailEntry>> topTutors({String? courseUnitId}) async {

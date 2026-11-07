@@ -15,6 +15,7 @@ import 'package:peerpass/features/auth/data/repositories/auth_repository.dart';
 import 'package:peerpass/features/auth/data/repositories/fake_auth_repository.dart';
 import 'package:peerpass/features/auth/presentation/providers/auth_providers.dart';
 import 'package:peerpass/features/auth/presentation/screens/sign_up_screen.dart';
+import 'package:peerpass/features/home/presentation/screens/tutor_hq_screen.dart';
 import 'package:peerpass/features/incentives/data/repositories/fake_incentives_repository.dart';
 import 'package:peerpass/features/incentives/data/repositories/incentives_repository.dart';
 import 'package:peerpass/features/incentives/presentation/screens/certificate_screen.dart';
@@ -27,6 +28,8 @@ import 'package:peerpass/features/notifications/data/repositories/notifications_
 import 'package:peerpass/features/notifications/presentation/screens/notifications_screen.dart';
 import 'package:peerpass/features/sessions/data/repositories/fake_sessions_repository.dart';
 import 'package:peerpass/features/sessions/data/repositories/sessions_repository.dart';
+import 'package:peerpass/features/tutors/data/repositories/fake_tutors_repository.dart';
+import 'package:peerpass/features/tutors/data/repositories/tutors_repository.dart';
 
 const String _signedOutText = 'Sign in';
 
@@ -467,6 +470,45 @@ void main() {
     // The empty state, because this fake proposes nobody. What is asserted is the
     // screen and its honest copy, not the absence of an error.
     expect(find.text('No one is waiting on you'), findsOneWidget);
+    expect(find.text(_homeText), findsNothing);
+  });
+
+  testWidgets('the tutor HQ is reached from home and kept by the guard', (
+    tester,
+  ) async {
+    // The dashboard composes three features' reads, so this is the whole chain:
+    // the entry on home, the route registration, the guard, and every repository
+    // the sections resolve. A screen that is only tested in isolation would pass
+    // while the shell route was never registered.
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(_signedIn(profile: _tutor)),
+          tutorsRepositoryProvider.overrideWithValue(FakeTutorsRepository()),
+          matchingRepositoryProvider.overrideWithValue(
+            FakeMatchingRepository(),
+          ),
+          incentivesRepositoryProvider.overrideWithValue(
+            FakeIncentivesRepository(certifiedMinutes: 600),
+          ),
+        ],
+        child: const PeerPassApp(),
+      ),
+    );
+    await _settle(tester);
+
+    await tester.scrollUntilVisible(
+      find.text('Your tutor HQ'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await _settle(tester);
+
+    await tester.tap(find.text('Your tutor HQ'));
+    await _settle(tester);
+
+    expect(find.byType(TutorHqScreen), findsOneWidget);
+    expect(find.text('Tutor HQ'), findsOneWidget);
     expect(find.text(_homeText), findsNothing);
   });
 

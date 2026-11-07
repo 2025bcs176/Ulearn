@@ -40,6 +40,34 @@ class RemoteTutorsDatasource {
         .toList();
   }
 
+  /// The caller's own tutor dashboard.
+  ///
+  /// No path parameter, because the API only answers about the authenticated
+  /// tutor. A caller without a tutor profile is a normal 200 whose body says so;
+  /// it is not a 404 and the screen renders it as a next step rather than an
+  /// error.
+  Future<Map<String, dynamic>> myHq() async {
+    final response = await _dio.get<Map<String, dynamic>>('/v1/tutors/me');
+    return response.data!;
+  }
+
+  /// Turns the caller's availability on or off.
+  ///
+  /// The whole updated dashboard comes back, so the screen does not have to
+  /// merge a local flag into stale counters after a successful save.
+  ///
+  /// The flag is positional because the repository contract fixes it that way;
+  /// at the two call sites `setAcceptingRequests(false)` reads as clearly as a
+  /// named argument would.
+  // ignore: avoid_positional_boolean_parameters
+  Future<Map<String, dynamic>> setAcceptingRequests(bool accepting) async {
+    final response = await _dio.patch<Map<String, dynamic>>(
+      '/v1/tutors/me',
+      data: {'accepting_requests': accepting},
+    );
+    return response.data!;
+  }
+
   /// One tutor, by public id.
   ///
   /// 404 for a user who does not exist and for one who is not a tutor, which the

@@ -15,12 +15,17 @@ import 'package:peerpass/features/competencies/presentation/screens/my_applicati
 import 'package:peerpass/features/competencies/presentation/screens/submit_claim_screen.dart';
 import 'package:peerpass/features/home/presentation/screens/home_screen.dart';
 import 'package:peerpass/features/home/presentation/screens/profile_screen.dart';
+import 'package:peerpass/features/home/presentation/screens/tutor_hq_screen.dart';
 import 'package:peerpass/features/home/presentation/widgets/authenticated_shell.dart';
+import 'package:peerpass/features/incentives/presentation/providers/incentive_providers.dart';
 import 'package:peerpass/features/incentives/presentation/screens/certificate_screen.dart';
+import 'package:peerpass/features/incentives/presentation/widgets/tutor_certificate_summary_card.dart';
+import 'package:peerpass/features/matching/presentation/providers/matching_providers.dart';
 import 'package:peerpass/features/matching/presentation/screens/course_unit_picker_screen.dart';
 import 'package:peerpass/features/matching/presentation/screens/match_results_screen.dart';
 import 'package:peerpass/features/matching/presentation/screens/tutor_requests_screen.dart';
 import 'package:peerpass/features/matching/presentation/widgets/ask_composer.dart';
+import 'package:peerpass/features/matching/presentation/widgets/tutor_waiting_requests_section.dart';
 import 'package:peerpass/features/notifications/presentation/screens/notifications_screen.dart';
 import 'package:peerpass/features/notifications/presentation/widgets/notification_tab_icon.dart';
 import 'package:peerpass/features/sessions/presentation/providers/session_providers.dart';
@@ -31,6 +36,8 @@ import 'package:peerpass/features/sessions/presentation/screens/sessions_tab_scr
 import 'package:peerpass/features/sessions/presentation/widgets/active_session_card.dart';
 import 'package:peerpass/features/tutors/presentation/providers/tutor_providers.dart';
 import 'package:peerpass/features/tutors/presentation/screens/tutor_detail_screen.dart';
+import 'package:peerpass/features/tutors/presentation/widgets/tutor_availability_toggle.dart';
+import 'package:peerpass/features/tutors/presentation/widgets/tutor_hq_progress_card.dart';
 import 'package:peerpass/features/tutors/presentation/widgets/tutor_rail.dart';
 
 /// Every location the shell can be at.
@@ -49,6 +56,7 @@ abstract final class AppRoutes {
   static const String matching = '/matching';
   static const String certificate = '/certificate';
   static const String tutorRequests = '/tutor-requests';
+  static const String tutorHq = '/tutor-hq';
 
   /// Debug-only catalogue of the design system. Not registered in release.
   static const String designPreview = '/design-preview';
@@ -357,6 +365,30 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.certificate,
         builder: (context, state) => const CertificateScreen(),
       ),
+      GoRoute(
+        path: AppRoutes.tutorHq,
+        builder: (context, state) => TutorHqScreen(
+          progressCard: const TutorHqProgressCard(),
+          availabilityToggle: const TutorAvailabilityToggle(),
+          requestsSection: const TutorWaitingRequestsSection(),
+          certificateCard: const TutorCertificateSummaryCard(),
+          onRefresh: () async {
+            // One pull refreshes the three reads the dashboard is made of. All
+            // three are invalidated before any is awaited, so the sections
+            // reload together instead of one finishing while another still
+            // shows the old number.
+            ref
+              ..invalidate(tutorHqProvider)
+              ..invalidate(tutorRequestsProvider)
+              ..invalidate(certificateEligibilityProvider);
+            await Future.wait([
+              ref.read(tutorHqProvider.future),
+              ref.read(tutorRequestsProvider.future),
+              ref.read(certificateEligibilityProvider.future),
+            ]);
+          },
+        ),
+      ),
     ],
     // go_router re-evaluates this on every navigation and whenever the
     // listenable fires, which is what makes an auth change redirect the app
@@ -471,7 +503,8 @@ String? _redirectForSignedIn(UserProfile? profile, String location) {
   if (_isSessionRoute(location) ||
       _isTutorRoute(location) ||
       _isMatchingRoute(location) ||
-      location == AppRoutes.certificate) {
+      location == AppRoutes.certificate ||
+      location == AppRoutes.tutorHq) {
     return null;
   }
 

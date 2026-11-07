@@ -172,6 +172,17 @@ is not.
 into `ProviderScope`. There is no in-memory default on the request path, so a
 stub cannot hide behind a working screen.
 
+#### Tutor HQ composes sections it does not own
+
+Tutor HQ is a dashboard, and the home feature owns only its layout and the entry
+to it. The standing/progress and availability section belongs to tutors, the
+waiting-requests section to matching, and the certificate summary to incentives.
+Each section arrives as a widget from the feature that owns the data, so the
+dashboard composes at one boundary without any feature importing another feature's
+`presentation/` screens or providers. That boundary is also why home does not
+re-derive "3 rated sessions" or "4.10": the thresholds and the progress they
+describe arrive together from `GET /v1/tutors/me`.
+
 #### Validation is deliberately duplicated
 
 `frontend/lib/core/utils/validators.dart` repeats the server's rules rather than
@@ -618,6 +629,51 @@ suspension indistinguishable from a role change and would lose the per-unit
 revocation this tier exists to express.
 
 This logic lives in `ValidationService` and is consulted by `MatchingService` before any match is proposed.
+
+### 6.1 Tutor HQ is a read model, not a second rule
+
+`GET /v1/tutors/me` answers the caller's own standing, counters, certificate
+progress, and availability in one round trip. It is a read model: every number is
+either read from `tutor_profiles` or produced by the service that already owns the
+rule. The certificate figures call `incentive_service.get_certificate_eligibility`,
+so the HQ and `GET /v1/incentives/certificate` cannot disagree about the threshold,
+the clamp, or the verdict. A second calculation here would make the dashboard the
+screen a tutor believed.
+
+**Promotion is two conditions, not one.** A tutor needs at least
+`PROMOTION_MIN_SESSIONS` (3) rated sessions *and* an average of at least
+`PROMOTION_MIN_AVERAGE` (4.10). Both halves travel in `promotion`, because a single
+"3 of 3" ring would tell a tutor they were finished while their average was still
+short. `progress` is the rated-session fraction, clamped, and is display only;
+`meets_average` and `verified` are the verdicts. The thresholds are sent with the
+answer rather than repeated in the client.
+
+`verified` is read from the stored standing rather than recomputed from the two
+thresholds. A verified tutor keeps the badge until the explicit demotion bar is
+crossed (Tier 3 above), so their current average can sit below the promotion bar
+while the API still offers them as verified; recomputing would show the badge and
+the screen disagreeing. `meets_average` is the current average against 4.10, and
+is reported separately for exactly that case.
+
+**`rated_sessions` is the rating count, not `completed_sessions`.** Completion and
+rating are separate actions, and a completed session waits on a rating. Counting
+completions would advance the ring for evidence the promotion rule has not
+received. The HQ sends both numbers because they answer different questions: the
+profile shows how much a tutor has taught, the ring shows how much rated evidence
+the rule has.
+
+**The read never creates a profile, and the write does not either.** Rows are
+created when the tutor role is granted. A caller without one gets
+`has_tutor_profile: false` and zeroed counters from the read — a real state, not a
+fault — while the write is a 404, because there is no setting to change and
+silently accepting it would tell a student they had paused something they were
+never offered.
+
+**Availability is a switch, not a calendar.** `PATCH /v1/tutors/me` writes
+`accepting_requests`, and matching reads it on every query (7.2), leaving a paused
+tutor out with `not_accepting_requests`. There is no slot model and nothing to
+expire, so pausing is immediate and real rather than a label the next deploy
+honours.
 
 ---
 

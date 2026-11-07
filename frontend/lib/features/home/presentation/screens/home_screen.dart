@@ -107,10 +107,7 @@ class HomeScreen extends ConsumerWidget {
                   label: 'Find a tutor',
                   onPressed: () => context.push(AppRoutes.matching),
                 ),
-              if (card != null) ...[
-                const SizedBox(height: AppDimens.xl),
-                card,
-              ],
+              if (card != null) ...[const SizedBox(height: AppDimens.xl), card],
               if (rail != null) ...[
                 const SizedBox(height: AppDimens.xxl),
                 rail,
@@ -122,6 +119,18 @@ class HomeScreen extends ConsumerWidget {
                   subtitle: 'Requests, hours, and the certificate they earn.',
                 ),
                 const SizedBox(height: AppDimens.md),
+                // The dashboard first, then the two shortcuts it summarises.
+                // A tutor who is looking for "what needs me now" should not
+                // have to choose between three entries to find it; the direct
+                // links stay because a tutor who already knows where they are
+                // going should not have to pass through the dashboard.
+                _HomeEntry(
+                  icon: Icons.space_dashboard_outlined,
+                  title: 'Your tutor HQ',
+                  subtitle: 'Progress, requests, and availability',
+                  onTap: () => context.push(AppRoutes.tutorHq),
+                ),
+                const SizedBox(height: AppDimens.sm),
                 _HomeEntry(
                   icon: Icons.mark_email_unread_outlined,
                   title: 'Waiting on you',
@@ -188,10 +197,12 @@ class _HomeEntry extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.onTap,
+    this.subtitle,
   });
 
   final IconData icon;
   final String title;
+  final String? subtitle;
   final VoidCallback onTap;
 
   @override
@@ -208,7 +219,21 @@ class _HomeEntry extends StatelessWidget {
           Icon(icon, color: palette.primary, size: 22),
           const SizedBox(width: AppDimens.md),
           Expanded(
-            child: Text(title, style: theme.textTheme.titleMedium),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: theme.textTheme.titleMedium),
+                if (subtitle case final text?) ...[
+                  const SizedBox(height: AppDimens.xxs),
+                  Text(
+                    text,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: palette.muted,
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
           Icon(Icons.chevron_right_rounded, color: palette.muted),
         ],

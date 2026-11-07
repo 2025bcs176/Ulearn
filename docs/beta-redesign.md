@@ -247,5 +247,16 @@ Kept current so the plan and the code do not drift apart.
       party records their own arrival and departure, the card names who is
       still to tap, and finishing asks before it records a time that cannot be
       changed. The detail screen no longer offers a status transition.
-- [ ] Tutor HQ.
+- [x] **Tutor HQ.** `GET /v1/tutors/me` answers the caller's own standing,
+      session and rating counters, certificate progress, and availability;
+      `PATCH /v1/tutors/me` flips `accepting_requests` and returns the same shape,
+      so the switch is written rather than echoed. Promotion is drawn from rated
+      sessions and the average bar together — an unrated completion does not move
+      the ring — and a tutor already Verified keeps the badge even while their
+      current average sits below the promotion bar. The screen is a dashboard
+      reached from Home: progress ring, availability toggle, the waiting-requests
+      section, and a certificate summary. Inline accept/decline stays on the full
+      `Waiting on you` screen; the dashboard section links there rather than
+      growing a second copy of the decision. A signed-in student with no tutor
+      profile is told they are not a tutor yet, not shown an error.
 - [ ] Hardening, validation, dry run, launch.
