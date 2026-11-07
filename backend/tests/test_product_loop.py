@@ -172,3 +172,17 @@ async def test_the_full_tutoring_loop_records_everything_it_promises(
     )
     assert summary["rating_count"] == 1
     assert summary["average_rating"] == "5.00"
+
+    # --- and the pilot funnel sees the same loop --------------------------
+    # Read after the loop rather than staged, because these are the counts an
+    # operator will quote in the daily check. Each stage proves that the
+    # previous one reached the table this endpoint reads, and `rated` proves
+    # the tutee's rating is the one that closed it.
+    funnel = await client.get("/v1/admin/analytics/pilot-funnel", headers=bearer(admin))
+    assert funnel.status_code == 200, funnel.text
+    assert funnel.json() == {
+        "requests_total": 1,
+        "requests_accepted": 1,
+        "sessions_completed": 1,
+        "sessions_rated": 1,
+    }

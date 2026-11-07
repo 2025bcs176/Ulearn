@@ -85,6 +85,39 @@ password hashes, refresh tokens, consent timestamps, or internal database ids.
 All list responses use the standard `items`, `total`, `offset`, and `limit`
 pagination shape.
 
+### `GET /v1/admin/analytics/pilot-funnel`
+
+The four counts the pilot runbook tracks, as one aggregate read. *Admin.*
+
+```json
+{
+  "requests_total": 42,
+  "requests_accepted": 31,
+  "sessions_completed": 24,
+  "sessions_rated": 21
+}
+```
+
+- `requests_total` counts every help request, including ones still open and ones
+  that were withdrawn or expired.
+- `requests_accepted` counts requests a tutor confirmed (`matched`), not merely
+  requests that were viewed.
+- `sessions_completed` counts sessions both parties finished.
+- `sessions_rated` counts completed sessions with the **tutee's** mandatory
+  feedback. Only the tutee can rate; the direction is still part of the query so
+  a future tutor-facing rating cannot inflate the number the quality loop is
+  judged on.
+
+Each number is a separate aggregate, not a stage derived by subtraction: a
+request can be accepted and its session cancelled, so accepted minus completed
+is not the number of sessions still open. The response contains counts only and
+cannot identify a student or a session.
+
+### `GET /v1/admin/analytics/topic-heatmap`
+
+Aggregated request topics, suppressed below a cohort of five requests and five
+distinct students. *Admin.*
+
 ## Errors
 
 Every error the API returns — framework validation, domain rejection, or an

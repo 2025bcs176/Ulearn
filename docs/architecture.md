@@ -1062,6 +1062,27 @@ name, standing and rating paint without waiting on the review query. It has no
 offset: the profile shows the newest handful, and a pager no screen reads is a
 contract to maintain for nothing.
 
+### 8.5 The pilot funnel counts evidence, not activity
+
+`GET /v1/admin/analytics/pilot-funnel` returns four separate aggregates:
+requests, accepted requests, completed sessions, and tutee-rated sessions. It is
+admin-only and contains no student, tutor, unit, or session identifier.
+
+The stages are counted independently rather than derived by subtraction. A
+request can be accepted and its session later cancelled, so accepted minus
+completed is not the number of sessions still open; it is a number that would
+silently change meaning with the cancellation policy. `accepted` is the request
+status `matched` — a tutor confirmed — not a match list that was merely shown.
+`sessions_rated` counts the tutee's mandatory rating. Only the tutee can submit
+session feedback today, and the query still restricts by direction so a future
+tutor-facing rating cannot silently make the quality loop look closed when it is
+not.
+
+The console renders the four counts with stage-to-stage conversion. A zero
+denominator omits the conversion rather than showing a 0% that would invent a
+number, and an empty pilot still renders four zeroes: launch-day zeroes are the
+honest starting state, not an error state an operator should learn to click past.
+
 ---
 
 ## 9. Security & Compliance

@@ -10,7 +10,7 @@
 
 This brief defines the Minimum Viable Product (MVP) for PeerPass. It captures:
 
-- What we will build first
+- What needs to be build first
 - Why these features were chosen
 - What is deliberately left out
 - How the product will expand after the pilot
@@ -42,7 +42,7 @@ If this loop works reliably in a small pilot, the foundation for a scalable acad
 ### Tutee
 
 1. Creates an account (email and password) and completes the onboarding wizard:
-   name, then university / faculty / year of study and consent
+   name, then university / faculty / year of study and declares the courses that the student expects to get help in and then consent
 2. Submits a help request (course unit + specific topic)
 3. Sees a short list of eligible tutors
 4. Requests a session with one tutor
@@ -52,7 +52,7 @@ If this loop works reliably in a small pilot, the foundation for a scalable acad
 ### Tutor
 
 1. Creates an account and declares course units + grades
-2. Starts as **Provisional Tutor** (if grade threshold is met)
+2. Starts as **Provisional Tutor** (if grade threshold is met, moves on to be a verified tutor)
 3. Receives and accepts/declines match requests
 4. Completes sessions
 5. Earns ratings that can promote them to **Verified Tutor**
@@ -83,7 +83,7 @@ both more honest and less damaging to trust than a plausible-looking stub.
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
 | **Accounts & Roles**      | Sign up / login, basic profile (name, faculty, year), roles: Tutee, Provisional Tutor, Verified Tutor                                                                                        | Identity and trust require clear roles from day one                |
 | **Tutor Validation**      | Self-declared course units + minimum grade (B+ / A), Provisional status on entry, filtering by competency + status                                                                           | Protects academic quality without heavy institutional integration  |
-| **Matching**              | Help request (unit + topic), list of 1–3 eligible tutors, **student selects one, that tutor confirms or declines**, simple ranking (Verified > Provisional, then rating)         | Delivers the core value proposition                                |
+| **Matching**              | Help request (unit + topic), list of 1–3 eligible tutors, **student selects one, that tutor confirms or declines**, simple ranking (Verified > Provisional, then rating)                     | Delivers the core value proposition                                |
 | **Sessions**              | Session record on acceptance, mark as completed, basic time/note field                                                                                                                       | Creates the data needed for ratings and future incentives          |
 | **Rating & Verification** | Mandatory 1–5 rating + optional short feedback after session, running average, automatic promotion (Provisional → Verified after threshold), reduced priority for low ratings, visible badge | Closes the quality loop and makes verification earned, not claimed |
 | **Light Admin**           | Ability to view users/requests/sessions and manually adjust status if needed                                                                                                                 | Safety net during pilot                                            |

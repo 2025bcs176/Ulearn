@@ -188,8 +188,9 @@ free-text field is always the way through.
 - [ ] 10–15 tutors have a bio, an avatar, and a Verified or Rising badge.
 - [ ] A WhatsApp support line is staffed.
 - [ ] The pilot runbook names who reviews a report and within what time.
-- [ ] Analytics answers: how many requests, how many accepted, how many
-      completed, how many rated.
+- [x] Analytics answers: how many requests, how many accepted, how many
+      completed, how many rated. The counts are on the console's **Pilot funnel**
+      screen and backed by `GET /v1/admin/analytics/pilot-funnel`.
 
 ## 7. Explicitly post-beta
 
@@ -259,4 +260,12 @@ Kept current so the plan and the code do not drift apart.
       `Waiting on you` screen; the dashboard section links there rather than
       growing a second copy of the decision. A signed-in student with no tutor
       profile is told they are not a tutor yet, not shown an error.
+- [x] **Pilot funnel.** `GET /v1/admin/analytics/pilot-funnel` counts requests,
+      accepted requests, completed sessions, and tutee-rated sessions for the
+      operator's daily check; the console shows all four with stage-to-stage
+      conversion. The stages are independent aggregates, not subtractions, so a
+      cancelled session does not reappear as an open one. The screen renders an
+      empty pilot as four honest zeroes, omits a stage's conversion when its
+      denominator is zero rather than showing 0%, and offers a retry without raw
+      exception text on failure.
 - [ ] Hardening, validation, dry run, launch.
