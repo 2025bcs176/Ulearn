@@ -4,6 +4,7 @@ import 'package:peerpass_admin/core/models/admin_session.dart';
 import 'package:peerpass_admin/core/providers/admin_providers.dart';
 import 'package:peerpass_admin/features/admin/presentation/screens/audit_log_screen.dart';
 import 'package:peerpass_admin/features/admin/presentation/screens/competencies_screen.dart';
+import 'package:peerpass_admin/features/admin/presentation/screens/pilot_funnel_screen.dart';
 import 'package:peerpass_admin/features/admin/presentation/screens/session_reports_screen.dart';
 import 'package:peerpass_admin/features/admin/presentation/screens/topic_heatmap_screen.dart';
 import 'package:peerpass_admin/features/admin/presentation/screens/tutor_standings_screen.dart';
@@ -50,9 +51,14 @@ const _destinations = <_ShellDestination>[
     label: 'Audit log',
   ),
   _ShellDestination(
+    icon: Icon(Icons.filter_alt_outlined),
+    selectedIcon: Icon(Icons.filter_alt),
+    label: 'Pilot funnel',
+  ),
+  _ShellDestination(
     icon: Icon(Icons.insights_outlined),
     selectedIcon: Icon(Icons.insights),
-    label: 'Analytics',
+    label: 'Topics',
   ),
   _ShellDestination(
     icon: Icon(Icons.report_outlined),
@@ -67,6 +73,7 @@ const _screens = <Widget>[
   CompetenciesScreen(),
   TutorStandingsScreen(),
   AuditLogScreen(),
+  PilotFunnelScreen(),
   TopicHeatmapScreen(),
   SessionReportsScreen(),
 ];

@@ -172,6 +172,17 @@ is not.
 into `ProviderScope`. There is no in-memory default on the request path, so a
 stub cannot hide behind a working screen.
 
+#### Tutor HQ composes sections it does not own
+
+Tutor HQ is a dashboard, and the home feature owns only its layout and the entry
+to it. The standing/progress and availability section belongs to tutors, the
+waiting-requests section to matching, and the certificate summary to incentives.
+Each section arrives as a widget from the feature that owns the data, so the
+dashboard composes at one boundary without any feature importing another feature's
+`presentation/` screens or providers. That boundary is also why home does not
+re-derive "3 rated sessions" or "4.10": the thresholds and the progress they
+describe arrive together from `GET /v1/tutors/me`.
+
 #### Validation is deliberately duplicated
 
 `frontend/lib/core/utils/validators.dart` repeats the server's rules rather than
@@ -249,6 +260,7 @@ Primary tables (see Section 5 for details):
 | `grades`            | The grade catalogue for a scale                                   |
 | `subjects`          | Faculty or department grouping for course units                   |
 | `course_units`      | University curriculum mapping                                     |
+| `course_unit_topics` | Suggested questions a request sheet offers for a unit            |
 | `competencies`      | Tutor eligibility per course unit (grade + verification status)   |
 | `tutor_profiles`    | A tutor's standing and the counters it is derived from            |
 | `help_requests`     | What a student asked for, before any tutor was matched            |
@@ -370,7 +382,7 @@ matching. This prevents a degree name such as Medicine and Surgery from being
 mistaken for a matchable course unit.
 
 **Help_Requests** | `tutee_id`, `course_unit_id`, `topic`, `status`                | What was asked for, before a tutor was matched                                          |
-| **Sessions**      | `tutee_id`, `tutor_id`, `course_unit_id`, `status`, `duration_minutes`, handshake hashes/expiry, `meeting_link`, `meeting_venue`, `meeting_venue_detail` | A session that happened; the source for tutor hours and certificates. Start and completion codes are six-digit, one-time values stored only as hashes and never appear in shared session responses |
+| **Sessions**      | `tutee_id`, `tutor_id`, `course_unit_id`, `status`, `duration_minutes`, `started_at`, `ended_at`, per-party check-in/finish timestamps, `meeting_link`, `meeting_venue`, `meeting_venue_detail` | A session that happened; the source for tutor hours and certificates. Attendance is two independent check-ins and two independent finishes, one from each account; a session is live only while both parties have checked in, and completes only when both have finished |
 | **Ratings**       | `session_id`, `rater_id`, `ratee_id`, `score`, `comprehension_helped`, `feedback_text` | Immutable post-session tutee feedback; low ratings reduce matching priority. Tutor-to-tutee ratings are not accepted |
 | **Session_Reports** | `session_id`, `reporter_id`, `category`, `description`, `status` | Safeguarding reports routed to operators without exposing them to the other participant |
 | **Unit_Endorsements** | `session_id`, `rater_id`, `ratee_id`, `course_unit_id` | "This tutor knows this unit", scoped to the session's own course unit. Separate from `ratings` so subject coverage never moves promotion. Unique on `(session_id, rater_id, course_unit_id)` so a corrected submission replaces rather than accumulates |
@@ -442,6 +454,24 @@ distinct, so a nullable university would let two unscoped units share a code. It
 is also required by matching, which only pairs people at one institution.
 Scoping the code is what lets `MAT 221` exist at two universities as two
 different courses, graded on two different scales.
+
+**Course_Unit_Topics**
+
+- `id` (PK), `course_unit_id` (FK → course_units, `ON DELETE CASCADE`)
+- `label`, `sort_order`
+- Unique on (`course_unit_id`, `label`)
+
+Suggested questions, not a taxonomy. A unit is too broad to type into one box and
+a first-year may not know the word for what they are stuck on, so the request
+sheet offers the unit's own labels as chips. Tapping one sends the **label** as
+the help request's free-text `topic`; nothing is matched on it and a topic outside
+the list is a normal request. The table is reference data with the unit's own
+lifetime and no user foreign key.
+
+`GET /v1/academics/course-units/{id}/topics` applies the same faculty scope as the
+catalogue: another faculty's unit is a 404, while a visible unit with no
+suggestions is a 200 with `[]`. Separating those two answers is what lets the
+sheet fall back to typing without telling a student their unit does not exist.
 
 **Competencies**
 
@@ -600,6 +630,51 @@ revocation this tier exists to express.
 
 This logic lives in `ValidationService` and is consulted by `MatchingService` before any match is proposed.
 
+### 6.1 Tutor HQ is a read model, not a second rule
+
+`GET /v1/tutors/me` answers the caller's own standing, counters, certificate
+progress, and availability in one round trip. It is a read model: every number is
+either read from `tutor_profiles` or produced by the service that already owns the
+rule. The certificate figures call `incentive_service.get_certificate_eligibility`,
+so the HQ and `GET /v1/incentives/certificate` cannot disagree about the threshold,
+the clamp, or the verdict. A second calculation here would make the dashboard the
+screen a tutor believed.
+
+**Promotion is two conditions, not one.** A tutor needs at least
+`PROMOTION_MIN_SESSIONS` (3) rated sessions *and* an average of at least
+`PROMOTION_MIN_AVERAGE` (4.10). Both halves travel in `promotion`, because a single
+"3 of 3" ring would tell a tutor they were finished while their average was still
+short. `progress` is the rated-session fraction, clamped, and is display only;
+`meets_average` and `verified` are the verdicts. The thresholds are sent with the
+answer rather than repeated in the client.
+
+`verified` is read from the stored standing rather than recomputed from the two
+thresholds. A verified tutor keeps the badge until the explicit demotion bar is
+crossed (Tier 3 above), so their current average can sit below the promotion bar
+while the API still offers them as verified; recomputing would show the badge and
+the screen disagreeing. `meets_average` is the current average against 4.10, and
+is reported separately for exactly that case.
+
+**`rated_sessions` is the rating count, not `completed_sessions`.** Completion and
+rating are separate actions, and a completed session waits on a rating. Counting
+completions would advance the ring for evidence the promotion rule has not
+received. The HQ sends both numbers because they answer different questions: the
+profile shows how much a tutor has taught, the ring shows how much rated evidence
+the rule has.
+
+**The read never creates a profile, and the write does not either.** Rows are
+created when the tutor role is granted. A caller without one gets
+`has_tutor_profile: false` and zeroed counters from the read — a real state, not a
+fault — while the write is a 404, because there is no setting to change and
+silently accepting it would tell a student they had paused something they were
+never offered.
+
+**Availability is a switch, not a calendar.** `PATCH /v1/tutors/me` writes
+`accepting_requests`, and matching reads it on every query (7.2), leaving a paused
+tutor out with `not_accepting_requests`. There is no slot model and nothing to
+expire, so pausing is immediate and real rather than a label the next deploy
+honours.
+
 ---
 
 ## 7. Matching Engine
@@ -657,11 +732,17 @@ advertised reason nothing produces leaves a client with a branch that never fire
 and a tutor with a real, fixable problem told the platform has no reason.
 
 Codes: `unverified`, `same_university_only`, `suspended`, `below_threshold`,
-`not_the_tutor`. The order of the checks is the order above, and it is not
-arbitrary: `unverified` is reported before any number is compared, so a tutor
-with an unverified A is not told their problem was the grade. Pending
-competencies are therefore read rather than filtered out — dropping the row
-silently made the commonest reason for a tutor's absence unanswerable.
+`not_the_tutor`, `not_accepting_requests`. The order of the checks is the order
+above, and it is not arbitrary: `unverified` is reported before any number is
+compared, so a tutor with an unverified A is not told their problem was the grade.
+Pending competencies are therefore read rather than filtered out — dropping the
+row silently made the commonest reason for a tutor's absence unanswerable.
+
+`not_accepting_requests` is the only exclusion the tutor chose themselves. It
+exists because the beta has no availability calendar: a single pause switch is
+what a tutor can actually keep true, and matching honours it rather than
+proposing someone who has said they are too busy. The rail still lists them with
+the flag set, because discovery is not a request.
 
 The caller is never a candidate for their own request, and is filtered in the
 query rather than reported as an exclusion: they were never considered, so
@@ -702,6 +783,11 @@ nothing else:
 - Neither endpoint creates a `tutor_profiles` row. The row is created when the
   tutor role is granted; a browse that minted one would hand every signed-in
   student a `probationary` standing on every cold start.
+- The rail and the detail screen carry `bio`, `avatar_url`, `year_of_study`, and
+  `accepting_requests`, so a card can read like a person rather than a grade
+  report. `contact_phone` is on neither: a number on a public card is a number
+  people who never booked will call, so it is returned only to the two parties of
+  a confirmed session.
 - The competency bar applies on **both** paths, filtered and unfiltered. Every
   unit at one university is graded on that university's single scale, so applying
   it only when a unit was named would mean the same tutor passes in one query and
@@ -852,8 +938,11 @@ Tutor confirms → POST /v1/sessions
 Session Scheduled (in-app)
       │
       ▼
-PIN Handshake: tutor shares a six-digit one-time code, tutee submits it
-      │   (a missing PIN fails closed — never treated as a match)
+Mutual check-in: each party taps check-in; the session goes live
+      │   only when both accounts have recorded an arrival
+      ▼
+Mutual finish: each party taps finish; the session completes only
+      │   when both have left, and minutes are the window both were present
       ▼
 Session Completed  (status assigned first, then the accrual —
                    so minutes bank exactly once)
@@ -865,19 +954,32 @@ Rating Submitted → ValidationService updates tutor status
 IncentiveService logs hours → certificate eligibility
 ```
 
-### 8.1 The PIN handshake is attendance evidence
+### 8.1 Mutual check-in is attendance evidence
 
-A six-digit one-time code is not an authentication credential. It exists to make attendance
-a *mutual* claim rather than the tutee's word alone: the tutor shows a code
-generated at acceptance, the tutee types it in to confirm they met. A tutee who
-fabricates attendance needs the tutor's code, not just a `completed` transition.
+Attendance is a *mutual* claim, not the tutee's word alone. The old design used a
+six-digit code the tutor read out and the tutee typed in. A code proves two people
+met, but it is also a secret one party can read to the other, and the server
+cannot tell a real meeting from a code shared over WhatsApp. The beta replaces it
+with two independent timestamps per party, one at the start and one at the end:
 
-The consequence is that the code is compared for **presence**, not for
-authenticity, so verification fails closed when `sessions.session_pin` is null.
-A row that never received a PIN cannot be verified by an empty submission, and
-the transition and verification paths both refuse it. The column is
-`VARCHAR(2)` with a length check constraint rather than a 4-digit code, because
-a peer reads the number aloud across a table and a longer one gets mistyped.
+- `tutor_checked_in_at`, `tutee_checked_in_at`
+- `tutor_finished_at`, `tutee_finished_at`
+
+A session is `in_progress` only when both check-in timestamps exist, and
+`completed` only when both finish timestamps exist. The database enforces both
+(`live_session_has_both_check_ins`, `completed_session_has_both_finishes`), so a
+future code path cannot mark a session live on one person's word.
+
+The recorded duration is the window both parties were present: from the later
+check-in to the **earlier** finish. A party who forgets to tap finish an hour
+later must not extend the tutor's hours, because the time after the other person
+left is not time that person can confirm. The floor is one minute, so a
+same-minute session still contributes something to a certificate even though it
+counts towards promotion.
+
+A retried check-in or finish is idempotent. Mobiles retry on a metered
+connection, and a second tap must neither move the timestamp nor report a failure
+for a state the caller already reached.
 
 ### 8.2 Unit endorsements are not ratings
 
@@ -895,6 +997,91 @@ mistake is retractable. The unique constraint on
 `(session_id, rater_id, course_unit_id)` is what makes that replacement safe
 under concurrent retries, and it is a database constraint rather than a service
 check because two simultaneous requests would both pass the check.
+
+### 8.3 Notifications are written in the transaction they announce
+
+An event is not a message. `select_tutor_for_request`, `create_session`, a
+session transition, a rating, and a promotion all write their own state first and
+call `notification_service` in the same transaction. The notification service
+flushes but never commits; the service that owns the action still owns the
+commit. This is the rule that makes a rollback safe: a session that failed to
+save cannot leave behind an inbox row telling a student it exists.
+
+`notifications` and `device_tokens` are separate tables for the same reason
+"event" and "channel" are different words. The inbox is the durable record and
+works with Firebase unconfigured — the first beta APK ships that way. A push
+token belongs to a handset, and the same token may arrive for a second account
+when a phone changes hands; registering it moves the row rather than refusing,
+because the alternative is delivering one student's messages to another.
+
+Rows that must not be announced twice carry a `dedupe_key`, unique per user. The
+pre-read handles the ordinary retry; the unique constraint handles the race, and
+the insert runs inside a savepoint so losing it costs nothing instead of
+poisoning the caller's transaction. Ordinary notifications leave the key null,
+and nulls are distinct in both databases.
+
+Every notification type in `NotificationType` has a producer. A type the client
+can render but nothing raises is a dead deep link and a branch that can never be
+tested, so certificate and reminder events are absent until the code that raises
+them exists.
+
+### 8.4 A review is published; the note was confided
+
+A rating is one transaction between two people. A review is that same row read by
+a stranger, and the two are not the same document even though they share a table.
+
+The tags are a fixed vocabulary (`RatingTag`), capped at four per rating, stored
+as a JSON array on `ratings`. A closed set is what makes a tag something a profile
+can count and render without a moderation queue behind it, and four is a summary
+rather than a checklist that can be ticked in full. The vocabulary is enforced by
+`RatingCreate` and not by the database: `jsonb` membership checks exist on
+PostgreSQL and not on SQLite, and a migration that only works on one backend is
+not worth a constraint the edge already applies. The array has no server default
+for a related reason — `alembic check` cannot compare a JSON default on
+PostgreSQL, and a default that always reports drift would make the check
+worthless.
+
+What a public review carries is the score, the tags, the rater's **initials**, and
+the date. Not the rater's id, and not the written note. The note was written *to*
+the tutor: publishing it puts a student's words in front of strangers who did not
+have the conversation, and in a pilot cohort small enough to recognise itself the
+text alone ("the resit", "my lab group") identifies the author without a name.
+The tutor still reads every note through their own session; nothing was taken
+from them.
+
+A review whose session carries an **unresolved** report is withheld from the
+public list. That is a pause on a publication, not an erasure of a rating: the
+score still counts in the tutor's running average, because the session happened
+and the standing was already recomputed from it. Keeping those two apart is also
+what stops the filter becoming an exploit — filing a report cannot scrub a low
+score out of a tutor's record, it can only hide the entry while somebody looks.
+Resolving the report restores it.
+
+The endpoint is `GET /v1/tutors/{id}/reviews`, separate from the profile so the
+name, standing and rating paint without waiting on the review query. It has no
+offset: the profile shows the newest handful, and a pager no screen reads is a
+contract to maintain for nothing.
+
+### 8.5 The pilot funnel counts evidence, not activity
+
+`GET /v1/admin/analytics/pilot-funnel` returns four separate aggregates:
+requests, accepted requests, completed sessions, and tutee-rated sessions. It is
+admin-only and contains no student, tutor, unit, or session identifier.
+
+The stages are counted independently rather than derived by subtraction. A
+request can be accepted and its session later cancelled, so accepted minus
+completed is not the number of sessions still open; it is a number that would
+silently change meaning with the cancellation policy. `accepted` is the request
+status `matched` — a tutor confirmed — not a match list that was merely shown.
+`sessions_rated` counts the tutee's mandatory rating. Only the tutee can submit
+session feedback today, and the query still restricts by direction so a future
+tutor-facing rating cannot silently make the quality loop look closed when it is
+not.
+
+The console renders the four counts with stage-to-stage conversion. A zero
+denominator omits the conversion rather than showing a 0% that would invent a
+number, and an empty pilot still renders four zeroes: launch-day zeroes are the
+honest starting state, not an error state an operator should learn to click past.
 
 ---
 
@@ -963,15 +1150,14 @@ called yet:
 
 ### 9.3 Rate limiting
 
-Sign-in, sign-up and the PIN handshake are all bounded. Argon2id makes each guess
+Sign-in and sign-up are bounded. Argon2id makes each guess
 expensive, which sets the *cost* of an attempt; these counters set how many
 attempts are allowed, which is the half that cost does not provide.
 
 **The counters are rows in `rate_limit_counters`, not entries in a dictionary.**
 An in-process counter is per worker process, so with four workers an attacker gets
 four times the configured budget for free, and a restart wipes the history —
-weakest exactly when the service is busiest and most worth attacking. The PIN
-throttle on the session row is the same decision at a smaller scale.
+weakest exactly when the service is busiest and most worth attacking.
 
 **One row per (scope, key), and the increment is a single statement.**
 `INSERT ... ON CONFLICT (scope, key) DO UPDATE SET attempts = attempts + 1

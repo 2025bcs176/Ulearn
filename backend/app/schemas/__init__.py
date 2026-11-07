@@ -50,10 +50,8 @@ from app.schemas.session import (
     HelpRequestCreate,
     HelpRequestResponse,
     SessionCreate,
-    SessionPinResponse,
     SessionResponse,
     SessionTransitionRequest,
-    VerifyPinRequest,
 )
 from app.schemas.tutor import (
     DEFAULT_RAIL_TUTORS,
@@ -114,7 +112,6 @@ __all__ = [
     "RegisterRequest",
     "RequestSchema",
     "SessionCreate",
-    "SessionPinResponse",
     "SessionResponse",
     "SessionTransitionRequest",
     "SubjectResponse",
@@ -126,5 +123,4 @@ __all__ = [
     "TutorRatingSummary",
     "UniversityResponse",
     "UserResponse",
-    "VerifyPinRequest",
 ]

@@ -10,6 +10,7 @@ import 'package:peerpass/core/storage/token_store.dart';
 import 'package:peerpass/features/auth/data/datasources/remote_academics_datasource.dart';
 import 'package:peerpass/features/auth/data/datasources/remote_auth_datasource.dart';
 import 'package:peerpass/features/auth/data/repositories/auth_repository.dart';
+
 /// [AuthRepository] over the real API.
 ///
 /// The only place that knows the wire format and the token store at the same
@@ -42,16 +43,24 @@ class RemoteAuthRepository implements AuthRepository {
   Future<UserProfile> signIn({
     required String email,
     required String password,
-  }) {
-    return _establish(() => auth.signIn(email: email, password: password));
+  }) async {
+    final profile = await _establish(() async {
+      await tokenStore.clear();
+      return await auth.signIn(email: email, password: password);
+    });
+    return profile;
   }
 
   @override
   Future<UserProfile> register({
     required String email,
     required String password,
-  }) {
-    return _establish(() => auth.register(email: email, password: password));
+  }) async {
+    final profile = await _establish(() async {
+      await tokenStore.clear();
+      return await auth.register(email: email, password: password);
+    });
+    return profile;
   }
 
   @override
@@ -71,10 +80,10 @@ class RemoteAuthRepository implements AuthRepository {
       return UserProfile.fromJson(await auth.me());
     } on Object catch (error) {
       final failure = _toFailure(error);
-      if (failure is AuthFailure) {
-        // The server no longer honours this token. Clear it, so the next cold
-        // start does not replay the same dead credential, and report signed out
-        // rather than as an error the user has to act on.
+      if (failure is AuthFailure || failure is NotFoundFailure) {
+        // The server no longer has a usable account/session for this token.
+        // Clear it, so the next cold start does not replay the same dead
+        // credential and hold the app on splash again.
         await tokenStore.clear();
         return null;
       }

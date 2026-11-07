@@ -35,6 +35,7 @@ MAX_MATCH_CANDIDATES = 20
 MATCH_EXCLUSION_REASONS = frozenset(
     {
         "below_threshold",
+        "not_accepting_requests",
         "not_the_tutor",
         "same_university_only",
         "suspended",

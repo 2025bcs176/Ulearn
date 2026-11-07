@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from collections.abc import Sequence
 from decimal import Decimal
@@ -18,17 +19,21 @@ from app.core.exceptions import (
 )
 from app.models.course_unit import CourseUnit
 from app.models.endorsement import UnitEndorsement
-from app.models.enums import SessionStatus, TutorStanding
+from app.models.enums import ReportStatus, SessionStatus, TutorStanding
 from app.models.rating import Rating
+from app.models.report import SessionReport
 from app.models.session import Session
 from app.models.tutor_profile import TutorProfile
 from app.models.user import User
 from app.schemas.rating import (
+    DEFAULT_TUTOR_REVIEWS,
     RatingCreate,
     RatingResponse,
     TutorRatingSummary,
+    TutorReview,
     UnitEndorsementCount,
 )
+from app.services import notification_service
 
 PROMOTION_MIN_SESSIONS = 3
 PROMOTION_MIN_AVERAGE = Decimal("4.10")
@@ -87,6 +92,7 @@ async def submit_rating(
             score=payload.score,
             comprehension_helped=payload.comprehension_helped,
             feedback_text=payload.feedback_text,
+            tags=[tag.value for tag in payload.tags],
         )
         db.add(rating)
         await _replace_endorsements(
@@ -102,6 +108,14 @@ async def submit_rating(
             profile.rating_count += 1
             await _recompute_standing(db, profile)
         await db.flush()
+        await notification_service.rating_received(
+            db,
+            tutor_id=ratee_id,
+            rater=user,
+            score=payload.score,
+            rating_id=rating.public_id,
+            session_id=session.public_id,
+        )
         await db.commit()
         await db.refresh(rating)
         return RatingResponse.model_validate(rating)
@@ -389,39 +403,45 @@ async def _get_or_create_tutor_profile(
 
 
 async def _recompute_standing(db: AsyncSession, profile: TutorProfile) -> None:
+    # Captured before the rules run, because the notification this may raise is
+    # about the move, not the destination. A tutor who was already verified is
+    # not promoted again by their next five-star rating.
+    previous = profile.standing
+
     if profile.operator_suspended:
         profile.standing = TutorStanding.SUSPENDED
-        return
-    if profile.rating_count < PROMOTION_MIN_SESSIONS or profile.average_rating is None:
+    elif (
+        profile.rating_count < PROMOTION_MIN_SESSIONS or profile.average_rating is None
+    ):
         profile.standing = TutorStanding.PROBATIONARY
-        return
-
-    # Compare totals rather than a rounded average so 4.10 is exactly in and
-    # 4.099... is exactly out.
-    promotion_bar = profile.rating_total * 100 >= 410 * profile.rating_count
-    if promotion_bar:
-        profile.standing = TutorStanding.VERIFIED
-        profile.suspended_reason = None
-        return
-
-    if profile.rating_count < DEMOTION_MIN_RATED_SESSIONS:
-        profile.standing = TutorStanding.PROBATIONARY
-        return
-
-    if profile.average_rating < SUSPENDED_BELOW_AVERAGE:
-        profile.standing = TutorStanding.SUSPENDED
-        profile.suspended_reason = "Rating average below 3.0"
-    elif profile.average_rating < REDUCED_BELOW_AVERAGE:
-        profile.standing = TutorStanding.REDUCED
-        profile.suspended_reason = None
-    elif profile.standing is TutorStanding.VERIFIED:
-        # A verified tutor keeps the badge until the explicit demotion bar is
-        # crossed; a single average below the promotion bar is not a demotion.
-        profile.standing = TutorStanding.VERIFIED
-        profile.suspended_reason = None
     else:
-        profile.standing = TutorStanding.PROBATIONARY
-        profile.suspended_reason = None
+        # Compare totals rather than a rounded average so 4.10 is exactly in and
+        # 4.099... is exactly out.
+        promotion_bar = profile.rating_total * 100 >= 410 * profile.rating_count
+        if promotion_bar:
+            profile.standing = TutorStanding.VERIFIED
+            profile.suspended_reason = None
+        elif profile.rating_count < DEMOTION_MIN_RATED_SESSIONS:
+            profile.standing = TutorStanding.PROBATIONARY
+        elif profile.average_rating < SUSPENDED_BELOW_AVERAGE:
+            profile.standing = TutorStanding.SUSPENDED
+            profile.suspended_reason = "Rating average below 3.0"
+        elif profile.average_rating < REDUCED_BELOW_AVERAGE:
+            profile.standing = TutorStanding.REDUCED
+            profile.suspended_reason = None
+        elif profile.standing is TutorStanding.VERIFIED:
+            # A verified tutor keeps the badge until the explicit demotion bar is
+            # crossed; a single average below the promotion bar is not a demotion.
+            profile.standing = TutorStanding.VERIFIED
+            profile.suspended_reason = None
+        else:
+            profile.standing = TutorStanding.PROBATIONARY
+            profile.suspended_reason = None
+
+    if previous is not TutorStanding.VERIFIED and (
+        profile.standing is TutorStanding.VERIFIED
+    ):
+        await notification_service.promoted(db, tutor_id=profile.user_id)
 
 
 async def record_completion(db: AsyncSession, session: Session) -> None:
@@ -455,3 +475,123 @@ async def list_recent_ratings(
         .limit(limit)
     )
     return [RatingResponse.model_validate(row) for row in result.scalars()]
+
+
+async def list_public_reviews(
+    db: AsyncSession,
+    tutor_public_id: uuid.UUID,
+    *,
+    limit: int = DEFAULT_TUTOR_REVIEWS,
+) -> list[TutorReview]:
+    """The reviews a tutor's profile publishes, newest first.
+
+    Read by any signed-in student, which decides three things this query does
+    that a tutor-facing read does not. The rater is reduced to initials and no
+    id, the written note is not selected at all, and a review whose session
+    carries an unresolved report is withheld.
+
+    Withholding a review is not the same as erasing a rating, and the difference
+    matters. The rating still counts in the tutor's average -- the session
+    happened, and `TutorProfile` has already been updated from it -- so this
+    hides a *publication* while an allegation about that session is unresolved,
+    not the evidence. It also bounds the obvious abuse: a student cannot file a
+    report to scrub their own low score out of the tutor's standing, because
+    standing never reads this list. A report that is resolved restores the
+    review, on the grounds that an operator has looked at the session by then.
+
+    404 for a user who does not exist and for one who is not a tutor, the same
+    pair of answers `tutor_service.get_tutor_detail` gives and for the same
+    reason: the route must not become a way to discover which accounts hold the
+    tutor role.
+    """
+    tutor_id = await db.scalar(
+        select(User.id)
+        .join(TutorProfile, TutorProfile.user_id == User.id)
+        .where(User.public_id == tutor_public_id)
+    )
+    if tutor_id is None:
+        raise NotFoundProblem("That tutor could not be found.")
+
+    unresolved_report = (
+        select(SessionReport.id)
+        .where(
+            SessionReport.session_id == Rating.session_id,
+            SessionReport.status != ReportStatus.RESOLVED,
+        )
+        .exists()
+    )
+    result = await db.execute(
+        select(Rating)
+        .where(Rating.ratee_id == tutor_id, ~unresolved_report)
+        .options(selectinload(Rating.rater))
+        .order_by(Rating.created_at.desc())
+        .limit(limit)
+    )
+    return [
+        TutorReview(
+            id=rating.public_id,
+            score=rating.score,
+            tags=list(rating.tags or ()),
+            rater_initials=_initials(rating.rater.display_name),
+            created_at=rating.created_at,
+        )
+        for rating in result.scalars()
+    ]
+
+
+def _initials(display_name: str) -> str:
+    """The first letters of a name, for a review's byline.
+
+    Two letters at most, because "A. O." beside a date identifies the cohort
+    member without publishing their name, and a longer abbreviation is a name
+    with the vowels taken out.
+
+    An email address is cut at the `@` first: `User.display_name` falls back to
+    the address for an account with no name, and the initial of a domain is not
+    something anybody would recognise as themselves. The fallback for a string
+    with no letters at all is `?` rather than an empty string, because a byline
+    with nothing in it looks like a rendering bug instead of a missing name.
+    """
+    local = display_name.split("@", 1)[0]
+    words = [word for word in re.split(r"\W+", local) if word]
+    if not words:
+        return "?"
+    first = words[0][0].upper()
+    if len(words) == 1:
+        return first
+    return f"{first}{words[-1][0].upper()}"
+
+
+async def get_session_rating(
+    db: AsyncSession,
+    user: User,
+    session_id: uuid.UUID,
+) -> RatingResponse | None:
+    """Return the tutee's rating to the tutor for one session.
+
+    The tutor may read only feedback attached to a session they taught. The
+    tutee submits it, but both participants may see the resulting record through
+    their own session; this endpoint is used by the tutor's read-only detail
+    view.
+    """
+    result = await db.execute(
+        select(Rating)
+        .join(Rating.session)
+        .where(
+            Session.public_id == session_id,
+            Rating.rater_id == Session.tutee_id,
+        )
+        .options(
+            selectinload(Rating.session),
+            selectinload(Rating.rater),
+            selectinload(Rating.ratee),
+        )
+    )
+    rating = result.scalar_one_or_none()
+    if rating is None:
+        return None
+    if rating.ratee_id != user.id:
+        raise AuthorizationProblem(
+            "Only the tutor who taught this session can view it."
+        )
+    return RatingResponse.model_validate(rating)

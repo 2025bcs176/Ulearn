@@ -298,6 +298,7 @@ async def _competent_tutor(
     status: CompetencyStatus = CompetencyStatus.VERIFIED,
     standing: TutorStanding = TutorStanding.VERIFIED,
     profile: bool = True,
+    accepting_requests: bool = True,
 ) -> User:
     """A tutor: the role, a profile unless refused one, one competency per unit.
 
@@ -331,6 +332,7 @@ async def _competent_tutor(
                 completed_sessions=6,
                 rating_total=Decimal("36.00"),
                 rating_count=10,
+                accepting_requests=accepting_requests,
             )
         )
     for unit in units:
@@ -556,7 +558,7 @@ async def test_every_advertised_exclusion_code_is_reachable(db_session):
     A documented reason nothing produces is worse than a missing one: a client
     writes a branch for it, that branch never fires, and a tutor with a real,
     fixable problem is told the platform has no reason. So this asserts equality
-    in both directions, over a university built to produce all five at once.
+    in both directions, over a university built to produce all six at once.
     """
     home, home_grades, units = await _campus(db_session)
     away, _away_grades, _away_units = await _campus(
@@ -574,6 +576,15 @@ async def test_every_advertised_exclusion_code_is_reachable(db_session):
         email="suspended@mak.ac.ug",
         full_name="Suspended Tutor",
         standing=TutorStanding.SUSPENDED,
+    )
+    paused = await _competent_tutor(
+        db_session,
+        university=home,
+        units=[units["CSC 121"]],
+        grade=home_grades["A"],
+        email="paused@mak.ac.ug",
+        full_name="Paused Tutor",
+        accepting_requests=False,
     )
     profileless = await _competent_tutor(
         db_session,
@@ -615,6 +626,7 @@ async def test_every_advertised_exclusion_code_is_reachable(db_session):
 
     assert _reasons(response) == {
         suspended.public_id: ["suspended"],
+        paused.public_id: ["not_accepting_requests"],
         profileless.public_id: ["not_the_tutor"],
         below.public_id: ["below_threshold"],
         unchecked.public_id: ["unverified"],

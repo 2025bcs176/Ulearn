@@ -224,6 +224,10 @@ async def _endorse(
             started_at=datetime.now(UTC),
             ended_at=datetime.now(UTC),
             duration_minutes=60,
+            tutor_checked_in_at=datetime.now(UTC),
+            tutee_checked_in_at=datetime.now(UTC),
+            tutor_finished_at=datetime.now(UTC),
+            tutee_finished_at=datetime.now(UTC),
         )
         db_session.add(session)
         await db_session.flush()
@@ -327,6 +331,10 @@ async def test_the_rail_lists_eligible_tutors_with_their_evidence(
             # compared, which a double could not carry.
             "average_rating": "4.10",
             "completed_sessions": 9,
+            "avatar_url": None,
+            "bio": None,
+            "year_of_study": None,
+            "accepting_requests": True,
             "endorsed_course_unit_ids": [str(units["CSC 121"].public_id)],
             "endorsement_count": 3,
         }
@@ -567,6 +575,61 @@ async def test_a_nameless_tutor_is_listed_under_their_email(client, db_session) 
     response = await client.get("/v1/tutors/top", headers=_bearer(caller))
 
     assert response.json()[0]["full_name"] == "nameless-tutor@mak.ac.ug"
+
+
+async def test_a_tutor_card_carries_the_profile_fields_it_draws(
+    client, db_session
+) -> None:
+    """Bio, avatar, year, and the request pause reach both student-facing views.
+
+    These are the fields the card reads instead of a grade report. A rail entry
+    and a detail response are built by different code paths, so both are
+    asserted: a field added to one and forgotten in the other is a card that
+    changes when the student taps it.
+
+    The phone is deliberately absent from both. It is returned only to the two
+    parties of a confirmed session, and a card is not a session.
+    """
+    university, _subject, grades, units = await _institution(db_session)
+    caller, _me = await _account(
+        client, db_session, "profile-me@mak.ac.ug", university=university
+    )
+    tutor = await _tutor(
+        db_session,
+        university=university,
+        units=[units["CSC 121"]],
+        grade=grades["A"],
+        email="profile-tutor@mak.ac.ug",
+        full_name="Profile Tutor",
+    )
+    tutor.year_of_study = 3
+    profile = await db_session.scalar(
+        select(TutorProfile).where(TutorProfile.user_id == tutor.id)
+    )
+    assert profile is not None
+    profile.bio = "Third-year CS. I explain recursion with trees, not slides."
+    profile.avatar_url = "https://cdn.peerpass.test/avatars/profile-tutor.jpg"
+    profile.contact_phone = "+256700000000"
+    profile.accepting_requests = False
+    await db_session.commit()
+
+    rail = await client.get("/v1/tutors/top", headers=_bearer(caller))
+    entry = rail.json()[0]
+
+    assert entry["bio"] == profile.bio
+    assert entry["avatar_url"] == profile.avatar_url
+    assert entry["year_of_study"] == 3
+    assert entry["accepting_requests"] is False
+    assert "contact_phone" not in entry
+
+    detail = await client.get(f"/v1/tutors/{tutor.public_id}", headers=_bearer(caller))
+    summary = detail.json()["profile"]
+
+    assert summary["bio"] == profile.bio
+    assert summary["avatar_url"] == profile.avatar_url
+    assert summary["year_of_study"] == 3
+    assert summary["accepting_requests"] is False
+    assert "contact_phone" not in summary
 
 
 # --- the unit filter --------------------------------------------------------
@@ -1020,6 +1083,10 @@ async def test_the_detail_screen_returns_the_trimmed_profile(
         "standing": "verified",
         "average_rating": "4.13",
         "completed_sessions": 7,
+        "avatar_url": None,
+        "bio": None,
+        "year_of_study": None,
+        "accepting_requests": True,
     }
     assert "suspended_reason" not in body["profile"]
     assert "rating_total" not in body["profile"]

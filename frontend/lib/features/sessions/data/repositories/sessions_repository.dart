@@ -23,33 +23,19 @@ abstract interface class SessionsRepository {
   /// One session by public id.
   Future<SessionModel> session(String sessionId);
 
-  /// The handshake pin the tutor reads out, with the attempts the tutee has left.
+  /// Records the signed-in user's own arrival and returns the session.
   ///
-  /// The tutor's half only. The tutee asking for this is refused by the API, and
-  /// it must stay that way: a tutee who could read their own pin would have
-  /// nothing to prove, and the tutor no way to tell an in-person student from
-  /// someone guessing a code on a borrowed account.
-  Future<SessionPinModel> revealPin({required String sessionId});
+  /// Each party calls this for themselves; the session goes live when both have.
+  /// A retried tap is idempotent, so a phone that did not receive the first
+  /// response can safely ask again.
+  Future<SessionModel> checkIn({required String sessionId});
 
-  /// Supplies the handshake pin, and returns the session as it now stands.
+  /// Records the signed-in user's own departure and returns the session.
   ///
-  /// A wrong pin is a `ValidationFailure` naming `pin`; the session is left
-  /// untouched. Throttling is the API's concern: the client counts no attempts
-  /// and locks nobody out, because a lock-out enforced on a device is one a
-  /// student clears by reinstalling the app.
-  Future<SessionModel> verifyPin({
-    required String sessionId,
-    required String pin,
-  });
-
-  Future<SessionModel> requestCompletion({required String sessionId});
-
-  Future<SessionPinModel> revealCompletionCode({required String sessionId});
-
-  Future<SessionModel> verifyCompletionCode({
-    required String sessionId,
-    required String code,
-  });
+  /// The session completes when both parties have finished. The API records the
+  /// earlier departure as the end, so one party staying on the screen cannot
+  /// extend the hours the other attended.
+  Future<SessionModel> finish({required String sessionId});
 
   /// Confirms a help request the student named this tutor on, and returns the
   /// session that confirmation created.
@@ -76,14 +62,15 @@ abstract interface class SessionsRepository {
     required int durationMinutes,
   });
 
-  /// Ends a live session, returning it as completed.
-  Future<SessionModel> endSession(String sessionId);
-
   /// Records the score the signed-in user gives for a session, and returns it.
   ///
   /// The API treats a second rating for the same session as an update rather than
   /// a second rating, so a student who changes their mind does not need a second
   /// screen to correct the first.
+  ///
+  /// [tags] is optional and comes from the API's fixed vocabulary. Empty is a
+  /// real submission and not a missing one: a student who only wants to give a
+  /// score is not made to describe the tutor to get past the form.
   ///
   /// [endorsedCourseUnitIds] is the other half of the same submission: a claim
   /// that the tutor actually covered those units, as separate from the score. It
@@ -97,8 +84,12 @@ abstract interface class SessionsRepository {
     required int score,
     required bool comprehensionHelped,
     String? feedbackText,
+    List<String> tags = const [],
     List<String> endorsedCourseUnitIds = const [],
   });
+
+  /// The tutor's read-only feedback for one completed session.
+  Future<RatingModel?> receivedRating({required String sessionId});
 }
 
 /// The sessions contract, as a live instance.

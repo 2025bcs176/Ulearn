@@ -17,7 +17,8 @@ enum MatchExclusionReason {
   sameUniversityOnly('same_university_only'),
   suspended('suspended'),
   unverified('unverified'),
-  notTheTutor('not_the_tutor');
+  notTheTutor('not_the_tutor'),
+  notAcceptingRequests('not_accepting_requests');
 
   MatchExclusionReason(this.wireValue);
 
@@ -38,6 +39,7 @@ enum MatchExclusionReason {
     suspended => 'their tutoring access has been suspended',
     unverified => 'the grade they claimed has not been checked by anyone yet',
     notTheTutor => 'they have no tutor profile for the platform to rank',
+    notAcceptingRequests => 'they have paused new requests for now',
   };
 
   /// The reason parsed from a wire code, or null when unrecognised.

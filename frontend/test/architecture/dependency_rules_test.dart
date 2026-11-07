@@ -60,7 +60,9 @@ void main() {
           // described a presentation-only rule, which meant the guide's one
           // permitted dependency -- the owning feature's repository contract --
           // was untestable in practice.
-          if (target != null && target != owner && trimmed.contains('/presentation/')) {
+          if (target != null &&
+              target != owner &&
+              trimmed.contains('/presentation/')) {
             offenders.add('${file.path} imports $target/presentation');
           }
         }
@@ -93,7 +95,10 @@ void main() {
           if (target == null || target == owner) continue;
           final isDataLayer = trimmed.contains('/data/');
           final isOwnContract =
-              trimmed.contains('/data/repositories/auth_repository.dart');
+              trimmed.contains('/data/repositories/auth_repository.dart') ||
+              trimmed.contains(
+                '/data/repositories/competencies_repository.dart',
+              );
           if (!isDataLayer || !isOwnContract) {
             offenders.add('${file.path} imports $target outside its contract');
           }

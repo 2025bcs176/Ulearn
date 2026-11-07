@@ -43,7 +43,7 @@ void main() {
       },
     );
 
-    test('returns a scheduled session belonging to the student who asked', () async {
+    test('returns a scheduled session with nobody checked in yet', () async {
       final fake = repository();
 
       final created = await confirm(fake);
@@ -53,12 +53,13 @@ void main() {
       expect(created.tuteeId, 'student-1');
       expect(created.tutorId, 'tutor-1');
       expect(created.durationMinutes, 45);
-      // A PIN is issued, and it is not on the session. The fake has to serve it
-      // the way the API does -- through `revealPin`, tutor-only -- so a screen
-      // test cannot pass by reading the pin off a payload a tutee could also read.
-      final pin = await fake.revealPin(sessionId: created.id);
-      expect(pin.sessionPin, hasLength(6));
-      expect(pin.attemptsRemaining, FakeSessionsRepository.maxPinAttempts);
+      // The pass starts empty: a session created by a confirmation has no
+      // attendance evidence until each party taps. A fake that pre-filled it
+      // would let a screen skip the check-in and still pass.
+      expect(created.tutorCheckedInAt, isNull);
+      expect(created.tuteeCheckedInAt, isNull);
+      expect(created.tutorFinishedAt, isNull);
+      expect(created.tuteeFinishedAt, isNull);
     });
 
     test('the created session joins the list the screen already has', () async {
@@ -108,6 +109,140 @@ void main() {
       // a screen test pass while the real request was never sent -- which is the
       // exact shape of a bug that a "the button does nothing" report produces.
       expect(fake.confirmations, hasLength(1));
+    });
+  });
+
+  group('the check-in pass', () {
+    SessionModel pass({
+      String status = 'scheduled',
+      String? startedAt,
+      String? tutorCheckedInAt,
+      String? tuteeCheckedInAt,
+      String? tutorFinishedAt,
+      String? tuteeFinishedAt,
+    }) {
+      return SessionModel.fromJson({
+        'id': 'session-pass',
+        'tutee_id': 'student-1',
+        'tutor_id': 'tutor-1',
+        'course_unit_id': 'unit-1',
+        'course_unit_code': 'MAT 221',
+        'course_unit_name': 'Linear Algebra',
+        'topic': 'eigenvalues',
+        'status': status,
+        'duration_minutes': 60,
+        'is_rated': false,
+        'created_at': '2026-03-01T08:00:00Z',
+        'started_at': startedAt,
+        'tutor_checked_in_at': tutorCheckedInAt,
+        'tutee_checked_in_at': tuteeCheckedInAt,
+        'tutor_finished_at': tutorFinishedAt,
+        'tutee_finished_at': tuteeFinishedAt,
+      });
+    }
+
+    test('one check-in leaves the session scheduled', () async {
+      final fake = FakeSessionsRepository(sessions: [pass()])
+        ..currentUser = 'student-1';
+
+      final checkedIn = await fake.checkIn(sessionId: 'session-pass');
+
+      expect(fake.checkedInSessionIds, ['session-pass']);
+      expect(checkedIn.tuteeCheckedInAt, isNotNull);
+      expect(checkedIn.tutorCheckedInAt, isNull);
+      // One account saying it is here is not evidence that anybody met. The
+      // session stays scheduled until the other party taps.
+      expect(checkedIn.status, TutoringSessionStatus.scheduled);
+    });
+
+    test('the second check-in starts the session', () async {
+      final fake = FakeSessionsRepository(
+        sessions: [pass(tutorCheckedInAt: '2026-03-04T09:00:00Z')],
+      )..currentUser = 'student-1';
+
+      final live = await fake.checkIn(sessionId: 'session-pass');
+
+      expect(live.tutorCheckedInAt, DateTime.utc(2026, 3, 4, 9));
+      expect(live.tuteeCheckedInAt, isNotNull);
+      expect(live.status, TutoringSessionStatus.inProgress);
+      expect(live.startedAt, isNotNull);
+    });
+
+    test('a retried check-in does not move the recorded time', () async {
+      final fake = FakeSessionsRepository(sessions: [pass()])
+        ..currentUser = 'student-1';
+
+      final first = await fake.checkIn(sessionId: 'session-pass');
+      final retried = await fake.checkIn(sessionId: 'session-pass');
+
+      expect(retried.tuteeCheckedInAt, first.tuteeCheckedInAt);
+    });
+
+    test('finish before both parties checked in is refused', () async {
+      final fake = FakeSessionsRepository(
+        sessions: [pass(tutorCheckedInAt: '2026-03-04T09:00:00Z')],
+      )..currentUser = 'tutor-1';
+
+      await expectLater(
+        fake.finish(sessionId: 'session-pass'),
+        throwsA(isA<ConflictFailure>()),
+      );
+    });
+
+    test('one finish leaves the session live', () async {
+      final fake = FakeSessionsRepository(
+        sessions: [
+          pass(
+            status: 'in_progress',
+            startedAt: '2026-03-04T09:00:00Z',
+            tutorCheckedInAt: '2026-03-04T09:00:00Z',
+            tuteeCheckedInAt: '2026-03-04T09:02:00Z',
+          ),
+        ],
+      )..currentUser = 'tutor-1';
+
+      final finished = await fake.finish(sessionId: 'session-pass');
+
+      expect(fake.finishedSessionIds, ['session-pass']);
+      expect(finished.tutorFinishedAt, isNotNull);
+      expect(finished.tuteeFinishedAt, isNull);
+      // The other party has not said they are done, so the session is not over.
+      expect(finished.status, TutoringSessionStatus.inProgress);
+    });
+
+    test(
+      'the earlier departure closes the session and sets the hours',
+      () async {
+        final fake = FakeSessionsRepository(
+          sessions: [
+            pass(
+              status: 'in_progress',
+              startedAt: '2026-03-04T09:00:00Z',
+              tutorCheckedInAt: '2026-03-04T09:00:00Z',
+              tuteeCheckedInAt: '2026-03-04T09:02:00Z',
+              // The student left at 09:30. The tutor finishing later must not
+              // extend the session past the time the student can confirm.
+              tuteeFinishedAt: '2026-03-04T09:30:00Z',
+            ),
+          ],
+        )..currentUser = 'tutor-1';
+
+        final completed = await fake.finish(sessionId: 'session-pass');
+
+        expect(completed.status, TutoringSessionStatus.completed);
+        expect(completed.endedAt, DateTime.utc(2026, 3, 4, 9, 30));
+        expect(completed.durationMinutes, 30);
+      },
+    );
+
+    test('a session that did not happen cannot be checked into', () async {
+      final fake = FakeSessionsRepository(sessions: [pass(status: 'cancelled')])
+        ..currentUser = 'student-1';
+
+      await expectLater(
+        fake.checkIn(sessionId: 'session-pass'),
+        throwsA(isA<ConflictFailure>()),
+      );
     });
   });
 }

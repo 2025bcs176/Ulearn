@@ -30,6 +30,8 @@ console does not provide public admin registration or role assignment.
 - **Competency review** is the console's only write: verifying or rejecting a
   pending competency claim.
 - **Tutor standing** shows privacy-safe tutor aggregates.
+- **Pilot funnel** shows the four counts the daily check needs: requests,
+  accepted requests, completed sessions, and tutee-rated sessions.
 
 ### Competency review
 

@@ -180,6 +180,37 @@ void main() {
     });
   });
 
+  group('pilot funnel', () {
+    test(
+      'reads the funnel from its own endpoint and maps every field',
+      () async {
+        transport = FakeAdminTransport((options) async {
+          if (options.path == '/v1/auth/login') {
+            return jsonResponse(loginJson());
+          }
+          return jsonResponse(<String, dynamic>{
+            'requests_total': 40,
+            'requests_accepted': 18,
+            'sessions_completed': 11,
+            'sessions_rated': 9,
+          });
+        });
+        await repository().signIn('operator@peerpass.test', 'pw');
+
+        final funnel = await repository().pilotFunnel();
+
+        expect(
+          transport.requests.last.path,
+          '/v1/admin/analytics/pilot-funnel',
+        );
+        expect(funnel.requestsTotal, 40);
+        expect(funnel.requestsAccepted, 18);
+        expect(funnel.sessionsCompleted, 11);
+        expect(funnel.sessionsRated, 9);
+      },
+    );
+  });
+
   group('reviewing a competency', () {
     test('records a verification with no reason', () async {
       final competency = competencyFixture();

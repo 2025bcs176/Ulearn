@@ -6,6 +6,7 @@ import 'package:peerpass_admin/core/models/admin_tutor_standing.dart';
 import 'package:peerpass_admin/core/models/admin_user.dart';
 import 'package:peerpass_admin/core/models/audit_event.dart';
 import 'package:peerpass_admin/core/models/competency_status.dart';
+import 'package:peerpass_admin/core/models/pilot_funnel.dart';
 import 'package:peerpass_admin/core/models/topic_heatmap.dart';
 import 'package:peerpass_admin/core/network/admin_api_client.dart';
 import 'package:peerpass_admin/features/admin/data/repositories/admin_repository.dart';
@@ -73,6 +74,11 @@ class HttpAdminRepository implements AdminRepository {
   @override
   Future<TopicHeatmap> topicHeatmap() async => TopicHeatmap.fromJson(
     await _client.getJson('/v1/admin/analytics/topic-heatmap'),
+  );
+
+  @override
+  Future<PilotFunnel> pilotFunnel() async => PilotFunnel.fromJson(
+    await _client.getJson('/v1/admin/analytics/pilot-funnel'),
   );
 
   @override

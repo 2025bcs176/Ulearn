@@ -85,6 +85,39 @@ password hashes, refresh tokens, consent timestamps, or internal database ids.
 All list responses use the standard `items`, `total`, `offset`, and `limit`
 pagination shape.
 
+### `GET /v1/admin/analytics/pilot-funnel`
+
+The four counts the pilot runbook tracks, as one aggregate read. *Admin.*
+
+```json
+{
+  "requests_total": 42,
+  "requests_accepted": 31,
+  "sessions_completed": 24,
+  "sessions_rated": 21
+}
+```
+
+- `requests_total` counts every help request, including ones still open and ones
+  that were withdrawn or expired.
+- `requests_accepted` counts requests a tutor confirmed (`matched`), not merely
+  requests that were viewed.
+- `sessions_completed` counts sessions both parties finished.
+- `sessions_rated` counts completed sessions with the **tutee's** mandatory
+  feedback. Only the tutee can rate; the direction is still part of the query so
+  a future tutor-facing rating cannot inflate the number the quality loop is
+  judged on.
+
+Each number is a separate aggregate, not a stage derived by subtraction: a
+request can be accepted and its session cancelled, so accepted minus completed
+is not the number of sessions still open. The response contains counts only and
+cannot identify a student or a session.
+
+### `GET /v1/admin/analytics/topic-heatmap`
+
+Aggregated request topics, suppressed below a cohort of five requests and five
+distinct students. *Admin.*
+
 ## Errors
 
 Every error the API returns — framework validation, domain rejection, or an
@@ -388,21 +421,25 @@ Read-only, administrator-loaded reference data. No create, update, or delete: a
 student who could invent a course unit their own transcript never mentioned could
 manufacture a match for it.
 
+For the current MUST pilot, the seed contains only the Faculty of Computing and
+Informatics and its undergraduate Computer Science, Information Technology, and
+Software Engineering programmes. Postgraduate and non-FCI entries are excluded.
+
 **All three are unauthenticated.** The sign-up form shows a student where they
 study before they have an account, and a published faculty list leaks nothing a
 prospectus does not.
 
 ### `GET /v1/academics/universities`
 
-Every institution, alphabetically. `grading_scale_id` is nullable: a tutor cannot
-be matched until their university has a scale, and the matching service reports
-that rather than assuming one.
+The MUST pilot institution, alphabetically. `grading_scale_id` is nullable: a
+tutor cannot be matched until their university has a scale, and the matching
+service reports that rather than assuming one.
 
 ```json
 [
   {
     "id": "8e2c…",
-    "name": "Makerere University",
+    "name": "Mbarara University of Science and Technology",
     "grading_scale_id": "1f4a…"
   }
 ]
@@ -422,16 +459,14 @@ IDs from different universities.
 
 ### `GET /v1/academics/programs?university_id=<uuid>`
 
-Every degree or postgraduate offering seeded for the selected university,
-ordered by faculty and name. Programs are reference information and are
-separate from course units, which remain the records used by matching.
+Every undergraduate offering seeded for the selected university, ordered by
+faculty and name. Programs are reference information and are separate from
+course units, which remain the records used by matching.
 
 ### `GET /v1/academics/course-units`
 
 **Requires authentication.** Returns only the course units inside the caller's own
-university **and** their own faculty. Ordered by university, then by code — a
-student scanning for `BIT 221` is looking for a code, not for alphabetical
-position.
+university **and** their own faculty. Ordered by university, then by code.
 
 | Query        | Type | Notes                                                     |
 | ------------ | ---- | --------------------------------------------------------- |
@@ -463,6 +498,32 @@ publishes at least one unit, so this list is empty only for a university whose
 catalogue has not been loaded — which the app must still let such a student
 leave onboarding past — see
 [A faculty with no course units](#a-faculty-with-no-course-units).
+
+### `GET /v1/academics/course-units/{id}/topics`
+
+**Requires authentication.** The suggested questions for one course unit, in the
+publisher's order. Offered as chips on the request sheet: a label becomes the
+request's `topic` verbatim when tapped, so it is free text in the student's words
+and not an id the tutor has to resolve.
+
+```json
+[
+  { "id": "…", "label": "SQL SELECT queries", "sort_order": 0 },
+  { "id": "…", "label": "Joins and subqueries", "sort_order": 1 }
+]
+```
+
+The same faculty scope as the catalogue applies. A unit in another faculty, or an
+unknown id, is a **404**; a unit the caller may see but that has no suggestions
+is a **200** with `[]`. The two are different claims and must not look alike: an
+empty list says the unit is published with no suggestions yet, and the sheet
+falls back to its free-text field. Suggestions are advisory; a topic outside the
+list is a normal request.
+
+| Status | When                                                              |
+| ------ | ----------------------------------------------------------------- |
+| 401    | No token.                                                         |
+| 404    | Unknown unit, or a unit outside the caller's own faculty.         |
 
 ### A faculty with no course units
 
@@ -548,11 +609,116 @@ verification process loses the people it is meant to be checking.
 
 ## Tutors
 
-Two read-only, student-facing views of a tutor. Both require a signed-in user, and
-**neither creates a `tutor_profiles` row.** The row belongs to a user holding the
-tutor role and is created when the role is granted, so a browse that minted one
-would hand every signed-in student a `probationary` standing and zero counters
-merely by opening the screen.
+One caller-scoped view and two read-only, student-facing views of a tutor. All
+require a signed-in user, and **none creates a `tutor_profiles` row.** The row
+belongs to a user holding the tutor role and is created when the role is granted,
+so a browse that minted one would hand every signed-in student a `probationary`
+standing and zero counters merely by opening the screen.
+
+### `GET /v1/tutors/me`
+
+The caller's own Tutor HQ: standing, counters, certificate progress, and whether
+they are taking new requests. *Auth.* No parameters — and no parameter can name
+another account. A tutor's hours, average, and availability are their own
+business, and there is deliberately no route that answers about someone else's
+HQ.
+
+```json
+{
+  "has_tutor_profile": true,
+  "standing": "probationary",
+  "completed_sessions": 4,
+  "average_rating": "5.00",
+  "rating_count": 1,
+  "certified_minutes": 600,
+  "certificate_required_minutes": 2400,
+  "certificate_remaining_minutes": 1800,
+  "certificate_eligible": false,
+  "certificate_progress": 0.25,
+  "accepting_requests": true,
+  "promotion": {
+    "verified": false,
+    "rated_sessions": 1,
+    "sessions_required": 3,
+    "sessions_remaining": 2,
+    "minimum_average": "4.10",
+    "meets_average": true,
+    "progress": 0.3333333333333333
+  }
+}
+```
+
+`has_tutor_profile` is sent rather than inferred from the caller's role. Holding
+the tutor role and having a profile can disagree for a moment — the role is
+granted before the first competency is verified — so a signed-in student who is
+not a tutor yet gets `200` with `has_tutor_profile: false`, `standing: null`,
+`accepting_requests: null`, `average_rating: null`, and zeroed counters. That is a
+real state with its own next step (apply to teach), not a screen in an error
+state. The certificate threshold is still the configured value and
+`certificate_remaining_minutes` equals it, because the certificate reading answers
+for any signed-in user too.
+
+**Promotion has two conditions, and both travel.** A tutor needs at least
+`sessions_required` (currently 3) rated sessions *and* an average of at least
+`minimum_average` (`"4.10"`). `rated_sessions` is the rating count, **not**
+`completed_sessions`: completion and rating are separate actions, and a completed
+session whose student has not rated it yet is ordinary, so it must not advance the
+ring. `sessions_remaining` counts rated sessions still needed.
+
+`verified` is read from the stored standing rather than recomputed from the two
+thresholds. A verified tutor keeps the badge until the explicit demotion bar is
+crossed, so `meets_average` can be `false` while `verified` is `true`; a
+recomputed badge would show a tutor as un-promoted while the API still offers them
+as verified. `meets_average` is the current average against `minimum_average`, and
+is `false` with no ratings at all — absence of evidence is not a pass.
+
+`progress` is the rated-session fraction, clamped to `1.0`, and is display only:
+`verified` and `meets_average` are the verdicts. A tutor already `verified` reads
+`1.0` regardless, because the badge is the verdict and a completed tutor must not
+read as incomplete. The thresholds are in the payload so the client renders the
+rule the server applied rather than a hardcoded copy of it.
+
+`average_rating` is `null` with no ratings and is a JSON string otherwise, like
+every decimal; see
+[Decimals are JSON strings](#decimals-are-json-strings-not-numbers).
+
+The certificate fields are produced by the same service as
+`GET /v1/incentives/certificate`, so the HQ and the certificate screen cannot
+disagree about the threshold, the remaining minutes, or the clamp.
+
+`accepting_requests` is the beta's availability switch, not a calendar. Matching
+reads it per query and leaves a paused tutor out with `not_accepting_requests`, so
+pausing is immediate and real rather than a label the next deploy honours.
+
+This read never creates a `TutorProfile`; profile rows are created when the tutor
+role is granted.
+
+| Status | `detail`             | `errors` |
+| ------ | -------------------- | -------- |
+| 401    | Sign-in required.    |          |
+
+### `PATCH /v1/tutors/me`
+
+Pause or resume new requests: `{"accepting_requests": false}`. *Auth.* Returns the
+same `TutorHqResponse` as the read, computed after the write, so the client paints
+one payload rather than merging a response into stale state. Repeating the same
+value is a no-op and still a `200`; a double tap must not fail.
+
+A body rather than a query parameter because this changes state: a PATCH that a
+browser can trigger by following a link is a switch a student can flip by
+accident. `accepting_requests` is the only tutor setting the beta exposes.
+
+A caller with no tutor profile gets `404`, unlike the read. There is no setting to
+change, and pretending otherwise would tell a student they had paused something
+they were never offered. Unknown fields are a `422` rather than silently dropped,
+so a misspelled setting never looks applied.
+
+| Status | `detail`                                       | `errors`                                                              |
+| ------ | ---------------------------------------------- | --------------------------------------------------------------------- |
+| 200    | The caller's HQ with the new setting.          |                                                                       |
+| 401    | Sign-in required.                              |                                                                       |
+| 404    | You are not a tutor yet.                       |                                                                       |
+| 422    | Some of the details you entered are not valid. | `accepting_requests` — required boolean; unknown fields are rejected. |
 
 ### `GET /v1/tutors/top`
 
@@ -582,6 +748,10 @@ it is simply not yours to rail on.
     "standing": "verified",
     "average_rating": "4.10",
     "completed_sessions": 9,
+    "avatar_url": null,
+    "bio": "Third-year CS. I explain recursion with trees, not slides.",
+    "year_of_study": 3,
+    "accepting_requests": true,
     "endorsed_course_unit_ids": ["1f4a…"],
     "endorsement_count": 3
   }
@@ -607,6 +777,21 @@ ratings totalling 33 average 4.125 and are sent as `"4.13"`.
 `endorsement_count` is the true total across every unit, so a tutor endorsed in
 fourteen units is not summarised by any five of them. The detail screen caps its
 list the same way, so a client can lay out both from one assumption.
+
+`bio`, `avatar_url`, and `year_of_study` are presentation fields the card draws.
+All three are nullable and null is normal: the beta seeds generated avatars, so
+`avatar_url` is empty for every pilot tutor, and a tutor who has not written a
+bio is shown their evidence instead. The client must not treat a missing bio as
+a missing card.
+
+`accepting_requests` is the tutor's pause switch. A paused tutor **is** still on
+the rail, with the flag set, so a student who has met them can see why they are
+not being proposed; matching leaves them out and reports
+`not_accepting_requests` as the exclusion.
+
+`contact_phone` is never in either response. A tutor's phone number is handed
+only to the two parties of a confirmed session, because a number on a public card
+is a number that gets called by people who never booked.
 
 A tutor is left out when they are `suspended`, belong to another university, hold
 no profile to rank on, or have no verified grade at or above the university's
@@ -634,7 +819,11 @@ One tutor's public profile, for a screen the student opened from the rail.
     "full_name": "Detail Tutor",
     "standing": "verified",
     "average_rating": "4.13",
-    "completed_sessions": 7
+    "completed_sessions": 7,
+    "avatar_url": null,
+    "bio": null,
+    "year_of_study": 2,
+    "accepting_requests": true
   },
   "endorsed_course_unit_ids": ["1f4a…"],
   "endorsement_count": 2
@@ -659,6 +848,47 @@ carries, so answering it for a tutor found elsewhere leaks nothing new.
 A 404 covers both "no such user" and "that user is not a tutor". They are the
 same answer on purpose: a route that distinguished them would confirm which
 accounts hold the tutor role.
+
+### `GET /v1/tutors/{user_id}/reviews`
+
+What other students said about this tutor, newest first. *Auth.*
+
+```json
+[
+  {
+    "id": "b73d…",
+    "score": 5,
+    "tags": ["clear_explanation", "made_it_click"],
+    "rater_initials": "AS",
+    "created_at": "2026-03-04T10:12:00Z"
+  }
+]
+```
+
+`limit` defaults to 5 and is capped at 20. There is no `offset`: the profile shows
+the newest handful, and the rating count beside the average says how much evidence
+is behind them.
+
+`tags` come from a fixed vocabulary — `clear_explanation`, `patient`,
+`well_prepared`, `made_it_click`, `practical_examples`, `on_time` — and an
+unrecognised value is a newer tag rather than a fault, so a client should render
+it from the value. The rater is an initial and an id is deliberately absent, so a
+review cannot be used to enumerate who rated whom.
+
+The written note is **not** in this payload. It was written to the tutor, and
+publishing it would put a student's words in front of strangers who were not in
+the conversation. The tutor reads it through their own session.
+
+A review whose session carries an unresolved report is omitted. The rating itself
+still counts in the tutor's average — withholding the publication is not erasing
+the evidence — which is what keeps filing a report from being a way to hide a low
+score. Resolving the report restores the review.
+
+| Status | `detail`                          | `errors` |
+| ------ | ---------------------------------- | -------- |
+| 401    | Sign-in required.                 |          |
+| 404    | That tutor could not be found.    |          |
+| 422    | Malformed id or `limit` out of range. |      |
 
 ## Matching
 
@@ -717,9 +947,9 @@ minted there would name no row, and a client that stored it would follow it to a
 
 A candidate is a tutor with a **verified** grade at or above
 `competency_min_points` for that unit, at the caller's own university, with a
-profile, and not `suspended`. Provisional standing is a ranking input rather than
-a disqualification — otherwise no tutor could ever earn the Verified standing
-that reading requires.
+profile, not `suspended`, and currently accepting requests. Provisional standing
+is a ranking input rather than a disqualification — otherwise no tutor could ever
+earn the Verified standing that reading requires.
 
 `reason` is a stable code, and the set is generated from one constant
 (`MATCH_EXCLUSION_REASONS`) so a documented reason cannot drift from one the
@@ -732,6 +962,7 @@ engine emits:
 | `suspended`          | Revoked for student-facing matching.                                 |
 | `below_threshold`    | A verified grade under `competency_min_points`. The bar is inclusive. |
 | `not_the_tutor`      | Verified grade and the role, but no profile to rank on.              |
+| `not_accepting_requests` | The tutor has paused new requests. The one exclusion the tutor chose; a student can wait or ask someone else. |
 
 `score` is relative: the client shows order, not a number a student could compare
 across requests. Ties are broken by grade, then name, then the course unit's
@@ -849,10 +1080,7 @@ response does not confirm that someone else's session exists.
 ### `POST /v1/sessions`
 
 Confirms a selected help request and creates the scheduled session. 201 with the
-session, and a six-digit one-time handshake code is issued.
-
-The PIN is **not** in the response. It belongs to the tutor and is read from
-`GET /v1/sessions/{session_id}/pin`; see below for why it is not shared.
+session. No code is issued: attendance is two check-ins, not a PIN.
 
 ```json
 {
@@ -890,92 +1118,84 @@ than `""` so it cannot collide with `GET /v1/sessions/{session_id}`.
 
 ### `GET /v1/sessions/{session_id}`
 
-One session, by public id.
+One session, by public id. The response carries the four attendance timestamps,
+so each party can see whether they are waiting on the other.
+
+### `POST /v1/sessions/{session_id}/check-in`
+
+No request body. Records the caller's own arrival.
+
+One check-in leaves the session `scheduled`. The second moves it to
+`in_progress` and sets `started_at`. Neither account can do this alone, which is
+the whole difference from the retired PIN: there is no code one person can read
+to another, only two accounts independently saying they are present.
+
+Idempotent. A retried tap leaves the recorded timestamp where it is and answers
+200, because a phone on a slow connection retrying a check-in is ordinary and
+must not be shown a failure for a state it already reached.
+
+| Status | `detail`                                            |
+| ------ | --------------------------------------------------- |
+| 401    | Sign-in required.                                   |
+| 403    | You do not have access to that session.             |
+| 404    | That session could not be found.                    |
+| 409    | This session is no longer open for check-in.        |
+
+### `POST /v1/sessions/{session_id}/finish`
+
+No request body. Records the caller's own departure.
+
+The first finish leaves the session `in_progress`; the second moves it to
+`completed`, sets `ended_at`, banks the minutes, and notifies the tutee to rate.
+The elapsed window runs from `started_at` to the **earlier** of the two finishes:
+time after one participant left is not time that participant can confirm, so a
+party who forgets to tap finish an hour later cannot extend the session. The
+floor is one minute.
+
+Finishing before both parties have checked in is a 409. Finishing an already
+completed session is idempotent and does not bank anything a second time.
 
 ### `POST /v1/sessions/{session_id}/transition`
 
-`{"status": "..."}` to advance or cancel. The legal moves are enforced in the
-service, not here: requested → accepted → completed, and cancellation from
-anything that has not completed. An illegal move is a 409.
+`{"status": "cancelled", "cancellation_reason": "…"}` or
+`{"status": "no_show"}`. Used to cancel a booked session or record that it did
+not happen.
+
+Starting and completing are **not** transitions. `in_progress` and `completed`
+are refused with a 422 pointing at `check-in` and `finish`, so no single account
+can move a session to a state that claims the other person was present. An
+illegal move within the remaining states is a 409.
 
 `completed` has an **empty** allowed set, so a session can only be completed
-once. That is what makes the accrual below happen exactly once rather than once
-per retry: the session's minutes and the tutor's `completed_sessions` are written
-after the status is assigned, and a second `completed` transition is refused
-before either write is reached.
+once. The accrual happens under `finish`, after both departures are recorded and
+the status is assigned; a second completion is refused before either write is
+reached.
 
-The minute accrual runs on this transition, not on the status column. Nothing
-else can reach it, and the ordering matters: a transition that handed the row to
-the accrual before recording `completed` banked nothing at all, silently, on
-every call.
+### Attendance evidence
 
-### `POST /v1/sessions/{session_id}/verify-pin`
+The session response carries:
 
-`{"pin": "123456"}` — **the tutee submits the code the tutor shared.** Moves the
-session to `in_progress` when the code matches.
+- `tutor_checked_in_at`, `tutee_checked_in_at`
+- `tutor_finished_at`, `tutee_finished_at`
+- `started_at` — when the second check-in made the session live
+- `ended_at` — the earlier of the two finishes
+- `duration_minutes` — the overlap both parties were present, at least one
 
-The tutee only. A tutor asking here gets a 403: they are the one reading the
-digits aloud, so entering them would prove nothing, and it would let a tutor
-start a session on behalf of a student who never arrived.
-
-Six-digit and stored only as a SHA-256 digest. The code expires after **20
-minutes**. After **5** wrong entries the tutee is put on a **15 minute** cooldown
-and every further attempt — including the correct one — is a **429** carrying
-`retry_after_seconds`. The counter is on the session row, not in process memory,
-so it survives a restart and is shared across workers; it is committed on the
-failure path, and reset by a success. A **missing stored PIN is refused**, never
-treated as a match.
-
-### `GET /v1/sessions/{session_id}/pin`
-
-The tutor's half of the handshake: the six digits to share. **403 for the
-tutee**, because a tutee who could read their own code would have nothing to
-prove. Unavailable once the session has started.
-
-```json
-{
-  "session_id": "9f35…",
-  "session_pin": "123456",
-  "attempts_remaining": 5
-}
-```
-
-`attempts_remaining` is advisory, and exists so a tutor can stop a student
-guessing in a room where they are trying to learn. The lockout itself is the
-API's: a ceiling counted on a device is one a student clears by reinstalling the
-app.
-
-### Starting a session
-
-Starting is reachable **only** through `verify-pin`. `POST
-/v1/sessions/{id}/transition` used to accept a `pin` field and check it inline
-with no attempt counter, which made all 100 candidates walkable without touching
-the cooldown; it now refuses `in_progress` and points here. One path means the
-ceiling cannot be circumvented.
-
-### `POST /v1/sessions/{session_id}/request-completion`
-
-The tutor requests a second six-digit one-time code after the session has
-started. This marks the session as waiting for completion confirmation; it does
-not reveal a code.
-
-### `POST /v1/sessions/{session_id}/reveal-completion`
-
-The tutee reveals a fresh six-digit code after the tutor requests completion.
-The code expires after 20 minutes and is shown only in the tutee response.
-
-### `POST /v1/sessions/{session_id}/verify-completion`
-
-The tutor submits the second code revealed by the tutee. A successful verification records the end
-timestamp, calculates session minutes, and moves the session to `completed`.
-Direct `completed` transitions are rejected. An expired or exhausted code leaves
-the session in progress for operator review.
+The database refuses a live session with fewer than two check-ins and a
+completed session with fewer than two finishes. Session records are the source of
+truth for hours and certificates, so the evidence is enforced below the service
+as well as in it.
 
 ## Ratings
 
 One immutable tutee rating per session. A second submission is rejected, and
 tutor-to-tutee ratings are not accepted. Ratings exist only for `completed`
 sessions and include the required comprehension answer.
+
+A rating also carries optional **tags** from a fixed vocabulary, and those — with
+the score, the rater's initials, and the date — are what other students read on
+the tutor's profile. The written note is never published; see
+`GET /v1/tutors/{user_id}/reviews`.
 
 ### `GET /v1/ratings/me`
 
@@ -988,10 +1208,22 @@ opened the screen would be handed a tutor standing.
 
 The last 20 ratings the caller has received.
 
+### `GET /v1/ratings/session/{session_id}`
+
+Returns the tutee's submitted rating for a session to the tutor who taught it.
+The response is read-only and can be `null` while feedback is still outstanding;
+other users cannot use this endpoint to read the session's feedback.
+
 ### `POST /v1/ratings/{session_id}`
 
-`{"score": 1-5, "comprehension_helped": true, "feedback_text": "...", "endorsed_course_unit_ids": ["..."]}`.
+`{"score": 1-5, "comprehension_helped": true, "feedback_text": "...", "tags": ["patient"], "endorsed_course_unit_ids": ["..."]}`.
 201 with the rating.
+
+`tags` is optional and empty by default. The vocabulary is fixed —
+`clear_explanation`, `patient`, `well_prepared`, `made_it_click`,
+`practical_examples`, `on_time` — capped at 4 per rating, and a value outside it
+or the same tag twice is a 422. Nothing is collapsed silently: a picker that
+sends every tick is told, not quietly given four.
 
 `endorsed_course_unit_ids` is optional and is **not** part of the score. It
 records "this tutor knows this unit" — a claim about subject coverage that is
@@ -1000,6 +1232,79 @@ computed. Only the session's own `course_unit_id` may be endorsed; any other
 unit is a 422, because a session is evidence about one unit and no more.
 Feedback cannot be edited after submission. The comprehension answer is stored
 with the rating and contributes to anonymized pilot analytics.
+
+## Notifications
+
+Every route here is scoped to the signed-in caller. There is no admin inbox: an
+operator already has the audit log and the review queues, and a second, quieter
+way to read a student's messages is not a feature.
+
+### `GET /v1/notifications`
+
+One page of the caller's inbox, newest first, using the standard envelope
+(`items`, `total`, `limit`, `offset`, `has_more`, `page_count`). *Auth.*
+
+A row carries `id`, `type`, `title`, `body`, `data`, `read_at`, and `created_at`.
+`read_at` null means unread. `data` holds the public ids the client needs to open
+the right screen; its `kind` is `help_request`, `session`, or `rating`.
+
+### `GET /v1/notifications/unread-count`
+
+`{"count": 2}`. Null `read_at` rows belonging to the caller only. *Auth.*
+
+### `POST /v1/notifications/{notification_id}/read`
+
+Marks one row read and returns it. Idempotent: reading a row that is already read
+returns the same `read_at` rather than an error, because a second tap is ordinary
+on a phone. A row belonging to someone else is a **404**, not a 403 — a 403 would
+confirm that the id exists.
+
+### `POST /v1/notifications/read-all`
+
+`{"marked": 3}`, counting only rows this call actually changed. A client can
+tell a fresh empty inbox from one that was already clear.
+
+### `POST /v1/notifications/devices`
+
+Registers a push token: `{"token": "...", "platform": "android"}`. *Auth.* The
+token is unique across the table; registering the same token while signed in as
+another account **moves** it to that account. A handset that changes hands must
+not keep delivering the previous owner's notifications. The response carries the
+device's public id, platform, and `last_seen_at` — never the token back, because
+the client already holds it and a token in a response body is a token in a log.
+
+### `DELETE /v1/notifications/devices/{token}`
+
+204 on success, and also 204 when the token is unknown or belongs to someone
+else. Called on sign-out: a sign-out that fails because the device was already
+cleaned up is a user stuck on a screen. Nothing is deleted unless the caller owns
+the token.
+
+### Notification types
+
+| `type` | Raised when | `data.kind` |
+| ------ | ----------- | ----------- |
+| `request_received` | A student chooses a tutor | `help_request` |
+| `request_accepted` | The chosen tutor confirms and a session is created | `session` |
+| `request_declined` | The chosen tutor declines | `help_request` |
+| `session_started` | The second party checks in and the session goes live | `session` |
+| `session_completed` | The second party finishes and the session completes | `session` |
+| `session_cancelled` | Either party cancels an upcoming or live session | `session` |
+| `rating_received` | A tutee rates a completed session | `rating` |
+| `promotion` | A tutor's standing moves to Verified | — |
+
+Every type has a producer. A type with no producer would make the client draw an
+icon and a deep link for a notification that can never arrive.
+
+A notification is written **inside the transaction of the action it announces**,
+never in a second commit. A failed session update cannot leave a message saying
+the session happened. Rows that need at-most-once delivery carry a `dedupe_key`
+unique per user, so a retried request or a reminder job that runs twice leaves
+one row.
+
+Push delivery is deliberately not implemented yet. The in-app inbox persists and
+the API boots with Firebase unconfigured; `device_tokens` is the address a future
+notifier will use.
 
 ## Safeguarding reports
 

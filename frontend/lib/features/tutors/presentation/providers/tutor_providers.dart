@@ -8,7 +8,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
 import 'package:peerpass/core/models/course_unit.dart';
 import 'package:peerpass/features/tutors/data/models/tutor_detail.dart';
+import 'package:peerpass/features/tutors/data/models/tutor_hq.dart';
 import 'package:peerpass/features/tutors/data/models/tutor_rail_entry.dart';
+import 'package:peerpass/features/tutors/data/models/tutor_review.dart';
 import 'package:peerpass/features/tutors/data/repositories/tutors_repository.dart';
 
 /// The tutors the rail shows, most endorsed first.
@@ -33,11 +35,12 @@ final AsyncNotifierProviderFamily<
   List<TutorRailEntry>,
   String?
 >
-topTutorsProvider = AsyncNotifierProvider.family<
-  TopTutorsNotifier,
-  List<TutorRailEntry>,
-  String?
->(TopTutorsNotifier.new, retry: (retryCount, error) => null);
+topTutorsProvider =
+    AsyncNotifierProvider.family<
+      TopTutorsNotifier,
+      List<TutorRailEntry>,
+      String?
+    >(TopTutorsNotifier.new, retry: (retryCount, error) => null);
 
 class TopTutorsNotifier extends AsyncNotifier<List<TutorRailEntry>> {
   TopTutorsNotifier(this.courseUnitId);
@@ -57,10 +60,11 @@ class TopTutorsNotifier extends AsyncNotifier<List<TutorRailEntry>> {
 /// a shareable link to it -- and a single slot would make the second overwrite
 /// the first one's state. Retried only by invalidating, for the reason above.
 final AsyncNotifierProviderFamily<TutorDetailNotifier, TutorDetail, String>
-tutorDetailProvider = AsyncNotifierProvider.family<
-  TutorDetailNotifier,
-  TutorDetail,
-  String>(TutorDetailNotifier.new, retry: (retryCount, error) => null);
+tutorDetailProvider =
+    AsyncNotifierProvider.family<TutorDetailNotifier, TutorDetail, String>(
+      TutorDetailNotifier.new,
+      retry: (retryCount, error) => null,
+    );
 
 class TutorDetailNotifier extends AsyncNotifier<TutorDetail> {
   TutorDetailNotifier(this.userId);
@@ -70,6 +74,72 @@ class TutorDetailNotifier extends AsyncNotifier<TutorDetail> {
   @override
   Future<TutorDetail> build() =>
       ref.read(tutorsRepositoryProvider).tutor(userId);
+}
+
+/// The reviews a tutor's profile publishes, newest first.
+///
+/// Read separately from [tutorDetailProvider], for the reason the endorsed units
+/// are: the name, standing and rating are already on screen, and a review query
+/// that failed must cost the reviews and not the whole profile. The detail screen
+/// renders this as its own section so its failure has its own retry.
+///
+/// Never auto-retried, for the same reason as the others: a section that retries
+/// underneath a student while offering them a button is two answers to one
+/// question.
+final AsyncNotifierProviderFamily<
+  TutorReviewsNotifier,
+  List<TutorReview>,
+  String
+>
+tutorReviewsProvider =
+    AsyncNotifierProvider.family<
+      TutorReviewsNotifier,
+      List<TutorReview>,
+      String
+    >(TutorReviewsNotifier.new, retry: (retryCount, error) => null);
+
+class TutorReviewsNotifier extends AsyncNotifier<List<TutorReview>> {
+  TutorReviewsNotifier(this.userId);
+
+  final String userId;
+
+  @override
+  Future<List<TutorReview>> build() =>
+      ref.read(tutorsRepositoryProvider).reviews(userId);
+}
+
+/// The signed-in user's own tutor dashboard.
+///
+/// Self-scoped and not a family: the API answers only about the caller, so a
+/// key would imply a view of somebody else's numbers that does not exist. An
+/// [AsyncNotifier] because [AsyncValue] already carries the three states the HQ
+/// widgets render: loading, the summary, and the reason there isn't one.
+///
+/// Retried only by invalidating, for the reason the other tutors providers are:
+/// a card that offers "Try again" must not also be re-requesting underneath the
+/// user's finger.
+final tutorHqProvider = AsyncNotifierProvider<TutorHqNotifier, TutorHq>(
+  TutorHqNotifier.new,
+  retry: (retryCount, error) => null,
+);
+
+class TutorHqNotifier extends AsyncNotifier<TutorHq> {
+  @override
+  Future<TutorHq> build() => ref.read(tutorsRepositoryProvider).myHq();
+
+  /// Saves the availability flag and adopts the dashboard the API returns.
+  ///
+  /// Errors are deliberately not caught: the toggle needs to know the save
+  /// failed so it can leave the switch where it was and show the reason. Turning
+  /// that into an [AsyncError] here would replace the whole dashboard with an
+  /// error for one failed setting.
+  // ignore: avoid_positional_boolean_parameters
+  Future<void> setAcceptingRequests(bool accepting) async {
+    final updated = await ref
+        .read(tutorsRepositoryProvider)
+        .setAcceptingRequests(accepting);
+    state = AsyncData(updated);
+  }
 }
 
 /// The course units, so an endorsed id on the detail screen can be named.

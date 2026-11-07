@@ -10,25 +10,33 @@ import 'package:peerpass/app/splash_screen.dart';
 import 'package:peerpass/core/error/failures.dart';
 import 'package:peerpass/core/models/user_profile.dart';
 import 'package:peerpass/core/models/user_role.dart';
+import 'package:peerpass/core/state/session.dart';
 import 'package:peerpass/features/auth/data/repositories/auth_repository.dart';
 import 'package:peerpass/features/auth/data/repositories/fake_auth_repository.dart';
 import 'package:peerpass/features/auth/presentation/providers/auth_providers.dart';
 import 'package:peerpass/features/auth/presentation/screens/sign_up_screen.dart';
+import 'package:peerpass/features/home/presentation/screens/tutor_hq_screen.dart';
 import 'package:peerpass/features/incentives/data/repositories/fake_incentives_repository.dart';
 import 'package:peerpass/features/incentives/data/repositories/incentives_repository.dart';
 import 'package:peerpass/features/incentives/presentation/screens/certificate_screen.dart';
 import 'package:peerpass/features/matching/data/repositories/fake_matching_repository.dart';
 import 'package:peerpass/features/matching/data/repositories/matching_repository.dart';
 import 'package:peerpass/features/matching/presentation/screens/tutor_requests_screen.dart';
+import 'package:peerpass/features/notifications/data/models/notification_model.dart';
+import 'package:peerpass/features/notifications/data/repositories/fake_notifications_repository.dart';
+import 'package:peerpass/features/notifications/data/repositories/notifications_repository.dart';
+import 'package:peerpass/features/notifications/presentation/screens/notifications_screen.dart';
 import 'package:peerpass/features/sessions/data/repositories/fake_sessions_repository.dart';
 import 'package:peerpass/features/sessions/data/repositories/sessions_repository.dart';
+import 'package:peerpass/features/tutors/data/repositories/fake_tutors_repository.dart';
+import 'package:peerpass/features/tutors/data/repositories/tutors_repository.dart';
 
 const String _signedOutText = 'Sign in';
 
 /// The greeting home builds from the stored name. Asserting on this rather than
 /// on a placeholder string means the test fails if the profile stopped reaching
 /// the screen, which is the thing it is actually about.
-const String _homeText = 'Hello, Achieng';
+const String _homeText = 'Hey Achieng 👋';
 
 /// A student who has finished onboarding.
 const UserProfile _enrolled = UserProfile(
@@ -84,6 +92,13 @@ class _OfflineAuthRepository extends FakeAuthRepository {
   @override
   Future<UserProfile?> restoreSession() async {
     throw const NetworkFailure();
+  }
+}
+
+class _DeletedAccountAuthRepository extends FakeAuthRepository {
+  @override
+  Future<UserProfile?> restoreSession() async {
+    throw const NotFoundFailure('That user could not be found.');
   }
 }
 
@@ -145,6 +160,8 @@ void main() {
     // than flashing sign-in at a returning user.
     expect(find.byType(SplashScreen), findsOneWidget);
     expect(find.text('Checking your session…'), findsOneWidget);
+    expect(find.text('PeerPass'), findsNothing);
+    expect(find.byIcon(Icons.school_rounded), findsNothing);
 
     repository.release();
     await _settle(tester);
@@ -175,6 +192,37 @@ void main() {
     expect(find.text('What is your name?'), findsOneWidget);
   });
 
+  test('a late restore cannot replace a newer signed-in account', () async {
+    const arali = UserProfile(
+      publicId: 'arali',
+      email: 'arali@must.ac.ug',
+      fullName: 'Arali Amooti',
+      roles: {UserRole.student},
+    );
+    const gilbert = UserProfile(
+      publicId: 'gilbert',
+      email: 'gilbert@must.ac.ug',
+      fullName: 'Gilbert Asiimwe',
+      roles: {UserRole.student, UserRole.tutor},
+    );
+    final repository = _GatedAuthRepository()
+      ..session = arali
+      ..refreshToken = 'refresh';
+    final container = ProviderContainer(
+      overrides: [authRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+
+    final controller = container.read(authControllerProvider);
+    repository.session = gilbert;
+    await controller.signIn(email: gilbert.email, password: 'password');
+
+    repository.release(profile: arali);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(container.read(sessionControllerProvider).profile, gilbert);
+  });
+
   testWidgets('a network failure keeps the user on splash with a way out', (
     tester,
   ) async {
@@ -192,6 +240,25 @@ void main() {
     // offers a retry, because a student on a train is not signed out.
     expect(find.byType(SplashScreen), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
+  });
+
+  testWidgets('a deleted account leaves splash and returns to sign-in', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(
+            _DeletedAccountAuthRepository(),
+          ),
+        ],
+        child: const PeerPassApp(),
+      ),
+    );
+    await _settle(tester);
+
+    expect(find.byType(SplashScreen), findsNothing);
+    expect(find.text(_signedOutText), findsOneWidget);
   });
 
   testWidgets('an auth change redirects without the screen asking', (
@@ -351,7 +418,11 @@ void main() {
     // on screen, so a tap at the recorded position would land on whatever happens
     // to be there instead of the entry -- which reads as a broken tile rather than
     // as a test that did not scroll.
-    await tester.scrollUntilVisible(find.text('My certificate'), 200);
+    await tester.scrollUntilVisible(
+      find.text('My certificate'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await _settle(tester);
 
     await tester.tap(find.text('My certificate'));
@@ -385,7 +456,11 @@ void main() {
     );
     await _settle(tester);
 
-    await tester.scrollUntilVisible(find.text('Waiting on you'), 200);
+    await tester.scrollUntilVisible(
+      find.text('Waiting on you'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await _settle(tester);
 
     await tester.tap(find.text('Waiting on you'));
@@ -395,6 +470,87 @@ void main() {
     // The empty state, because this fake proposes nobody. What is asserted is the
     // screen and its honest copy, not the absence of an error.
     expect(find.text('No one is waiting on you'), findsOneWidget);
+    expect(find.text(_homeText), findsNothing);
+  });
+
+  testWidgets('the tutor HQ is reached from home and kept by the guard', (
+    tester,
+  ) async {
+    // The dashboard composes three features' reads, so this is the whole chain:
+    // the entry on home, the route registration, the guard, and every repository
+    // the sections resolve. A screen that is only tested in isolation would pass
+    // while the shell route was never registered.
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(_signedIn(profile: _tutor)),
+          tutorsRepositoryProvider.overrideWithValue(FakeTutorsRepository()),
+          matchingRepositoryProvider.overrideWithValue(
+            FakeMatchingRepository(),
+          ),
+          incentivesRepositoryProvider.overrideWithValue(
+            FakeIncentivesRepository(certifiedMinutes: 600),
+          ),
+        ],
+        child: const PeerPassApp(),
+      ),
+    );
+    await _settle(tester);
+
+    await tester.scrollUntilVisible(
+      find.text('Your tutor HQ'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await _settle(tester);
+
+    await tester.tap(find.text('Your tutor HQ'));
+    await _settle(tester);
+
+    expect(find.byType(TutorHqScreen), findsOneWidget);
+    expect(find.text('Tutor HQ'), findsOneWidget);
+    expect(find.text(_homeText), findsNothing);
+  });
+
+  testWidgets('the alerts tab opens the inbox and the guard keeps it', (
+    tester,
+  ) async {
+    // The tab, the route, and the redirect allow-list in one chain. Each half can
+    // be right on its own while the app still bounces a student back home: the
+    // shell navigates, the guard undoes it, and the destination looks broken.
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(_signedIn()),
+          notificationsRepositoryProvider.overrideWithValue(
+            FakeNotificationsRepository(
+              notifications: [
+                AppNotification(
+                  id: 'notification-1',
+                  typeWire: AppNotificationType.requestReceived.wireValue,
+                  title: 'New tutoring request',
+                  body: 'A student needs help with CSC 121.',
+                  data: const {
+                    'kind': 'help_request',
+                    'request_id': 'request-1',
+                  },
+                  createdAt: DateTime.utc(2026, 11, 3, 9),
+                ),
+              ],
+            ),
+          ),
+        ],
+        child: const PeerPassApp(),
+      ),
+    );
+    await _settle(tester);
+    expect(find.text(_homeText), findsOneWidget);
+
+    await tester.tap(find.text('Alerts'));
+    await _settle(tester);
+
+    expect(find.byType(NotificationsScreen), findsOneWidget);
+    expect(find.text('New tutoring request'), findsOneWidget);
     expect(find.text(_homeText), findsNothing);
   });
 }

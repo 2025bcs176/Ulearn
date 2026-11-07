@@ -43,7 +43,6 @@ SessionModel session({
     'is_rated': false,
     'created_at': '2026-03-01T08:00:00Z',
     'scheduled_start': '2026-03-04T09:00:00Z',
-    'session_pin': '654321',
   });
 }
 
@@ -116,7 +115,7 @@ void main() {
 
   testWidgets('a live session is shown ahead of a waiting one', (tester) async {
     // The API's order decides between equals; a live session outranks a scheduled
-    // one because it is the one with a handshake waiting to happen.
+    // one because it is the one with a finish waiting to happen.
     await _pumpCard(
       tester,
       _container(

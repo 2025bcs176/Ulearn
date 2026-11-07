@@ -36,7 +36,7 @@ from app.schemas.session import (
     SelectTutorRequest,
 )
 from app.schemas.tutor import TutorProfileSummary
-from app.services import faculty_scope
+from app.services import faculty_scope, notification_service
 
 
 async def create_help_request(
@@ -164,6 +164,17 @@ async def select_tutor_for_request(
     # while the tutor's screen says it did.
     request.matched_tutor = tutor
     request.status = HelpRequestStatus.PENDING_CONFIRMATION
+    # In the same transaction as the state change. A tutor who is told about a
+    # request that then failed to save has been sent to a screen with nothing on
+    # it, and the student has no idea their choice did not land.
+    await notification_service.request_received(
+        db,
+        tutor_id=tutor.id,
+        tutee=request.tutee,
+        unit_code=request.course_unit.code,
+        topic=request.topic,
+        request_id=request.public_id,
+    )
     await db.flush()
     await db.commit()
     return help_request_response(request)
@@ -206,6 +217,13 @@ async def decline_help_request(
         raise ConflictProblem("This help request is not waiting for your answer.")
 
     request.status = HelpRequestStatus.DECLINED
+    await notification_service.request_declined(
+        db,
+        tutee_id=request.tutee_id,
+        tutor=request.matched_tutor,
+        topic=request.topic,
+        request_id=request.public_id,
+    )
     await db.flush()
     await db.commit()
     return help_request_response(request)
@@ -511,6 +529,13 @@ async def _search_candidates_for_units(
         if profile is not None and profile.standing is TutorStanding.SUSPENDED:
             exclude(tutor.public_id, "suspended")
             continue
+        if profile is not None and not profile.accepting_requests:
+            # A tutor who has paused is not a candidate, and the reason is
+            # reported because it is the one exclusion the tutor themself chose.
+            # A student reading "they are not taking requests" can wait or ask
+            # someone else; a row that simply vanished would read as a fault.
+            exclude(tutor.public_id, "not_accepting_requests")
+            continue
 
         threshold = _grade_threshold(competency.course_unit)
         if competency.grade.grade_points < threshold:
@@ -539,6 +564,10 @@ async def _search_candidates_for_units(
                 standing=profile.standing,
                 average_rating=profile.average_rating,
                 completed_sessions=profile.completed_sessions,
+                avatar_url=profile.avatar_url,
+                bio=profile.bio,
+                year_of_study=tutor.year_of_study,
+                accepting_requests=profile.accepting_requests,
             ),
             course_unit_id=competency.course_unit.public_id,
             competency_grade_points=competency.grade.grade_points,

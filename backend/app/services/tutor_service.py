@@ -44,10 +44,13 @@ from app.schemas.tutor import (
     DEFAULT_RAIL_TUTORS,
     RAIL_ENDORSED_UNITS,
     TutorDetailResponse,
+    TutorHqResponse,
     TutorProfileSummary,
+    TutorPromotionProgress,
     TutorRailEntry,
+    UpdateTutorSettingsRequest,
 )
-from app.services import rating_service
+from app.services import incentive_service, rating_service
 
 
 async def list_top_tutors(
@@ -133,6 +136,10 @@ async def list_top_tutors(
                 # shows the same `Decimal` the promotion rule was applied with.
                 average_rating=profile.average_rating,
                 completed_sessions=profile.completed_sessions,
+                avatar_url=profile.avatar_url,
+                bio=profile.bio,
+                year_of_study=tutor.year_of_study,
+                accepting_requests=profile.accepting_requests,
                 endorsed_course_unit_ids=[
                     row.course_unit_id for row in endorsed[:RAIL_ENDORSED_UNITS]
                 ],
@@ -185,11 +192,137 @@ async def get_tutor_detail(
             standing=profile.standing,
             average_rating=profile.average_rating,
             completed_sessions=profile.completed_sessions,
+            avatar_url=profile.avatar_url,
+            bio=profile.bio,
+            year_of_study=tutor.year_of_study,
+            accepting_requests=profile.accepting_requests,
         ),
         endorsed_course_unit_ids=[
             entry.course_unit_id for entry in endorsed[:RAIL_ENDORSED_UNITS]
         ],
         endorsement_count=sum(entry.endorsement_count for entry in endorsed),
+    )
+
+
+async def get_my_hq(db: AsyncSession, user: User) -> TutorHqResponse:
+    """The caller's own tutor standing, availability, and certificate progress.
+
+    The only subject is the caller. There is no parameter that could name another
+    account, which is the whole authorisation rule -- the same one
+    `GET /v1/incentives/certificate` follows, and the reason this is under
+    `/tutors/me` rather than a public profile.
+
+    A user with no `TutorProfile` is answered rather than refused. Holding the
+    tutor role and having a profile can disagree for a moment, and a student
+    opening the screen is a real state with a next step (apply to teach); a 404
+    would put a signed-in student's screen into an error over something they did
+    not do wrong. The certificate numbers come from the incentive service so
+    this screen and the certificate screen cannot disagree about the threshold
+    or the clamp.
+    """
+    profile = await _load_my_profile(db, user)
+    certificate = await incentive_service.get_certificate_eligibility(db, user)
+
+    promotion = _promotion_for(profile)
+    return TutorHqResponse(
+        has_tutor_profile=profile is not None,
+        standing=profile.standing if profile is not None else None,
+        completed_sessions=profile.completed_sessions if profile is not None else 0,
+        average_rating=profile.average_rating if profile is not None else None,
+        rating_count=profile.rating_count if profile is not None else 0,
+        certified_minutes=certificate.certified_minutes,
+        certificate_required_minutes=certificate.required_minutes,
+        certificate_remaining_minutes=certificate.remaining_minutes,
+        certificate_eligible=certificate.eligible,
+        certificate_progress=certificate.progress,
+        accepting_requests=profile.accepting_requests if profile is not None else None,
+        promotion=promotion,
+    )
+
+
+async def update_my_settings(
+    db: AsyncSession,
+    user: User,
+    payload: UpdateTutorSettingsRequest,
+) -> TutorHqResponse:
+    """Pause or resume new requests, and return the caller's HQ as it now stands.
+
+    A 404 for a user with no tutor profile, unlike the read. There is nothing to
+    update, and silently accepting the write would tell a student they had
+    changed a setting they do not have -- the failure is about their account,
+    not about a screen state.
+
+    Matching reads `accepting_requests` on every query, so the switch takes
+    effect on the next student's search rather than at the next deploy. That is
+    what makes pausing a promise instead of a label.
+    """
+    profile = await _load_my_profile(db, user)
+    if profile is None:
+        raise NotFoundProblem("You are not a tutor yet.")
+
+    if profile.accepting_requests != payload.accepting_requests:
+        profile.accepting_requests = payload.accepting_requests
+        await db.commit()
+
+    return await get_my_hq(db, user)
+
+
+async def _load_my_profile(db: AsyncSession, user: User) -> TutorProfile | None:
+    """The caller's tutor profile, or `None` when they do not have one.
+
+    Read-only. This service must never create a profile: rows are created when
+    the tutor role is granted, and a browser or a dashboard opening would
+    otherwise hand every signed-in student a `probationary` standing.
+    """
+    return await db.scalar(select(TutorProfile).where(TutorProfile.user_id == user.id))
+
+
+def _promotion_for(profile: TutorProfile | None) -> TutorPromotionProgress:
+    """The distance to Verified, with both conditions stated separately.
+
+    The thresholds and the comparison are `rating_service`'s, imported rather
+    than copied. A second copy of "4.10" here would let the badge and the rule
+    that awards it disagree, and the screen would be the one a tutor believed.
+
+    The session fraction is counted from `rating_count`, because that is what
+    the promotion rule counts. `completed_sessions` is a different number -- a
+    completed session whose student has not rated it yet is ordinary -- and
+    using it here would show a full ring to a tutor the rule would not promote.
+    """
+    if profile is None:
+        return TutorPromotionProgress(
+            verified=False,
+            rated_sessions=0,
+            sessions_required=rating_service.PROMOTION_MIN_SESSIONS,
+            sessions_remaining=rating_service.PROMOTION_MIN_SESSIONS,
+            minimum_average=rating_service.PROMOTION_MIN_AVERAGE,
+            meets_average=False,
+            progress=0.0,
+        )
+
+    required = rating_service.PROMOTION_MIN_SESSIONS
+    average = profile.average_rating
+    # `verified` is the stored standing, not a re-run of the thresholds: a
+    # verified tutor keeps the badge until the explicit demotion bar is crossed,
+    # so recomputing would show some of them as un-promoted while the API still
+    # offers them as verified.
+    verified = profile.standing is TutorStanding.VERIFIED
+    return TutorPromotionProgress(
+        verified=verified,
+        rated_sessions=profile.rating_count,
+        sessions_required=required,
+        sessions_remaining=max(required - profile.rating_count, 0),
+        minimum_average=rating_service.PROMOTION_MIN_AVERAGE,
+        # False with no ratings at all. An average of nothing is not a pass, and
+        # reading it as one would tell a new tutor their rating is fine.
+        meets_average=(
+            average is not None and average >= rating_service.PROMOTION_MIN_AVERAGE
+        ),
+        progress=(
+            1.0
+            if verified
+            else float(Decimal(min(profile.rating_count, required)) / Decimal(required))
+        ),
     )
 
 

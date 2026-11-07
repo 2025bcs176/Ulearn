@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:peerpass/app/design_preview_screen.dart';
 import 'package:peerpass/app/splash_screen.dart';
 import 'package:peerpass/core/constants/app_dimens.dart';
 import 'package:peerpass/core/models/user_profile.dart';
@@ -13,11 +15,19 @@ import 'package:peerpass/features/competencies/presentation/screens/my_applicati
 import 'package:peerpass/features/competencies/presentation/screens/submit_claim_screen.dart';
 import 'package:peerpass/features/home/presentation/screens/home_screen.dart';
 import 'package:peerpass/features/home/presentation/screens/profile_screen.dart';
+import 'package:peerpass/features/home/presentation/screens/tutor_hq_screen.dart';
 import 'package:peerpass/features/home/presentation/widgets/authenticated_shell.dart';
+import 'package:peerpass/features/incentives/presentation/providers/incentive_providers.dart';
 import 'package:peerpass/features/incentives/presentation/screens/certificate_screen.dart';
+import 'package:peerpass/features/incentives/presentation/widgets/tutor_certificate_summary_card.dart';
+import 'package:peerpass/features/matching/presentation/providers/matching_providers.dart';
 import 'package:peerpass/features/matching/presentation/screens/course_unit_picker_screen.dart';
 import 'package:peerpass/features/matching/presentation/screens/match_results_screen.dart';
 import 'package:peerpass/features/matching/presentation/screens/tutor_requests_screen.dart';
+import 'package:peerpass/features/matching/presentation/widgets/ask_composer.dart';
+import 'package:peerpass/features/matching/presentation/widgets/tutor_waiting_requests_section.dart';
+import 'package:peerpass/features/notifications/presentation/screens/notifications_screen.dart';
+import 'package:peerpass/features/notifications/presentation/widgets/notification_tab_icon.dart';
 import 'package:peerpass/features/sessions/presentation/providers/session_providers.dart';
 import 'package:peerpass/features/sessions/presentation/screens/confirm_request_screen.dart';
 import 'package:peerpass/features/sessions/presentation/screens/rate_session_screen.dart';
@@ -26,6 +36,8 @@ import 'package:peerpass/features/sessions/presentation/screens/sessions_tab_scr
 import 'package:peerpass/features/sessions/presentation/widgets/active_session_card.dart';
 import 'package:peerpass/features/tutors/presentation/providers/tutor_providers.dart';
 import 'package:peerpass/features/tutors/presentation/screens/tutor_detail_screen.dart';
+import 'package:peerpass/features/tutors/presentation/widgets/tutor_availability_toggle.dart';
+import 'package:peerpass/features/tutors/presentation/widgets/tutor_hq_progress_card.dart';
 import 'package:peerpass/features/tutors/presentation/widgets/tutor_rail.dart';
 
 /// Every location the shell can be at.
@@ -38,11 +50,16 @@ abstract final class AppRoutes {
   static const String myApplications = '/tutor-applications';
   static const String home = '/home';
   static const String sessions = '/sessions';
+  static const String notifications = '/notifications';
   static const String profile = '/profile';
   static const String tutors = '/tutors';
   static const String matching = '/matching';
   static const String certificate = '/certificate';
   static const String tutorRequests = '/tutor-requests';
+  static const String tutorHq = '/tutor-hq';
+
+  /// Debug-only catalogue of the design system. Not registered in release.
+  static const String designPreview = '/design-preview';
 
   /// One tutor's profile, opened from the rail.
   ///
@@ -55,8 +72,20 @@ abstract final class AppRoutes {
   /// The unit is in the path for the same reason the session id is: the screen
   /// that answers "who can help with this course" is not reachable without the
   /// course, and a route that could not name it would be a link to nothing.
-  static String matchResultsPath(String courseUnitId) =>
-      '$matching/$courseUnitId';
+  ///
+  /// The question a student typed travels as a query, because it is free text
+  /// and belongs in `Uri`'s hands rather than in a path segment. It is optional:
+  /// a student who picked the unit from the catalogue has not written one yet,
+  /// and the request sheet is where they will.
+  static String matchResultsPath(String courseUnitId, {String? topic}) {
+    final path = '$matching/$courseUnitId';
+    final question = topic?.trim();
+    if (question == null || question.isEmpty) return path;
+    return Uri(
+      path: path,
+      queryParameters: <String, String>{'topic': question},
+    ).toString();
+  }
 
   /// The list, a session, and that session's rating form.
   ///
@@ -194,6 +223,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.signUp,
         builder: (context, state) => const SignUpScreen(),
       ),
+      if (kDebugMode)
+        GoRoute(
+          path: AppRoutes.designPreview,
+          builder: (context, state) => const DesignPreviewScreen(),
+        ),
       GoRoute(
         path: AppRoutes.onboarding,
         builder: (context, state) => const OnboardingScreen(),
@@ -210,15 +244,19 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state, child) => AuthenticatedShell(
           selectedIndex: switch (state.uri.path) {
             AppRoutes.sessions => 1,
-            AppRoutes.profile => 2,
+            AppRoutes.notifications => 2,
+            AppRoutes.profile => 3,
             _ => 0,
           },
+          notificationsIcon: const NotificationTabIcon(),
+          notificationsSelectedIcon: const NotificationTabIcon(selected: true),
           child: child,
         ),
         routes: [
           GoRoute(
             path: AppRoutes.home,
             builder: (context, state) => HomeScreen(
+              askComposer: const AskComposer(),
               activeSessionCard: const ActiveSessionCard(),
               tutorRail: const TutorRail(),
               onRefresh: () async {
@@ -232,6 +270,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.sessions,
             builder: (context, state) => const SessionsTabScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.notifications,
+            builder: (context, state) => const NotificationsScreen(),
           ),
           GoRoute(
             path: AppRoutes.profile,
@@ -309,7 +351,10 @@ final routerProvider = Provider<GoRouter>((ref) {
               message: 'That link does not name a course unit.',
             );
           }
-          return MatchResultsScreen(courseUnitId: courseUnitId);
+          return MatchResultsScreen(
+            courseUnitId: courseUnitId,
+            topic: state.uri.queryParameters['topic'],
+          );
         },
       ),
       GoRoute(
@@ -319,6 +364,30 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.certificate,
         builder: (context, state) => const CertificateScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.tutorHq,
+        builder: (context, state) => TutorHqScreen(
+          progressCard: const TutorHqProgressCard(),
+          availabilityToggle: const TutorAvailabilityToggle(),
+          requestsSection: const TutorWaitingRequestsSection(),
+          certificateCard: const TutorCertificateSummaryCard(),
+          onRefresh: () async {
+            // One pull refreshes the three reads the dashboard is made of. All
+            // three are invalidated before any is awaited, so the sections
+            // reload together instead of one finishing while another still
+            // shows the old number.
+            ref
+              ..invalidate(tutorHqProvider)
+              ..invalidate(tutorRequestsProvider)
+              ..invalidate(certificateEligibilityProvider);
+            await Future.wait([
+              ref.read(tutorHqProvider.future),
+              ref.read(tutorRequestsProvider.future),
+              ref.read(certificateEligibilityProvider.future),
+            ]);
+          },
+        ),
       ),
     ],
     // go_router re-evaluates this on every navigation and whenever the
@@ -342,6 +411,12 @@ final routerProvider = Provider<GoRouter>((ref) {
 /// university has to run the wizard first. Passing only the status would have
 /// forced that distinction back out into every call site.
 String? _redirectFor(SessionState state, String location) {
+  // The design catalogue is a development tool, not a product screen. It is
+  // exempt from the auth guard so it can be opened on a device that is signed
+  // out, which is exactly when someone is checking a token rather than a flow.
+  // The route itself only exists in debug builds.
+  if (kDebugMode && location == AppRoutes.designPreview) return null;
+
   return switch (state.status) {
     // Nothing is known yet. Stay put only if already waiting; otherwise hold
     // the app on splash rather than guessing and flashing the wrong screen.
@@ -428,7 +503,8 @@ String? _redirectForSignedIn(UserProfile? profile, String location) {
   if (_isSessionRoute(location) ||
       _isTutorRoute(location) ||
       _isMatchingRoute(location) ||
-      location == AppRoutes.certificate) {
+      location == AppRoutes.certificate ||
+      location == AppRoutes.tutorHq) {
     return null;
   }
 
@@ -437,6 +513,7 @@ String? _redirectForSignedIn(UserProfile? profile, String location) {
   // after its last step.
   return location == AppRoutes.home ||
           location == AppRoutes.sessions ||
+          location == AppRoutes.notifications ||
           location == AppRoutes.profile
       ? null
       : AppRoutes.home;

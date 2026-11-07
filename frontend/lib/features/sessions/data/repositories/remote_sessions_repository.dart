@@ -36,49 +36,16 @@ class RemoteSessionsRepository implements SessionsRepository {
   );
 
   @override
-  Future<SessionPinModel> revealPin({required String sessionId}) {
+  Future<SessionModel> checkIn({required String sessionId}) {
     return _guard(
-      () async => SessionPinModel.fromJson(await _remote.revealPin(sessionId)),
+      () async => SessionModel.fromJson(await _remote.checkIn(sessionId)),
     );
   }
 
   @override
-  Future<SessionModel> verifyPin({
-    required String sessionId,
-    required String pin,
-  }) {
+  Future<SessionModel> finish({required String sessionId}) {
     return _guard(
-      () async =>
-          SessionModel.fromJson(await _remote.verifyPin(sessionId, pin)),
-    );
-  }
-
-  @override
-  Future<SessionModel> requestCompletion({required String sessionId}) {
-    return _guard(
-      () async =>
-          SessionModel.fromJson(await _remote.requestCompletion(sessionId)),
-    );
-  }
-
-  @override
-  Future<SessionPinModel> revealCompletionCode({required String sessionId}) {
-    return _guard(
-      () async => SessionPinModel.fromJson(
-        await _remote.revealCompletionCode(sessionId),
-      ),
-    );
-  }
-
-  @override
-  Future<SessionModel> verifyCompletionCode({
-    required String sessionId,
-    required String code,
-  }) {
-    return _guard(
-      () async => SessionModel.fromJson(
-        await _remote.verifyCompletionCode(sessionId, code),
-      ),
+      () async => SessionModel.fromJson(await _remote.finish(sessionId)),
     );
   }
 
@@ -102,20 +69,12 @@ class RemoteSessionsRepository implements SessionsRepository {
   }
 
   @override
-  Future<SessionModel> endSession(String sessionId) {
-    return _guard(
-      () async => SessionModel.fromJson(
-        await _remote.transition(sessionId, status: 'completed'),
-      ),
-    );
-  }
-
-  @override
   Future<RatingModel> rateSession({
     required String sessionId,
     required int score,
     required bool comprehensionHelped,
     String? feedbackText,
+    List<String> tags = const [],
     List<String> endorsedCourseUnitIds = const [],
   }) {
     return _guard(
@@ -125,10 +84,19 @@ class RemoteSessionsRepository implements SessionsRepository {
           score: score,
           comprehensionHelped: comprehensionHelped,
           feedbackText: feedbackText,
+          tags: tags,
           endorsedCourseUnitIds: endorsedCourseUnitIds,
         ),
       ),
     );
+  }
+
+  @override
+  Future<RatingModel?> receivedRating({required String sessionId}) {
+    return _guard(() async {
+      final payload = await _remote.receivedRating(sessionId);
+      return payload == null ? null : RatingModel.fromJson(payload);
+    });
   }
 
   /// Runs a call and translates whatever comes back into a [Failure].

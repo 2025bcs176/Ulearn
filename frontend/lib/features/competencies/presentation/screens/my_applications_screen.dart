@@ -8,7 +8,7 @@ import 'package:peerpass/core/widgets/empty_view.dart';
 import 'package:peerpass/core/widgets/failure_view.dart';
 import 'package:peerpass/core/widgets/loading_view.dart';
 import 'package:peerpass/features/competencies/data/models/tutor_claim.dart';
-import 'package:peerpass/features/competencies/presentation/providers/competency_providers.dart';
+import 'package:peerpass/features/competencies/data/repositories/competencies_repository.dart';
 import 'package:peerpass/features/competencies/presentation/widgets/tutor_claim_status_chip.dart';
 
 /// Every proof the signed-in user has submitted, and where each one stands.

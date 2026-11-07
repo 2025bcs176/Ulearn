@@ -98,8 +98,8 @@ class _Sessions extends StatelessWidget {
               icon: Icons.event_note_outlined,
               title: 'No sessions yet',
               message:
-                  'Sessions you have with a tutor will appear here, with the PIN '
-                  'you show them and the meeting link you share.',
+                  'Sessions you have with a tutor will appear here, with the '
+                  'check-in and the meeting link you share.',
             ),
           ],
         ),

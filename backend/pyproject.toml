@@ -84,3 +84,11 @@ ignore = [
 # `--autogenerate`, and its shape is SQLAlchemy's to decide. The checks that
 # still matter on a migration -- unused imports, undefined names -- stay on.
 "alembic/versions/*" = ["E501", "I001"]
+
+[dependency-groups]
+dev = [
+    "aiosqlite>=0.22.1",
+    "httpx>=0.28.1",
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.4.1.post1",
+]

@@ -44,10 +44,18 @@ import 'package:peerpass/features/matching/presentation/widgets/request_topic_sh
 /// quietly lost -- a list that read as a booking list would have a student turning
 /// up for a session no tutor had agreed to.
 class MatchResultsScreen extends ConsumerStatefulWidget {
-  const MatchResultsScreen({required this.courseUnitId, super.key});
+  const MatchResultsScreen({
+    required this.courseUnitId,
+    this.topic,
+    super.key,
+  });
 
   /// The unit to find tutors for, as a public id from the route.
   final String courseUnitId;
+
+  /// The question the student typed on the home composer, if they came from
+  /// there. Prefills the request sheet once a tutor is chosen.
+  final String? topic;
 
   @override
   ConsumerState<MatchResultsScreen> createState() => _MatchResultsScreenState();
@@ -80,7 +88,11 @@ class _MatchResultsScreenState extends ConsumerState<MatchResultsScreen> {
   /// and treating it as an empty topic would be a request for a tutor to look at
   /// with nothing to look at.
   Future<void> _askTutor(MatchCandidate candidate) async {
-    final draft = await showRequestTopicSheet(context);
+    final draft = await showRequestTopicSheet(
+      context,
+      courseUnitId: widget.courseUnitId,
+      initialTopic: widget.topic,
+    );
     if (draft == null || !mounted) return;
 
     setState(() => _askingTutorId = candidate.tutor.userId);
@@ -126,9 +138,9 @@ class _MatchResultsScreenState extends ConsumerState<MatchResultsScreen> {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
-                    AppDimens.lg,
+                    AppDimens.screenPadding,
                     AppDimens.md,
-                    AppDimens.lg,
+                    AppDimens.screenPadding,
                     AppDimens.sm,
                   ),
                   child: _WidenToggle(
@@ -137,12 +149,46 @@ class _MatchResultsScreenState extends ConsumerState<MatchResultsScreen> {
                         setState(() => _widenToSubject = value),
                   ),
                 ),
+                // What the student asked, carried from the home composer. Shown
+                // rather than silently prefilled so the question a tutor will
+                // read is on screen while the student chooses who to ask.
+                if (widget.topic case final topic?
+                    when topic.trim().isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppDimens.screenPadding,
+                      0,
+                      AppDimens.screenPadding,
+                      AppDimens.sm,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.chat_bubble_outline_rounded,
+                          size: 16,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: AppDimens.sm),
+                        Expanded(
+                          child: Text(
+                            topic,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 // A failure counts as something to report even with no request
                 // behind it, which is the state a failed create leaves.
                 if (choice.request != null || choice.failure != null)
                   Padding(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: AppDimens.lg,
+                      horizontal: AppDimens.screenPadding,
                     ),
                     child: _ChoiceBanner(
                       choice: choice,
@@ -283,7 +329,7 @@ class _Results extends StatelessWidget {
     // the app had looked at the right course.
     if (result.noEligibleTutors) {
       return ListView(
-        padding: const EdgeInsets.all(AppDimens.lg),
+        padding: const EdgeInsets.all(AppDimens.screenPadding),
         children: [
           if (result.widened) ...[
             _WidenedNotice(unitLabel: unitLabel),
@@ -303,7 +349,7 @@ class _Results extends StatelessWidget {
     }
 
     return ListView(
-      padding: const EdgeInsets.all(AppDimens.lg),
+      padding: const EdgeInsets.all(AppDimens.screenPadding),
       children: [
         if (result.widened) ...[
           _WidenedNotice(unitLabel: unitLabel),
@@ -455,7 +501,7 @@ class _Banner extends StatelessWidget {
       color: background,
       margin: const EdgeInsets.only(bottom: AppDimens.sm),
       child: Padding(
-        padding: const EdgeInsets.all(AppDimens.lg),
+        padding: const EdgeInsets.all(AppDimens.screenPadding),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -510,7 +556,7 @@ class _WidenedNotice extends StatelessWidget {
     return Card(
       color: theme.colorScheme.tertiaryContainer,
       child: Padding(
-        padding: const EdgeInsets.all(AppDimens.lg),
+        padding: const EdgeInsets.all(AppDimens.screenPadding),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

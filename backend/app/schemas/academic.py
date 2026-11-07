@@ -95,3 +95,17 @@ class CourseUnitResponse(OrmSchema):
     )
     grade_id: uuid.UUID | None = Field(default=None, validation_alias="grade_public_id")
     created_at: datetime
+
+
+class CourseUnitTopicResponse(OrmSchema):
+    """One suggested question for a course unit.
+
+    The id is public so a client can key a chip on it, but the label is what is
+    sent back as the topic: the request sheet takes free text, and a suggestion
+    that a student taps becomes their words, not an opaque id the tutor cannot
+    read.
+    """
+
+    id: uuid.UUID = Field(validation_alias="public_id")
+    label: str
+    sort_order: int

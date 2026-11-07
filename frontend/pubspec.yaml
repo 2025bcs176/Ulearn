@@ -69,6 +69,39 @@ flutter:
     - assets/icons/
     - assets/lotties/
 
+  # Both families are bundled rather than fetched. A first launch on a metered
+  # student connection must not wait on Google Fonts, and a font request that
+  # fails would silently fall back to the platform face, which is how a design
+  # system quietly stops being one.
+  #
+  # The files are variable fonts: one file carries every weight, so the family
+  # costs ~1MB instead of ~3MB of static instances. Each weight is declared
+  # against the same file so font matching picks the requested weight rather
+  # than synthesising a bold from the default instance.
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Variable.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Variable.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-Variable.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Variable.ttf
+          weight: 700
+        - asset: assets/fonts/Inter-Variable.ttf
+          weight: 800
+    - family: Sora
+      fonts:
+        - asset: assets/fonts/Sora-Variable.ttf
+          weight: 400
+        - asset: assets/fonts/Sora-Variable.ttf
+          weight: 600
+        - asset: assets/fonts/Sora-Variable.ttf
+          weight: 700
+        - asset: assets/fonts/Sora-Variable.ttf
+          weight: 800
+
 flutter_native_splash:
   color: "#FFFFFF"
   android_12:

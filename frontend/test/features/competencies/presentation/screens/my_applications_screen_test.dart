@@ -7,7 +7,6 @@ import 'package:peerpass/core/theme/app_theme.dart';
 import 'package:peerpass/features/competencies/data/models/tutor_claim.dart';
 import 'package:peerpass/features/competencies/data/repositories/competencies_repository.dart';
 import 'package:peerpass/features/competencies/data/repositories/fake_competencies_repository.dart';
-import 'package:peerpass/features/competencies/presentation/providers/competency_providers.dart';
 import 'package:peerpass/features/competencies/presentation/screens/my_applications_screen.dart';
 
 TutorClaim claim({

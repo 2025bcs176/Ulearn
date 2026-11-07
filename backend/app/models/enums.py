@@ -127,6 +127,67 @@ class SessionStatus(StrEnum):
     NO_SHOW = "no_show"
 
 
+class NotificationType(StrEnum):
+    """Why a notification exists, as the client switches on it.
+
+    Every member has a producer in the service layer. A type with no producer is
+    worse than a missing one: the client draws an icon and a deep link for a
+    notification that can never arrive, and the one that does arrive has no
+    case. Certificate and reminder events are deliberately absent until the code
+    that raises them exists.
+    """
+
+    REQUEST_RECEIVED = "request_received"
+    REQUEST_ACCEPTED = "request_accepted"
+    REQUEST_DECLINED = "request_declined"
+    SESSION_STARTED = "session_started"
+    SESSION_COMPLETED = "session_completed"
+    SESSION_CANCELLED = "session_cancelled"
+    RATING_RECEIVED = "rating_received"
+    PROMOTION = "promotion"
+
+
+class RatingTag(StrEnum):
+    """What a student may say about a tutor beyond the score.
+
+    A fixed vocabulary, because the tags are read by other students choosing a
+    tutor: free text at that position would be a public comment with no
+    moderation, while a closed set is something the profile can render, count,
+    and translate without a reporting queue behind it.
+
+    Every tag is a claim about the session that just happened and one a student
+    can make from memory. The set is deliberately all-neutral-to-positive and
+    carries no negative member: the score is where dissatisfaction goes, and a
+    "not prepared" chip beside a three is a second, sharper answer to a question
+    the student already answered.
+
+    Wire values are the bare lowercase name and are part of the contract. A tag
+    removed from this enum is a breaking change for any client that still sends
+    it; adding one is not, because an older client can display a tag it does not
+    know from the value itself.
+    """
+
+    CLEAR_EXPLANATION = "clear_explanation"
+    PATIENT = "patient"
+    WELL_PREPARED = "well_prepared"
+    MADE_IT_CLICK = "made_it_click"
+    PRACTICAL_EXAMPLES = "practical_examples"
+    ON_TIME = "on_time"
+
+
+class DevicePlatform(StrEnum):
+    """Where a push token came from.
+
+    Stored so a future payload can be shaped per platform. The beta ships an
+    Android APK, but the column is not Android-only: a token table that cannot
+    hold the first iOS build is a migration on the day push is switched on.
+    """
+
+    ANDROID = "android"
+    IOS = "ios"
+    WEB = "web"
+
+
 #: The only moves a session may make.
 #:
 #: Declared as data rather than scattered `if` statements in a service, so the

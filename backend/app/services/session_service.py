@@ -1,8 +1,7 @@
 """Tutoring session lifecycle business logic."""
 
-import secrets
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +11,6 @@ from app.core.exceptions import (
     AuthorizationProblem,
     ConflictProblem,
     NotFoundProblem,
-    TooManyRequestsProblem,
     ValidationProblem,
 )
 from app.models.course_unit import CourseUnit
@@ -26,23 +24,10 @@ from app.models.session import HelpRequest, Session
 from app.models.user import User, has_role, load_roles
 from app.schemas.session import (
     SessionCreate,
-    SessionPinResponse,
     SessionResponse,
     SessionTransitionRequest,
 )
-from app.services import rating_service
-
-#: Wrong entries before the tutee is put on a cooldown.
-#:
-#: A small retry budget prevents guessing while leaving room for a genuine typo.
-MAX_PIN_ATTEMPTS = 5
-
-#: How long a tutee is locked out once they have used them all.
-#:
-#: A cooldown rather than a permanent lock, because the session still has to be
-#: startable and both parties are physically present.
-PIN_LOCKOUT = timedelta(minutes=15)
-PIN_LIFETIME = timedelta(minutes=20)
+from app.services import notification_service, rating_service
 
 
 def _utc(dt: datetime) -> datetime:
@@ -50,6 +35,27 @@ def _utc(dt: datetime) -> datetime:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=UTC)
     return dt.astimezone(UTC)
+
+
+def _attendance_minutes(
+    started_at: datetime,
+    tutor_finished_at: datetime,
+    tutee_finished_at: datetime,
+) -> int:
+    """Whole minutes both parties were present, with a floor of one.
+
+    The end of the window is the *earlier* finish, not the later one. Hours
+    banked behind a certificate have to be defensible, and the time after one
+    participant left is not time that participant can confirm. A party who
+    forgets to tap finish until an hour later must not extend the session; the
+    other party's timestamp is the ceiling.
+
+    The floor of one minute keeps a check-in-and-finish in the same minute from
+    recording a session with no time in it. Such a session still counts towards
+    promotion, so it must not be able to contribute zero hours to a certificate.
+    """
+    ended_at = min(_utc(tutor_finished_at), _utc(tutee_finished_at))
+    return max(1, int((ended_at - _utc(started_at)).total_seconds() // 60))
 
 
 async def create_session(
@@ -110,7 +116,6 @@ async def create_session(
     if existing is not None:
         raise ConflictProblem("That help request already has an accepted session.")
 
-    _, session_pin_hash = Session.generate_session_pin()
     session = Session(
         help_request_id=help_request.id,
         tutee_id=help_request.tutee_id,
@@ -119,8 +124,6 @@ async def create_session(
         topic=payload.topic or help_request.topic,
         scheduled_start=payload.scheduled_start,
         duration_minutes=payload.duration_minutes,
-        session_pin_hash=session_pin_hash,
-        session_pin_expires_at=_utc(datetime.now(UTC) + PIN_LIFETIME),
         meeting_link=(payload.meeting_link or "").strip() or None,
         meeting_venue=(payload.meeting_venue or "").strip() or None,
         meeting_venue_detail=(payload.meeting_venue_detail or "").strip() or None,
@@ -130,6 +133,13 @@ async def create_session(
     help_request.status = HelpRequestStatus.MATCHED
     help_request.matched_tutor_id = user.id
     await db.flush()
+    await notification_service.request_accepted(
+        db,
+        tutee_id=session.tutee_id,
+        tutor=user,
+        topic=session.topic,
+        session_id=session.public_id,
+    )
     await db.commit()
     await db.refresh(session)
     return await _session_response(db, session)
@@ -185,27 +195,18 @@ async def transition_session(
         )
 
     if payload.status is SessionStatus.IN_PROGRESS:
-        # Starting used to be accepted here too, with a `pin` field checked
-        # inline. Two problems, and the first is why this is now a refusal
-        # rather than a second code path:
-        #
-        # - It was a bypass. This branch had no attempt counter and no cooldown,
-        #   so the throttle in `verify_session_pin` could be walked around by
-        #   calling this instead, making the lockout decoration.
-        # - It let either party start a session. Under the rule that the tutor
-        #   reveals and the tutee enters, a tutor calling this has simply told
-        #   the server the session is live.
-        #
-        # One code path means the throttle cannot be circumvented by accident.
+        # Starting is two check-ins, not a status a caller can set. This used to
+        # be reachable with a PIN inline, which let one party declare the other
+        # present; now the only way in is `check_in`, called by both accounts.
         raise ValidationProblem(
-            "Use the PIN endpoint to start this session.",
-            errors={"status": "in_progress requires verify-pin"},
+            "Both parties must check in to start this session.",
+            errors={"status": "in_progress requires both check-ins"},
         )
 
     if payload.status is SessionStatus.COMPLETED:
         raise ValidationProblem(
-            "Use the completion handshake to complete this session.",
-            errors={"status": "completion handshake required"},
+            "Both parties must finish the session to complete it.",
+            errors={"status": "completion requires both finishes"},
         )
 
     if payload.status is SessionStatus.CANCELLED:
@@ -227,263 +228,185 @@ async def transition_session(
     session.status = payload.status
     if payload.status is SessionStatus.COMPLETED:
         await rating_service.record_completion(db, session)
+    elif payload.status is SessionStatus.CANCELLED:
+        # The caller recorded themselves as the canceller just above, so the
+        # recipient is never themselves. A cancellation the other party learns
+        # about only by opening the session is a no-show waiting to happen.
+        recipient_id = (
+            session.tutor_id if user.id == session.tutee_id else session.tutee_id
+        )
+        await notification_service.session_cancelled(
+            db,
+            recipient_id=recipient_id,
+            cancelled_by=user,
+            topic=session.topic,
+            reason=session.cancellation_reason,
+            session_id=session.public_id,
+        )
 
     await db.flush()
     await db.commit()
     return await _session_response(db, session)
 
 
-async def request_completion_pin(
+async def check_in(
     db: AsyncSession, user: User, session_id: uuid.UUID
 ) -> SessionResponse:
-    """Mark that the tutor is ready for the tutee to confirm completion."""
+    """Record one party's arrival, starting the session when both are present.
+
+    Each party writes only their own timestamp. A retried tap after it was
+    recorded is idempotent rather than an error: a phone on a slow connection
+    retrying a check-in is ordinary, and showing a failure for a state the
+    caller already achieved is worse than doing nothing.
+
+    The session becomes live on the second check-in, never the first. That is
+    the whole difference from the PIN handshake: there is no code one person
+    reads to another, only two accounts independently saying they are here.
+    """
     session = await _load_session_for_user(db, user, session_id)
-    if session.tutor_id != user.id:
-        raise AuthorizationProblem("Only the tutor can request completion.")
-    if session.status is not SessionStatus.IN_PROGRESS:
-        raise ConflictProblem("Only an in-progress session can be completed.")
+    if session.status in {
+        SessionStatus.COMPLETED,
+        SessionStatus.CANCELLED,
+        SessionStatus.NO_SHOW,
+    }:
+        raise ConflictProblem("This session is no longer open for check-in.")
 
-    session.completion_requested_at = _utc(datetime.now(UTC))
-    await db.commit()
-    return await _session_response(db, session)
+    # Serialize the two arrivals. Without the lock both parties can read
+    # `scheduled`, each write only their own column, and the second commit
+    # overwrites the first -- leaving one check-in recorded and a session that
+    # never went live even though both people tapped.
+    session = await _lock_session(db, session)
+    if session.status in {
+        SessionStatus.COMPLETED,
+        SessionStatus.CANCELLED,
+        SessionStatus.NO_SHOW,
+    }:
+        # Re-checked under the lock: a cancellation committed between the read
+        # above and this write must not leave a check-in on a cancelled session.
+        raise ConflictProblem("This session is no longer open for check-in.")
 
-
-async def reveal_completion_pin(
-    db: AsyncSession, user: User, session_id: uuid.UUID
-) -> SessionPinResponse:
-    """Create and reveal the completion code to the tutee only."""
-    session = await _load_session_for_user(db, user, session_id)
-    if session.tutee_id != user.id:
-        raise AuthorizationProblem("Only the tutee can reveal completion.")
-    if session.status is not SessionStatus.IN_PROGRESS:
-        raise ConflictProblem("This session is not waiting for completion.")
-    if session.completion_requested_at is None:
-        raise ConflictProblem("The tutor has not requested completion.")
-
-    locked_result = await db.execute(
-        select(Session)
-        .where(Session.id == session.id)
-        .options(
-            selectinload(Session.help_request),
-            selectinload(Session.tutee),
-            selectinload(Session.tutor),
-            selectinload(Session.course_unit),
-        )
-        .with_for_update()
-        .execution_options(populate_existing=True)
+    now = _utc(datetime.now(UTC))
+    is_tutor = session.tutor_id == user.id
+    already_checked_in = (
+        session.tutor_checked_in_at if is_tutor else session.tutee_checked_in_at
     )
-    session = locked_result.scalar_one()
-    if session.status is not SessionStatus.IN_PROGRESS:
-        raise ConflictProblem("This session is not waiting for completion.")
-    if session.completion_requested_at is None:
-        raise ConflictProblem("The tutor has not requested completion.")
-    if session.completion_pin_locked_until and (
-        _utc(session.completion_pin_locked_until) > _utc(datetime.now(UTC))
-    ):
-        raise TooManyRequestsProblem(
-            "Too many wrong completion codes. Wait before trying again.",
-            retry_after_seconds=_completion_pin_lock_remaining(session),
-        )
+    if already_checked_in is None:
+        if is_tutor:
+            session.tutor_checked_in_at = now
+        else:
+            session.tutee_checked_in_at = now
 
-    code, session.completion_pin_hash = Session.generate_session_pin()
-    session.completion_pin_expires_at = _utc(datetime.now(UTC) + PIN_LIFETIME)
-    session.completion_pin_failed_attempts = 0
-    session.completion_pin_locked_until = None
-    await db.commit()
-    return SessionPinResponse(
-        session_id=session.public_id,
-        session_pin=code,
-        attempts_remaining=MAX_PIN_ATTEMPTS,
-    )
-
-
-async def verify_completion_pin(
-    db: AsyncSession, user: User, session_id: uuid.UUID, pin: str
-) -> SessionResponse:
-    """Confirm completion with the code revealed by the tutee."""
-    session = await _load_session_for_user(db, user, session_id)
-    if session.tutor_id != user.id:
-        raise AuthorizationProblem("Only the tutor can confirm completion.")
-    if session.status is not SessionStatus.IN_PROGRESS:
-        raise ConflictProblem("This session is not waiting for completion.")
-
-    locked_result = await db.execute(
-        select(Session)
-        .where(Session.id == session.id)
-        .options(
-            selectinload(Session.help_request),
-            selectinload(Session.tutee),
-            selectinload(Session.tutor),
-            selectinload(Session.course_unit),
-        )
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    )
-    session = locked_result.scalar_one()
-    if session.status is not SessionStatus.IN_PROGRESS:
-        raise ConflictProblem("This session is not waiting for completion.")
-    if session.completion_pin_locked_until and (
-        _utc(session.completion_pin_locked_until) > _utc(datetime.now(UTC))
-    ):
-        raise TooManyRequestsProblem(
-            "Too many wrong completion codes. Wait before trying again.",
-            retry_after_seconds=_completion_pin_lock_remaining(session),
-        )
     if (
-        not session.completion_pin_hash
-        or not session.completion_pin_expires_at
-        or _utc(session.completion_pin_expires_at) <= _utc(datetime.now(UTC))
+        session.status is SessionStatus.SCHEDULED
+        and session.tutor_checked_in_at is not None
+        and session.tutee_checked_in_at is not None
     ):
-        raise ConflictProblem("The completion code has expired.")
-
-    supplied = Session.hash_session_pin(pin.strip())
-    if not secrets.compare_digest(supplied, session.completion_pin_hash):
-        session.completion_pin_failed_attempts += 1
-        if session.completion_pin_failed_attempts >= MAX_PIN_ATTEMPTS:
-            session.completion_pin_locked_until = _utc(datetime.now(UTC) + PIN_LOCKOUT)
-        await db.commit()
-        raise ValidationProblem(
-            "The completion code is incorrect.",
-            errors={"pin": "incorrect"},
+        session.status = SessionStatus.IN_PROGRESS
+        session.started_at = _utc(datetime.now(UTC))
+        # Tell the party who was already waiting. The caller was present for
+        # their own tap, so a notification to them would only repeat the screen
+        # they are looking at.
+        recipient_id = session.tutee_id if is_tutor else session.tutor_id
+        await notification_service.session_started(
+            db,
+            recipient_id=recipient_id,
+            checked_in=user,
+            topic=session.topic,
+            session_id=session.public_id,
         )
 
-    session.status = SessionStatus.COMPLETED
-    session.ended_at = _utc(datetime.now(UTC))
-    elapsed = int(
-        (_utc(session.ended_at) - _utc(session.started_at)).total_seconds() // 60
-    )
-    session.duration_minutes = max(1, elapsed)
-    session.completion_pin_hash = None
-    session.completion_pin_expires_at = None
-    await rating_service.record_completion(db, session)
-    await db.commit()
-    return await _session_response(db, session)
-
-
-async def reveal_session_pin(
-    db: AsyncSession,
-    user: User,
-    session_id: uuid.UUID,
-) -> SessionPinResponse:
-    """Hand the handshake PIN to the tutor, and to nobody else.
-
-    The tutee is refused here. That refusal is the whole point of the handshake:
-    if a tutee could read their own PIN, there would be nothing to prove, and the
-    tutor would have no way to tell an in-person student from someone guessing
-    a guessed code on a stolen account.
-    """
-    session = await _load_session_for_user(db, user, session_id)
-    if session.tutor_id != user.id:
-        raise AuthorizationProblem("Only the tutor can see the session PIN.")
-
-    # Stays available until the session starts. Revealing it earlier would let a
-    # tutor collect PINs in advance, which is a use the handshake cannot detect.
-    if session.status is not SessionStatus.SCHEDULED:
-        raise ConflictProblem("This session has already started.")
-
-    code, session.session_pin_hash = Session.generate_session_pin()
-    session.session_pin_expires_at = _utc(datetime.now(UTC) + PIN_LIFETIME)
-    await db.commit()
-
-    # The code is returned only through this party-specific endpoint. The
-    # shared session response never carries it.
-    return SessionPinResponse(
-        session_id=session.public_id,
-        session_pin=code,
-        attempts_remaining=max(0, MAX_PIN_ATTEMPTS - session.pin_failed_attempts),
-    )
-
-
-def _pin_lock_remaining(session: Session) -> int:
-    """Seconds until the tutee may try again, or 0 if they may try now."""
-    if session.pin_locked_until is None:
-        return 0
-    remaining = (
-        _utc(session.pin_locked_until) - _utc(datetime.now(UTC))
-    ).total_seconds()
-    return int(remaining) + 1 if remaining > 0 else 0
-
-
-def _completion_pin_lock_remaining(session: Session) -> int:
-    if session.completion_pin_locked_until is None:
-        return 0
-    remaining = (
-        _utc(session.completion_pin_locked_until) - _utc(datetime.now(UTC))
-    ).total_seconds()
-    return int(remaining) + 1 if remaining > 0 else 0
-
-
-async def verify_session_pin(
-    db: AsyncSession,
-    user: User,
-    session_id: uuid.UUID,
-    pin: str,
-) -> SessionResponse:
-    """The tutee enters the six-digit code delivered for this session.
-
-    Throttled on the row. The pin has 100 possible values, so without a ceiling
-    this endpoint is a free oracle: a caller can walk the whole space in a second
-    and start any session they are a party to.
-    """
-    session = await _load_session_for_user(db, user, session_id)
-
-    # The tutor already has the PIN. Letting them enter it would make the check
-    # something they pass on their own, so the two directions are exclusive.
-    if session.tutee_id != user.id:
-        raise AuthorizationProblem("Only the student can enter the session PIN.")
-
-    if session.status is not SessionStatus.SCHEDULED:
-        raise ConflictProblem("This session is not waiting to start.")
-
-    # Serialize attempts on the session row. Without a row lock, concurrent
-    # guesses can all read the same counter and overwrite one another.
-    locked_result = await db.execute(
-        select(Session).where(Session.id == session.id).with_for_update()
-    )
-    session = locked_result.scalar_one()
-
-    if session.status is not SessionStatus.SCHEDULED:
-        raise ConflictProblem("This session is not waiting to start.")
-
-    waiting = _pin_lock_remaining(session)
-    if waiting:
-        raise TooManyRequestsProblem(
-            "Too many wrong PINs. Wait before trying again.",
-            retry_after_seconds=waiting,
-        )
-
-    # Fails closed: a session with no stored PIN must reject every candidate,
-    # including a blank one, rather than treating "no PIN" as "PIN matches".
-    expires_at = session.session_pin_expires_at
-    if expires_at is None or _utc(expires_at) <= _utc(datetime.now(UTC)):
-        raise ConflictProblem("The session PIN has expired.")
-
-    expected = session.session_pin_hash
-    supplied = Session.hash_session_pin(pin.strip())
-    if not expected or not secrets.compare_digest(supplied, expected):
-        session.pin_failed_attempts += 1
-        if session.pin_failed_attempts >= MAX_PIN_ATTEMPTS:
-            session.pin_locked_until = _utc(datetime.now(UTC) + PIN_LOCKOUT)
-        # Committed rather than left to a rollback. An attempt that is not counted
-        # is an attempt that is free, and the error path is exactly where an
-        # uncommitted counter would be silently discarded.
-        await db.commit()
-        raise ValidationProblem(
-            "The session PIN is incorrect.",
-            errors={"pin": "incorrect"},
-        )
-
-    # Reset on success so a later handshake on the same row is not punished for
-    # typos the tutee already recovered from.
-    session.pin_failed_attempts = 0
-    session.pin_locked_until = None
-    session.session_pin_hash = None
-    session.session_pin_expires_at = None
-    session.status = SessionStatus.IN_PROGRESS
-    session.started_at = _utc(session.started_at or datetime.now(UTC))
     await db.flush()
     await db.commit()
     return await _session_response(db, session)
+
+
+async def finish(
+    db: AsyncSession, user: User, session_id: uuid.UUID
+) -> SessionResponse:
+    """Record one party's departure, completing the session when both are done.
+
+    Finishing is refused until the session is live, so nobody can end a session
+    the other party never joined. The first finish leaves the session in
+    progress; the second completes it, and only then are minutes banked.
+
+    A retried finish after completion is a no-op. A client that did not receive
+    the response is the normal case on a metered connection, and re-sending the
+    request must not re-bank the session.
+    """
+    session = await _load_session_for_user(db, user, session_id)
+    if session.status is SessionStatus.COMPLETED:
+        return await _session_response(db, session)
+    if session.status is not SessionStatus.IN_PROGRESS:
+        raise ConflictProblem(
+            "Only a session both parties have checked in to can be finished."
+        )
+
+    session = await _lock_session(db, session)
+    if session.status is SessionStatus.COMPLETED:
+        return await _session_response(db, session)
+    if session.status is not SessionStatus.IN_PROGRESS:
+        raise ConflictProblem(
+            "Only a session both parties have checked in to can be finished."
+        )
+
+    now = _utc(datetime.now(UTC))
+    is_tutor = session.tutor_id == user.id
+    already_finished = (
+        session.tutor_finished_at if is_tutor else session.tutee_finished_at
+    )
+    if already_finished is None:
+        if is_tutor:
+            session.tutor_finished_at = now
+        else:
+            session.tutee_finished_at = now
+
+    if session.tutor_finished_at is not None and session.tutee_finished_at is not None:
+        if session.started_at is None:
+            # Unreachable through the service -- both check-ins set it -- but
+            # failing closed is cheaper than computing minutes from a missing
+            # start and banking a nonsense duration if that ever changes.
+            raise ConflictProblem("This session has no recorded start.")
+        session.ended_at = min(
+            _utc(session.tutor_finished_at),
+            _utc(session.tutee_finished_at),
+        )
+        session.duration_minutes = _attendance_minutes(
+            session.started_at,
+            session.tutor_finished_at,
+            session.tutee_finished_at,
+        )
+        session.status = SessionStatus.COMPLETED
+        await rating_service.record_completion(db, session)
+        # The tutee is the only party who rates, so the only party who needs the
+        # prompt. Deduplicated by key, so finishing twice cannot produce two.
+        await notification_service.session_completed(
+            db,
+            tutee_id=session.tutee_id,
+            tutor=session.tutor,
+            topic=session.topic,
+            session_id=session.public_id,
+        )
+
+    await db.flush()
+    await db.commit()
+    return await _session_response(db, session)
+
+
+async def _lock_session(db: AsyncSession, session: Session) -> Session:
+    """Reload the row under a write lock, with the joins the response needs."""
+    result = await db.execute(
+        select(Session)
+        .where(Session.id == session.id)
+        .options(
+            selectinload(Session.help_request),
+            selectinload(Session.tutee),
+            selectinload(Session.tutor),
+            selectinload(Session.course_unit),
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    return result.scalar_one()
 
 
 async def _load_help_request(db: AsyncSession, request_id: uuid.UUID) -> HelpRequest:
@@ -557,7 +480,10 @@ async def _session_response(db: AsyncSession, session: Session) -> SessionRespon
         scheduled_start=session.scheduled_start,
         started_at=session.started_at,
         ended_at=session.ended_at,
-        completion_requested_at=session.completion_requested_at,
+        tutor_checked_in_at=session.tutor_checked_in_at,
+        tutee_checked_in_at=session.tutee_checked_in_at,
+        tutor_finished_at=session.tutor_finished_at,
+        tutee_finished_at=session.tutee_finished_at,
         duration_minutes=session.duration_minutes,
         meeting_link=session.meeting_link,
         meeting_venue=session.meeting_venue,

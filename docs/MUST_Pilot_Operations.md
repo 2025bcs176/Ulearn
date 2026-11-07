@@ -162,6 +162,10 @@ The primary operator checks daily:
 4. Unresolved safety and dispute reports.
 5. **Audit log**, for privileged actions with no matching entry in the operator's
    own record of what they did.
+6. **Pilot funnel** in the admin console. It reports requests, accepted requests,
+   completed sessions, and tutee-rated sessions. A zero on launch day is the
+   honest starting state, not a fault to escalate; a stage that stops moving while
+   the one above it grows is the thing to investigate.
 
 The pilot dashboard or exported report should track:
 

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:peerpass/app/router.dart';
@@ -13,15 +12,15 @@ import 'package:peerpass/features/sessions/data/models/session_model.dart';
 import 'package:peerpass/features/sessions/presentation/formatting.dart';
 import 'package:peerpass/features/sessions/presentation/providers/session_providers.dart';
 import 'package:peerpass/features/sessions/presentation/widgets/meeting_link_field.dart';
-import 'package:peerpass/features/sessions/presentation/widgets/session_pin_section.dart';
+import 'package:peerpass/features/sessions/presentation/widgets/session_attendance_section.dart';
 import 'package:peerpass/features/sessions/presentation/widgets/session_status_chip.dart';
 
 /// One session, and the one thing the reader can do to it right now.
 ///
 /// The action offered is a function of the status, and only of the status: a
-/// scheduled session has the handshake, a live one can be ended, a completed one
-/// can be rated. The transitions themselves are the API's -- this screen asks for
-/// a move and renders whatever comes back, including a refusal -- so there is no
+/// scheduled session offers a check-in, a live one a finish, a completed one a
+/// rating. The transitions themselves are the API's -- this screen asks for a
+/// tap and renders whatever comes back, including a refusal -- so there is no
 /// second state machine here to fall out of step with the server's.
 ///
 /// A completed session must be rated by the student before this quality loop is
@@ -45,7 +44,14 @@ class SessionDetailScreen extends ConsumerWidget {
       final failure = state.loadFailure;
       if (failure != null) {
         return Scaffold(
-          appBar: AppBar(title: const Text('Session')),
+          appBar: AppBar(
+            title: const Text('Session'),
+            leading: IconButton(
+              tooltip: 'Back to Home',
+              icon: const Icon(Icons.home_outlined),
+              onPressed: () => context.go(AppRoutes.home),
+            ),
+          ),
           body: SafeArea(
             child: Center(
               child: ContentWidthLimiter(
@@ -93,8 +99,8 @@ class _Body extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    // Who the reader is, which is what decides which half of the handshake they
-    // are shown and whether a rating is of a tutor or of a student. The session
+    // Who the reader is, which is what decides which side of the pass they are
+    // shown and whether a rating is of a tutor or of a student. The session
     // names both parties and the API has already refused anyone who is neither.
     final viewerId = ref.watch(sessionControllerProvider).profile?.publicId;
     final link = session.meetingLink;
@@ -130,25 +136,16 @@ class _Body extends ConsumerWidget {
           value: durationLabel(session.durationMinutes),
         ),
         if (venue != null) _FactRow(label: 'Venue', value: venue),
-        if (session.startedAt case final startedAt?)
-          _FactRow(label: 'Started', value: momentLabel(startedAt)),
-        if (session.endedAt case final endedAt?)
-          _FactRow(label: 'Ended', value: momentLabel(endedAt)),
         if (link != null) ...[
           const SizedBox(height: AppDimens.lg),
           MeetingLinkField(link: link),
         ],
         const SizedBox(height: AppDimens.lg),
-        SessionPinSection(session: session, viewerId: viewerId),
-        if (state.actionFailure != null && !state.pinRejected) ...[
-          const SizedBox(height: AppDimens.md),
-          Text(
-            state.actionFailure!.message,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.error,
-            ),
-          ),
-        ],
+        SessionAttendanceSection(session: session, viewerId: viewerId),
+        if (session.status == TutoringSessionStatus.completed &&
+            viewerId != null &&
+            session.isTutor(viewerId))
+          _ReceivedRating(sessionId: session.id),
         const SizedBox(height: AppDimens.lg),
         _Action(session: session, state: state, viewerId: viewerId),
       ],
@@ -181,6 +178,55 @@ class _Body extends ConsumerWidget {
   }
 }
 
+class _ReceivedRating extends ConsumerWidget {
+  const _ReceivedRating({required this.sessionId});
+
+  final String sessionId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final rating = ref.watch(receivedRatingProvider(sessionId));
+    return rating.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.only(top: AppDimens.lg),
+        child: LinearProgressIndicator(),
+      ),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (value) {
+        if (value == null) return const SizedBox.shrink();
+        return Card(
+          margin: const EdgeInsets.only(top: AppDimens.lg),
+          child: Padding(
+            padding: const EdgeInsets.all(AppDimens.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Feedback received',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: AppDimens.sm),
+                Text('${value.score}/5 stars'),
+                if (value.feedbackText case final note?) ...[
+                  const SizedBox(height: AppDimens.sm),
+                  Text(note),
+                ],
+                const SizedBox(height: AppDimens.xs),
+                Text(
+                  value.comprehensionHelped
+                      ? 'The student said the session helped them understand the topic.'
+                      : 'The student said they still need help with the topic.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 /// The primary action, chosen by the status and nothing else.
 class _Action extends StatelessWidget {
   const _Action({
@@ -206,18 +252,14 @@ class _Action extends StatelessWidget {
     if (session.isRated) return const _RatedBySomeoneElse();
 
     return switch (session.status) {
-      // The handshake in `SessionPinSection` is the action for a scheduled
-      // session, and it renders nothing for a reader who is neither party.
-      TutoringSessionStatus.scheduled => const SizedBox.shrink(),
-      TutoringSessionStatus.inProgress => _CompletionHandshake(
-        session: session,
-        state: state,
-        viewerId: viewerId,
-      ),
+      // Check-in and finish are in `SessionAttendanceSection`, which owns the
+      // timeline they update.
+      TutoringSessionStatus.scheduled ||
+      TutoringSessionStatus.inProgress => const SizedBox.shrink(),
       TutoringSessionStatus.completed =>
         _isTutee(viewerId)
             ? _RateThisSession(session: session)
-            : const _RatedBySomeoneElse(),
+            : const _AwaitingRating(),
       // Nothing to offer for a session that did not happen. A no-show is the
       // case where a rating might be tempting and must not be: the API refuses it,
       // and the tutor attending a session the student missed is not something a
@@ -234,118 +276,6 @@ class _Action extends StatelessWidget {
 
   bool _isTutee(String? viewerId) =>
       viewerId != null && session.isTutee(viewerId);
-}
-
-class _CompletionHandshake extends ConsumerStatefulWidget {
-  const _CompletionHandshake({
-    required this.session,
-    required this.state,
-    required this.viewerId,
-  });
-
-  final SessionModel session;
-  final SessionDetailState state;
-  final String? viewerId;
-
-  @override
-  ConsumerState<_CompletionHandshake> createState() =>
-      _CompletionHandshakeState();
-}
-
-class _CompletionHandshakeState extends ConsumerState<_CompletionHandshake> {
-  final _code = TextEditingController();
-
-  @override
-  void dispose() {
-    _code.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final controller = ref.read(
-      sessionDetailProvider(widget.session.id).notifier,
-    );
-    final isTutor = widget.viewerId == widget.session.tutorId;
-    final requested = widget.session.completionRequestedAt != null;
-
-    if (!isTutor && !requested) {
-      return const Text('Waiting for the tutor to request completion.');
-    }
-    if (!isTutor) {
-      final code = widget.state.completionCode;
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            'Confirm the session ended, then show this code to the tutor.',
-          ),
-          const SizedBox(height: AppDimens.md),
-          if (code == null)
-            FilledButton.tonal(
-              onPressed: widget.state.submitting
-                  ? null
-                  : controller.revealCompletionCode,
-              child: const Text('Show completion code'),
-            )
-          else
-            SelectableText(
-              code.sessionPin,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-        ],
-      );
-    }
-    if (!requested) {
-      return FilledButton(
-        onPressed: widget.state.submitting ? null : controller.endSession,
-        child: widget.state.submitting
-            ? const SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Text('Request completion'),
-      );
-    }
-    final ready = _code.text.length == 6 && !widget.state.submitting;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const Text('Enter the six-digit code shown by the student.'),
-        const SizedBox(height: AppDimens.sm),
-        TextField(
-          controller: _code,
-          enabled: !widget.state.submitting,
-          keyboardType: TextInputType.number,
-          maxLength: 6,
-          inputFormatters: [
-            FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(6),
-          ],
-          decoration: const InputDecoration(
-            labelText: 'Completion code',
-            counterText: '',
-          ),
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: AppDimens.sm),
-        FilledButton(
-          onPressed: ready
-              ? () => controller.verifyCompletionCode(_code.text)
-              : null,
-          child: widget.state.submitting
-              ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Complete session'),
-        ),
-      ],
-    );
-  }
 }
 
 /// The affordance that opens the rating screen.
@@ -404,6 +334,38 @@ class _RatingReadOnly extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// A completed session the student has not rated yet, as the tutor sees it.
+///
+/// Not "this session has been rated": `is_rated` is false until the student
+/// submits, and telling a tutor their feedback exists before it does is a lie
+/// the API would contradict on the next refresh.
+class _AwaitingRating extends StatelessWidget {
+  const _AwaitingRating();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Row(
+      children: [
+        Icon(
+          Icons.hourglass_empty_rounded,
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(width: AppDimens.sm),
+        Expanded(
+          child: Text(
+            'Waiting for the student to rate this session.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -51,6 +51,23 @@ class RemoteMatchingDatasource {
     ];
   }
 
+  /// The suggested questions for one course unit.
+  ///
+  /// Read by the request sheet, not the picker: a suggestion only has meaning
+  /// once a tutor and a unit are chosen. Raw maps so the repository owns the
+  /// parse, exactly as it does for the matching responses.
+  Future<List<Map<String, dynamic>>> courseUnitTopics(
+    String courseUnitId,
+  ) async {
+    final response = await _dio.get<List<dynamic>>(
+      '/v1/academics/course-units/$courseUnitId/topics',
+    );
+    return [
+      for (final row in response.data ?? const <dynamic>[])
+        if (row is Map<String, dynamic>) row,
+    ];
+  }
+
   /// Asks who may take this course unit.
   ///
   /// The unit-only route. The request-backed one, `/help-requests/{id}/matches`,

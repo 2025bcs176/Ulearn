@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:peerpass/core/error/failures.dart';
 import 'package:peerpass/core/models/course_unit.dart';
+import 'package:peerpass/features/matching/data/models/course_unit_topic.dart';
 import 'package:peerpass/features/matching/data/models/help_request.dart';
 import 'package:peerpass/features/matching/data/models/match_result.dart';
 
@@ -30,6 +31,13 @@ abstract interface class MatchingRepository {
     String? universityId,
     String? subjectId,
   });
+
+  /// The suggested questions for one course unit.
+  ///
+  /// Reference data for the request sheet, so a student can tap a concept instead
+  /// of inventing its name. An empty list is a normal answer for a unit whose
+  /// suggestions have not been published; the sheet then relies on free text.
+  Future<List<CourseUnitTopic>> courseUnitTopics(String courseUnitId);
 
   /// Who may take this course unit, in the API's ranking.
   ///

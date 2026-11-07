@@ -8,6 +8,7 @@ import 'package:peerpass/core/models/user_profile.dart';
 import 'package:peerpass/core/models/user_role.dart';
 import 'package:peerpass/core/state/session.dart';
 import 'package:peerpass/core/widgets/failure_view.dart';
+import 'package:peerpass/features/competencies/data/repositories/competencies_repository.dart';
 import 'package:peerpass/features/home/presentation/providers/change_faculty_controller.dart';
 import 'package:peerpass/features/home/presentation/providers/profile_providers.dart';
 import 'package:peerpass/features/home/presentation/providers/sign_out_controller.dart';
@@ -23,6 +24,7 @@ class ProfileScreen extends ConsumerWidget {
     final university = profile?.universityId == null
         ? null
         : ref.watch(universityByIdProvider(profile!.universityId!));
+    final applications = ref.watch(myClaimsProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
@@ -66,21 +68,14 @@ class ProfileScreen extends ConsumerWidget {
                     title: const Text('Role'),
                     subtitle: Text(_roleLabel(profile)),
                   ),
-                  // The tutor-application row lives here rather than on the
-                  // home screen because it is an account fact, and because home
-                  // may not import another feature's presentation: this pushes a
-                  // route instead, which is what the app router exists for.
-                  //
-                  // It is shown to every signed-in user, not only to tutors. A
-                  // student who has not applied yet needs it too -- it is where
-                  // the screen says so and offers the form.
-                  ListTile(
-                    leading: const Icon(Icons.fact_check_outlined),
-                    title: const Text('Tutor applications'),
-                    subtitle: const Text('Where your submitted proofs stand'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => context.push(AppRoutes.myApplications),
-                  ),
+                  if (applications.value?.isNotEmpty ?? false)
+                    ListTile(
+                      leading: const Icon(Icons.fact_check_outlined),
+                      title: const Text('Tutor applications'),
+                      subtitle: const Text('Where your submitted proofs stand'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => context.push(AppRoutes.myApplications),
+                    ),
                 ],
               ),
             ),

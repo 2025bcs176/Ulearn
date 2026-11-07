@@ -1,5 +1,6 @@
 import 'package:peerpass/core/error/failures.dart';
 import 'package:peerpass/core/models/course_unit.dart';
+import 'package:peerpass/features/matching/data/models/course_unit_topic.dart';
 import 'package:peerpass/features/matching/data/models/help_request.dart';
 import 'package:peerpass/features/matching/data/models/match_result.dart';
 import 'package:peerpass/features/matching/data/repositories/matching_repository.dart';
@@ -19,6 +20,8 @@ import 'package:peerpass/features/matching/data/repositories/matching_repository
 class FakeMatchingRepository implements MatchingRepository {
   FakeMatchingRepository({
     List<CourseUnit> courseUnits = const [],
+    Map<String, List<CourseUnitTopic>> topicsByUnit = const {},
+    this.onCourseUnitTopics,
     this.onSuggestions,
     this.onMyHelpRequests,
     this.onCreateHelpRequest,
@@ -26,9 +29,24 @@ class FakeMatchingRepository implements MatchingRepository {
     this.onRequestsAwaitingMe,
     this.onDeclineHelpRequest,
     this.defaultResult,
-  }) : _courseUnits = List<CourseUnit>.of(courseUnits);
+  }) : _courseUnits = List<CourseUnit>.of(courseUnits),
+       _topicsByUnit = {
+         for (final entry in topicsByUnit.entries)
+           entry.key: List<CourseUnitTopic>.unmodifiable(entry.value),
+       };
 
   final List<CourseUnit> _courseUnits;
+
+  /// Suggested topics, keyed by unit so a sheet that asks about the wrong unit
+  /// gets the wrong (or no) answer rather than a plausible one.
+  final Map<String, List<CourseUnitTopic>> _topicsByUnit;
+
+  /// Stands in for a topic query that failed. Return null to use the map.
+  final Future<List<CourseUnitTopic>?> Function(String courseUnitId)?
+  onCourseUnitTopics;
+
+  /// Every unit the sheet asked for topics about, in order.
+  final List<String> topicRequests = [];
 
   final List<HelpRequest> _requests = <HelpRequest>[];
 
@@ -112,6 +130,14 @@ class FakeMatchingRepository implements MatchingRepository {
     String? universityId,
     String? subjectId,
   }) async => List<CourseUnit>.unmodifiable(_courseUnits);
+
+  @override
+  Future<List<CourseUnitTopic>> courseUnitTopics(String courseUnitId) async {
+    topicRequests.add(courseUnitId);
+    final scripted = await onCourseUnitTopics?.call(courseUnitId);
+    if (scripted != null) return scripted;
+    return _topicsByUnit[courseUnitId] ?? const [];
+  }
 
   @override
   Future<MatchResult> suggestions({

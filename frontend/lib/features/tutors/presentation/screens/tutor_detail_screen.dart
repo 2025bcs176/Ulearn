@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:peerpass/core/constants/app_dimens.dart';
 import 'package:peerpass/core/error/failures.dart';
+import 'package:peerpass/core/models/rating_tag.dart';
 import 'package:peerpass/core/widgets/content_width_limiter.dart';
 import 'package:peerpass/core/widgets/empty_view.dart';
 import 'package:peerpass/core/widgets/failure_view.dart';
 import 'package:peerpass/core/widgets/loading_view.dart';
 import 'package:peerpass/features/tutors/data/models/tutor_detail.dart';
+import 'package:peerpass/features/tutors/data/models/tutor_review.dart';
 import 'package:peerpass/features/tutors/presentation/formatting.dart';
 import 'package:peerpass/features/tutors/presentation/providers/tutor_providers.dart';
 import 'package:peerpass/features/tutors/presentation/widgets/tutor_standing_chip.dart';
@@ -97,6 +99,12 @@ class _Detail extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: AppDimens.xl),
+          if (tutor.hasBio) ...[
+            Text('About', style: theme.textTheme.titleMedium),
+            const SizedBox(height: AppDimens.xs),
+            Text(tutor.bio!, style: theme.textTheme.bodyMedium),
+            const SizedBox(height: AppDimens.xl),
+          ],
           _Stats(
             rating: tutor.ratingLabel,
             sessions: sessionsTaughtLabel(tutor.completedSessions),
@@ -114,6 +122,8 @@ class _Detail extends ConsumerWidget {
           ),
           const SizedBox(height: AppDimens.md),
           _EndorsedUnits(detail: detail),
+          const SizedBox(height: AppDimens.xl),
+          _Reviews(userId: tutor.userId),
         ],
       ),
     );
@@ -332,6 +342,195 @@ class _CatalogueProblem extends StatelessWidget {
         ),
         IconButton(
           tooltip: 'Retry unit codes',
+          icon: const Icon(Icons.refresh),
+          onPressed: onRetry,
+        ),
+      ],
+    );
+  }
+}
+
+/// The reviews other students left, with their initials and nothing else.
+///
+/// Its own section with its own state, for the reason the endorsed units have
+/// one: the profile is already readable by the time this resolves, so a failed
+/// review query costs the reviews and shows a retry beside them rather than
+/// replacing a page the student could still use.
+///
+/// An empty list is a normal state for a new tutor and says so plainly. It does
+/// not borrow the rating's absence: a tutor can have ratings and no reviews,
+/// because tags and a score are cheaper to give than an endorsement or a note.
+class _Reviews extends ConsumerWidget {
+  const _Reviews({required this.userId});
+
+  final String userId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final reviews = ref.watch(tutorReviewsProvider(userId));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('What students say', style: theme.textTheme.titleMedium),
+        const SizedBox(height: AppDimens.xs),
+        Text(
+          'Scores and tags from students who had a session with this tutor. '
+          'They are shown with initials only, and the note each one wrote stays '
+          'private.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: AppDimens.md),
+        if (reviews.hasError)
+          _ReviewsProblem(
+            onRetry: () => ref.invalidate(tutorReviewsProvider(userId)),
+          )
+        else if (!reviews.hasValue)
+          const _ReviewsProblem(loading: true)
+        else if (reviews.value!.isEmpty)
+          Text(
+            'No reviews yet. Reviews appear after a student rates a completed '
+            'session.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          )
+        else
+          for (final (index, review) in reviews.value!.indexed) ...[
+            if (index > 0) const SizedBox(height: AppDimens.sm),
+            _ReviewTile(review: review),
+          ],
+      ],
+    );
+  }
+}
+
+/// One review: the score, what it was like, and who said so.
+class _ReviewTile extends StatelessWidget {
+  const _ReviewTile({required this.review});
+
+  final TutorReview review;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppDimens.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                _Stars(score: review.score),
+                const SizedBox(width: AppDimens.sm),
+                Expanded(
+                  child: Text(
+                    '${initialsLabel(review.raterInitials)} · '
+                    '${reviewDateLabel(review.createdAt)}',
+                    textAlign: TextAlign.end,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (review.tags.isNotEmpty) ...[
+              const SizedBox(height: AppDimens.md),
+              Wrap(
+                spacing: AppDimens.sm,
+                runSpacing: AppDimens.sm,
+                children: [
+                  for (final tag in review.tags)
+                    Chip(
+                      label: Text(ratingTagLabel(tag)),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Five stars, filled to the score.
+///
+/// The score is not clamped: the API bounds it, and a client that hid a value
+/// the server chose would be inventing a second rule. A score above five simply
+/// fills every star.
+class _Stars extends StatelessWidget {
+  const _Stars({required this.score});
+
+  final int score;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Semantics(
+      label: '$score out of 5',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var value = 1; value <= 5; value++)
+            Icon(
+              score >= value ? Icons.star_rounded : Icons.star_outline_rounded,
+              size: 18,
+              color: score >= value
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurfaceVariant,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The reviews section's own loading and failure line.
+class _ReviewsProblem extends StatelessWidget {
+  const _ReviewsProblem({this.onRetry, this.loading = false});
+
+  final VoidCallback? onRetry;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    if (loading) {
+      return Row(
+        children: [
+          const SizedBox(
+            width: AppDimens.lg,
+            height: AppDimens.lg,
+            child: CircularProgressIndicator.adaptive(strokeWidth: 2),
+          ),
+          const SizedBox(width: AppDimens.md),
+          Text('Loading reviews', style: theme.textTheme.bodySmall),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            'The reviews could not be loaded.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        IconButton(
+          tooltip: 'Retry reviews',
           icon: const Icon(Icons.refresh),
           onPressed: onRetry,
         ),

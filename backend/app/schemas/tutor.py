@@ -20,9 +20,18 @@ from decimal import Decimal
 from pydantic import Field
 
 from app.models.enums import TutorStanding
-from app.schemas.base import MeanRating, OrmSchema
+from app.schemas.base import MeanRating, OrmSchema, RequestSchema
 
 MAX_SUSPENSION_REASON_LENGTH = 500
+
+#: How long a tutor's bio may be.
+#:
+#: The same bound as the model's column. A bio is read inside a card, so the
+#: limit is a layout decision as much as a storage one.
+MAX_BIO_LENGTH = 280
+
+#: How long an avatar URL may be.
+MAX_AVATAR_URL_LENGTH = 500
 
 #: How many entries the "top tutors" rail returns when the client says nothing.
 #: Ten is a rail, not a list: enough to scroll past, few enough that a student
@@ -93,6 +102,41 @@ class TutorProfileSummary(OrmSchema):
     standing: TutorStanding
     average_rating: MeanRating | None = Field(default=None)
     completed_sessions: int = Field(ge=0)
+    avatar_url: str | None = Field(
+        default=None,
+        max_length=MAX_AVATAR_URL_LENGTH,
+        description=(
+            "A photo when the tutor has one. Null is the normal beta state: the "
+            "client draws a generated avatar from the name, so a tutor is never "
+            "represented by an empty frame."
+        ),
+    )
+    bio: str | None = Field(
+        default=None,
+        max_length=MAX_BIO_LENGTH,
+        description=(
+            "A few sentences in the tutor's own voice. Null when they have not "
+            "written one, which is a normal state and not a reason to hide "
+            "their other evidence."
+        ),
+    )
+    year_of_study: int | None = Field(
+        default=None,
+        ge=1,
+        le=6,
+        description=(
+            "The tutor's year, when they have declared it. Useful context for "
+            "a student choosing between two people who look equally qualified."
+        ),
+    )
+    accepting_requests: bool = Field(
+        default=True,
+        description=(
+            "Whether the tutor is currently taking new requests. A paused "
+            "tutor does not appear in matching; the rail still shows them with "
+            "this flag set so a student who has met them can see why."
+        ),
+    )
 
 
 class TutorRailEntry(OrmSchema):
@@ -127,6 +171,28 @@ class TutorRailEntry(OrmSchema):
         description="Mean score, or null with no ratings yet.",
     )
     completed_sessions: int = Field(ge=0)
+    avatar_url: str | None = Field(
+        default=None,
+        max_length=MAX_AVATAR_URL_LENGTH,
+        description="A photo when the tutor has one; null draws a generated avatar.",
+    )
+    bio: str | None = Field(
+        default=None,
+        max_length=MAX_BIO_LENGTH,
+        description=(
+            "A few sentences in the tutor's own voice, or null when they have "
+            "not written one. The card falls back to their evidence, so a "
+            "missing bio is not a missing card."
+        ),
+    )
+    year_of_study: int | None = Field(default=None, ge=1, le=6)
+    accepting_requests: bool = Field(
+        default=True,
+        description=(
+            "False when the tutor has paused new requests. The rail shows them "
+            "with the flag set; matching leaves them out."
+        ),
+    )
     endorsed_course_unit_ids: list[uuid.UUID] = Field(
         default_factory=list,
         max_length=RAIL_ENDORSED_UNITS,
@@ -219,3 +285,139 @@ class CertificateEligibilityResponse(OrmSchema):
         ),
     )
     generated_at: datetime
+
+
+class TutorPromotionProgress(OrmSchema):
+    """How far a tutor is from Verified, with both halves of the rule.
+
+    Promotion has two conditions, not one: a tutor must be rated often enough
+    *and* average at least the promotion bar. A single "3 of 3" ring would tell
+    a tutor they are finished while their average is still below 4.10, so the
+    two halves travel separately and the client can say which one is outstanding.
+
+    `rated_sessions` is deliberately the rating count rather than
+    `completed_sessions`. The promotion rule counts ratings, and a completed
+    session its student has not rated yet -- a normal state, because the rating
+    is a second action -- must not advance the ring. Showing the completed count
+    here would be a number the rule does not use.
+
+    `progress` is the session-count fraction, clamped at 1.0. It is a display
+    value only: it says how much of the evidence exists, not whether the tutor
+    is eligible, which is why `meets_average` and `verified` travel beside it.
+    """
+
+    verified: bool = Field(
+        description=(
+            "Whether the stored standing is `verified`. Read from the standing "
+            "rather than recomputed from the thresholds, because a verified "
+            "tutor keeps the badge until the explicit demotion bar is crossed."
+        )
+    )
+    rated_sessions: int = Field(
+        ge=0,
+        description=(
+            "How many ratings the tutor has. The promotion rule counts these, "
+            "not completed sessions; an unrated session has not closed the loop."
+        ),
+    )
+    sessions_required: int = Field(
+        gt=0,
+        description=(
+            "The configured number of rated sessions required for promotion. "
+            "Sent so the client renders the rule the server applied rather than "
+            "a hardcoded copy of it."
+        ),
+    )
+    sessions_remaining: int = Field(
+        ge=0,
+        description="Rated sessions still needed. Zero once the count is met.",
+    )
+    minimum_average: Decimal = Field(
+        max_digits=10,
+        decimal_places=2,
+        description=(
+            "The average a tutor must reach. A string on the wire, like every "
+            "other decimal, so no value is rounded on its way to the client."
+        ),
+    )
+    meets_average: bool = Field(
+        description=(
+            "Whether the current average is at or above `minimum_average`. "
+            "False with no ratings yet: absence of evidence is not a pass."
+        )
+    )
+    progress: float = Field(
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Rated sessions as a fraction of `sessions_required`, clamped. "
+            "Display only -- `meets_average` and `verified` are the verdicts."
+        ),
+    )
+
+
+class TutorHqResponse(OrmSchema):
+    """The signed-in tutor's own HQ: standing, counters, and availability.
+
+    Only ever about the caller. There is no user parameter on the route and no
+    id in the body, which is the whole authorisation rule: a tutor's hours,
+    average, and availability are their own business, and this is the one place
+    the client reads them together.
+
+    `has_tutor_profile` is sent rather than inferred from the caller's role.
+    Holding the tutor role and having a profile can disagree for a moment -- the
+    role is granted before the first competency is verified -- and a student
+    opening the screen is a real state with its own next step, not a broken
+    tutor. When it is false, every counter is zero and `standing` and
+    `accepting_requests` are null: the same `None`-rather-than-zero distinction
+    `average_rating` uses, because "not on this path" is not "has not started".
+    """
+
+    has_tutor_profile: bool
+    standing: TutorStanding | None = Field(
+        default=None,
+        description="The stored standing, or null when the caller has no profile.",
+    )
+    completed_sessions: int = Field(ge=0)
+    average_rating: MeanRating | None = Field(
+        default=None,
+        description="Mean score, or null with no ratings yet.",
+    )
+    rating_count: int = Field(ge=0)
+    certified_minutes: int = Field(
+        ge=0,
+        description="Minutes that counted towards a certificate.",
+    )
+    certificate_required_minutes: int = Field(
+        gt=0,
+        description="The configured certificate threshold, as an operator set it.",
+    )
+    certificate_remaining_minutes: int = Field(ge=0)
+    certificate_eligible: bool
+    certificate_progress: float = Field(ge=0.0, le=1.0)
+    accepting_requests: bool | None = Field(
+        default=None,
+        description=(
+            "Whether the tutor is taking new requests, or null when there is no "
+            "profile to take them from."
+        ),
+    )
+    promotion: TutorPromotionProgress
+
+
+class UpdateTutorSettingsRequest(RequestSchema):
+    """A change to the caller's own tutor settings.
+
+    One field for now. The availability switch is the only tutor setting the
+    client can change in the beta; bio and photo editing are not exposed, and
+    adding them here without the screens that collect them would be a contract
+    nothing exercises.
+    """
+
+    accepting_requests: bool = Field(
+        description=(
+            "False pauses new requests. Matching leaves a paused tutor out "
+            "immediately, which is what makes the switch a promise rather than "
+            "a label."
+        )
+    )

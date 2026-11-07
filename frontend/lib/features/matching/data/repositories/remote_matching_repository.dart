@@ -3,6 +3,7 @@ import 'package:peerpass/core/error/failures.dart';
 import 'package:peerpass/core/models/course_unit.dart';
 import 'package:peerpass/core/network/network_exceptions.dart';
 import 'package:peerpass/features/matching/data/datasources/remote_matching_datasource.dart';
+import 'package:peerpass/features/matching/data/models/course_unit_topic.dart';
 import 'package:peerpass/features/matching/data/models/help_request.dart';
 import 'package:peerpass/features/matching/data/models/match_result.dart';
 import 'package:peerpass/features/matching/data/repositories/matching_repository.dart';
@@ -25,6 +26,16 @@ class RemoteMatchingRepository implements MatchingRepository {
   }) => _guard(
     () => _remote.courseUnits(universityId: universityId, subjectId: subjectId),
   );
+
+  @override
+  Future<List<CourseUnitTopic>> courseUnitTopics(String courseUnitId) {
+    return _guard(
+      () async => [
+        for (final row in await _remote.courseUnitTopics(courseUnitId))
+          CourseUnitTopic.fromJson(row),
+      ],
+    );
+  }
 
   @override
   Future<MatchResult> suggestions({

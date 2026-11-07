@@ -7,6 +7,7 @@ import 'package:peerpass_admin/core/models/admin_tutor_standing.dart';
 import 'package:peerpass_admin/core/models/admin_user.dart';
 import 'package:peerpass_admin/core/models/audit_event.dart';
 import 'package:peerpass_admin/core/models/competency_status.dart';
+import 'package:peerpass_admin/core/models/pilot_funnel.dart';
 import 'package:peerpass_admin/core/models/topic_heatmap.dart';
 import 'package:peerpass_admin/features/admin/data/repositories/admin_repository.dart';
 
@@ -31,6 +32,13 @@ class FakeAdminRepository implements AdminRepository {
     this.auditEventRows = const <AuditEvent>[],
     this.competencyRows = const <AdminCompetency>[],
     this.tutorStandingRows = const <AdminTutorStanding>[],
+    this.funnel = const PilotFunnel(
+      requestsTotal: 0,
+      requestsAccepted: 0,
+      sessionsCompleted: 0,
+      sessionsRated: 0,
+    ),
+    this.funnelError,
     this.session = const AdminSession(
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
@@ -45,7 +53,14 @@ class FakeAdminRepository implements AdminRepository {
   List<AuditEvent> auditEventRows;
   List<AdminCompetency> competencyRows;
   List<AdminTutorStanding> tutorStandingRows;
+  PilotFunnel funnel;
   AdminSession session;
+
+  /// Thrown from [pilotFunnel] while set, for the failure paths.
+  Error? funnelError;
+
+  /// How many times the funnel read was attempted, so a retry can be counted.
+  int pilotFunnelReads = 0;
 
   /// Thrown from [signIn] when set, for the failure paths.
   Error? signInError;
@@ -73,6 +88,14 @@ class FakeAdminRepository implements AdminRepository {
   @override
   Future<TopicHeatmap> topicHeatmap() async =>
       const TopicHeatmap(minimumCohortSize: 5, entries: <TopicHeatmapEntry>[]);
+
+  @override
+  Future<PilotFunnel> pilotFunnel() async {
+    pilotFunnelReads++;
+    final error = funnelError;
+    if (error != null) throw error;
+    return funnel;
+  }
 
   @override
   Future<AdminSessionReportPage> sessionReports(

@@ -10,38 +10,25 @@ import 'package:peerpass/features/sessions/data/repositories/sessions_repository
 /// is the seam a test cares about: overriding the repository is the only
 /// composition the app supports.
 ///
-/// It is a fake and not a stub: the handshake really compares pins and the wrong
-/// one really fails, the pin really moves the session to in-progress, and a rating
-/// really marks the session rated. A fake that returned whatever it was given would
-/// let a screen that never shows the failure -- or shows the wrong one -- pass.
+/// It is a fake and not a stub: a second check-in really starts the session, a
+/// first finish really leaves it live, the second really completes it, and a
+/// check-in on a cancelled session really fails. A fake that returned whatever it
+/// was given would let a screen that never shows the failure -- or shows the wrong
+/// one -- pass.
 class FakeSessionsRepository implements SessionsRepository {
-  FakeSessionsRepository({
-    List<SessionModel> sessions = const [],
-    Map<String, int> pinFailures = const {},
-  }) : _sessions = List<SessionModel>.of(sessions),
-       _pinFailures = Map<String, int>.of(pinFailures) {
-    // Every session the API creates is issued a PIN, so seeded ones get one too.
-    // Otherwise a tutor-side screen test would fail on "no PIN" for a reason that
-    // has nothing to do with what it is testing.
-    for (final session in _sessions) {
-      _pins.putIfAbsent(session.id, () => '654321');
-    }
-  }
+  FakeSessionsRepository({List<SessionModel> sessions = const []})
+    : _sessions = List<SessionModel>.of(sessions);
 
   final List<SessionModel> _sessions;
 
-  /// Handshake pins, keyed by session id.
+  /// The signed-in user, as the API reads it from the access token.
   ///
-  /// Held here rather than on [SessionModel] because that is where the API keeps
-  /// it too: the pin is not part of a session payload, so a session built from
-  /// fake wire data has no pin until one is issued for it.
-  final Map<String, String> _pins = <String, String>{};
-
-  /// Wrong entries per session, so the fake can mirror the API's ceiling.
-  final Map<String, int> _pinFailures;
-
-  /// The ceiling the fake enforces. Mirrors `MAX_PIN_ATTEMPTS` server-side.
-  static const int maxPinAttempts = 5;
+  /// Check-in and finish record *one party's* timestamp, so the fake needs to
+  /// know who is tapping. Set through [currentUser] by a widget test's pump
+  /// helper, because the repository interface deliberately carries no user id:
+  /// the real server takes it from the token, and a client that could name it
+  /// would be able to check in for someone else.
+  String? _currentUserId;
 
   /// The tutee a confirmed session is attributed to.
   ///
@@ -71,14 +58,14 @@ class FakeSessionsRepository implements SessionsRepository {
   /// at all.
   final List<List<String>> endorsementSubmissions = [];
 
-  /// Every pin submitted through [verifyPin], in order.
+  /// Every session id passed to [checkIn], in order.
   ///
-  /// Kept so a test can prove a rejected pin was actually sent rather than
-  /// refused by the client, and that a second attempt was still allowed.
-  final List<String> pinAttempts = [];
+  /// Recorded before the state check, so a screen test can prove the request was
+  /// sent even when the API refused it.
+  final List<String> checkedInSessionIds = [];
 
-  /// The sessions passed to [endSession], in order.
-  final List<String> endedSessionIds = [];
+  /// Every session id passed to [finish], in order.
+  final List<String> finishedSessionIds = [];
 
   /// What every [confirmRequest] was called with, in order.
   ///
@@ -142,7 +129,6 @@ class FakeSessionsRepository implements SessionsRepository {
       'help_request_id': requestId,
     });
     _sessions.add(created);
-    _pins[created.id] = '654321';
     return created;
   }
 
@@ -156,6 +142,18 @@ class FakeSessionsRepository implements SessionsRepository {
     if (tutorId != null) _pendingTutorId = tutorId;
   }
 
+  /// The signed-in user the next [checkIn] or [finish] acts for.
+  ///
+  /// The API reads this from the access token; the fake cannot, because the
+  /// repository contract has no user parameter on purpose. Tests set this from
+  /// their pump helper so a tutor-side screen records the tutor's timestamp
+  /// rather than guessing a party.
+  String? get currentUser => _currentUserId;
+
+  set currentUser(String publicId) {
+    _currentUserId = publicId;
+  }
+
   @override
   Future<List<SessionModel>> sessionsForMe() async => sessions;
 
@@ -163,107 +161,80 @@ class FakeSessionsRepository implements SessionsRepository {
   Future<SessionModel> session(String sessionId) async => _require(sessionId);
 
   @override
-  Future<SessionPinModel> revealPin({required String sessionId}) async {
-    final pin = _pins[sessionId];
-    if (pin == null) {
-      throw const ValidationFailure('This session has no handshake PIN.');
-    }
-    return SessionPinModel(
-      sessionId: sessionId,
-      sessionPin: pin,
-      attemptsRemaining: maxPinAttempts - (_pinFailures[sessionId] ?? 0),
-    );
-  }
-
-  @override
-  Future<SessionModel> verifyPin({
-    required String sessionId,
-    required String pin,
-  }) async {
-    pinAttempts.add(pin);
-
+  Future<SessionModel> checkIn({required String sessionId}) async {
+    checkedInSessionIds.add(sessionId);
     final session = _require(sessionId);
-    final expected = _pins[sessionId];
-    final failures = _pinFailures[sessionId] ?? 0;
-
-    // Fails closed the way the API does: a session with no stored pin rejects
-    // every candidate, including a blank one.
-    if (expected == null || expected.isEmpty || pin.trim() != expected) {
-      final updatedFailures = failures + 1;
-      _pinFailures[sessionId] = updatedFailures;
-      if (updatedFailures >= maxPinAttempts) {
-        throw ThrottledFailure(
-          'Too many wrong PIN attempts. Try again later.',
-          retryAfter: const Duration(minutes: 15),
-          retryAt: DateTime.now().add(const Duration(minutes: 15)),
-        );
-      }
-
-      throw const ValidationFailure(
-        'The session PIN is incorrect.',
-        fieldErrors: {'pin': 'incorrect'},
+    if (session.status == TutoringSessionStatus.completed ||
+        session.status == TutoringSessionStatus.cancelled ||
+        session.status == TutoringSessionStatus.noShow) {
+      throw const ConflictFailure(
+        'This session is no longer open for check-in.',
       );
     }
 
-    // Reset on success, as the API does, so one typo does not leave a tutee a
-    // try away from a lockout.
-    _pinFailures.remove(sessionId);
+    final viewerId = _viewerFor(session);
+    // Already recorded: a retry answers 200 with the same row, because a phone
+    // that missed the response must not be told its tap failed.
+    if (session.hasCheckedIn(viewerId)) return session;
 
-    return _replace(
-      session.copyWith(
+    final now = DateTime.now().toUtc();
+    var updated = session.isTutor(viewerId)
+        ? session.copyWith(tutorCheckedInAt: now)
+        : session.copyWith(tuteeCheckedInAt: now);
+
+    if (updated.tutorCheckedInAt != null && updated.tuteeCheckedInAt != null) {
+      updated = updated.copyWith(
         status: TutoringSessionStatus.inProgress,
         statusWire: TutoringSessionStatus.inProgress.wireValue,
-      ),
-    );
-  }
-
-  @override
-  Future<SessionModel> requestCompletion({required String sessionId}) async {
-    return _replace(
-      _require(sessionId)
-          .copyWith(completionRequestedAt: DateTime.utc(2026, 3, 4, 10)),
-    );
-  }
-
-  @override
-  Future<SessionPinModel> revealCompletionCode({
-    required String sessionId,
-  }) async {
-    return SessionPinModel(
-      sessionId: sessionId,
-      sessionPin: '654321',
-      attemptsRemaining: maxPinAttempts,
-    );
-  }
-
-  @override
-  Future<SessionModel> verifyCompletionCode({
-    required String sessionId,
-    required String code,
-  }) async {
-    if (code != '654321') {
-      throw const ValidationFailure(
-        'The completion code is incorrect.',
-        fieldErrors: {'pin': 'incorrect'},
+        startedAt: now,
       );
     }
-    return _replace(
-      _require(sessionId).copyWith(
-        status: TutoringSessionStatus.completed,
-        statusWire: TutoringSessionStatus.completed.wireValue,
-      ),
-    );
+    return _replace(updated);
   }
 
   @override
-  Future<SessionModel> endSession(String sessionId) async {
-    endedSessionIds.add(sessionId);
-    return _replace(
-      _require(sessionId).copyWith(
+  Future<SessionModel> finish({required String sessionId}) async {
+    finishedSessionIds.add(sessionId);
+    final session = _require(sessionId);
+
+    // A retried finish after completion returns the completed row unchanged, as
+    // the API does, rather than banking the minutes a second time.
+    if (session.status == TutoringSessionStatus.completed) return session;
+    if (session.status != TutoringSessionStatus.inProgress) {
+      throw const ConflictFailure(
+        'Only a session both parties have checked in to can be finished.',
+      );
+    }
+
+    final viewerId = _viewerFor(session);
+    if (session.hasFinished(viewerId)) return session;
+
+    final now = DateTime.now().toUtc();
+    var updated = session.isTutor(viewerId)
+        ? session.copyWith(tutorFinishedAt: now)
+        : session.copyWith(tuteeFinishedAt: now);
+
+    final tutorFinished = updated.tutorFinishedAt;
+    final tuteeFinished = updated.tuteeFinishedAt;
+    if (tutorFinished != null && tuteeFinished != null) {
+      final started = updated.startedAt;
+      if (started == null) {
+        throw const ConflictFailure('This session has no recorded start.');
+      }
+      // The earlier departure, so a late tap cannot extend the hours -- the same
+      // rule the API enforces.
+      final ended = tutorFinished.isBefore(tuteeFinished)
+          ? tutorFinished
+          : tuteeFinished;
+      final minutes = ended.difference(started).inMinutes;
+      updated = updated.copyWith(
         status: TutoringSessionStatus.completed,
         statusWire: TutoringSessionStatus.completed.wireValue,
-      ),
-    );
+        endedAt: ended,
+        durationMinutes: minutes < 1 ? 1 : minutes,
+      );
+    }
+    return _replace(updated);
   }
 
   @override
@@ -272,6 +243,7 @@ class FakeSessionsRepository implements SessionsRepository {
     required int score,
     required bool comprehensionHelped,
     String? feedbackText,
+    List<String> tags = const [],
     List<String> endorsedCourseUnitIds = const [],
   }) async {
     final session = _require(sessionId);
@@ -287,6 +259,7 @@ class FakeSessionsRepository implements SessionsRepository {
       score: score,
       comprehensionHelped: comprehensionHelped,
       feedbackText: feedbackText,
+      tags: List<String>.unmodifiable(tags),
       createdAt: DateTime.utc(2026, 3, 4, 9),
     );
     submittedRatings.add(rating);
@@ -294,6 +267,33 @@ class FakeSessionsRepository implements SessionsRepository {
 
     _replace(session.copyWith(isRated: true));
     return rating;
+  }
+
+  @override
+  Future<RatingModel?> receivedRating({required String sessionId}) async {
+    for (final rating in submittedRatings) {
+      if (rating.sessionId == sessionId) return rating;
+    }
+    return null;
+  }
+
+  /// The signed-in user, refused unless they are one of the session's parties.
+  ///
+  /// An unset viewer is a test that forgot to set [currentUser], not a
+  /// condition a server can produce, so it fails loudly with a [StateError]
+  /// rather than pretending to be a party.
+  String _viewerFor(SessionModel session) {
+    final viewerId = _currentUserId;
+    if (viewerId == null) {
+      throw StateError(
+        'FakeSessionsRepository.currentUser must be set before checkIn or '
+        'finish.',
+      );
+    }
+    if (!session.isTutee(viewerId) && !session.isTutor(viewerId)) {
+      throw const AuthFailure('You do not have access to that session.');
+    }
+    return viewerId;
   }
 
   /// The session with [sessionId], or a failure the way the API would.

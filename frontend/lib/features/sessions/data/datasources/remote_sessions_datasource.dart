@@ -55,18 +55,30 @@ class RemoteSessionsDatasource {
     return response.data!;
   }
 
-  /// Moves a session to a new state.
+  /// Records the caller's own arrival, returning the session as it now stands.
   ///
-  /// Only the target state is sent. The API validates the move against its own
-  /// transition table and records who made it, so a client cannot assert a status
-  /// it was not entitled to reach, and cannot name a different actor.
-  Future<Map<String, dynamic>> transition(
-    String sessionId, {
-    required String status,
-  }) async {
+  /// A bodyless POST because the only thing that identifies the party is the
+  /// access token: a client cannot check in on behalf of anyone else, and there
+  /// is no code to carry. The session goes live only when the other account
+  /// has checked in too, which the API decides.
+  ///
+  /// Idempotent. A phone on a metered connection retrying the same tap is
+  /// ordinary, and the API answers 200 without moving the recorded timestamp.
+  Future<Map<String, dynamic>> checkIn(String sessionId) async {
     final response = await _dio.post<Map<String, dynamic>>(
-      '/v1/sessions/$sessionId/transition',
-      data: <String, dynamic>{'status': status},
+      '/v1/sessions/$sessionId/check-in',
+    );
+    return response.data!;
+  }
+
+  /// Records the caller's own departure, returning the session as it now stands.
+  ///
+  /// A bodyless POST for the same reason as [checkIn]. The session completes
+  /// only when both parties have finished, and the API records the earlier of
+  /// the two departures as the end so a late tap cannot extend the hours.
+  Future<Map<String, dynamic>> finish(String sessionId) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/v1/sessions/$sessionId/finish',
     );
     return response.data!;
   }
@@ -102,58 +114,6 @@ class RemoteSessionsDatasource {
     return response.data!;
   }
 
-  /// Reads the six-digit handshake code the tutor shares with the tutee.
-  ///
-  /// Tutor-only, and it is a separate call rather than a field on the session:
-  /// the pin lives in a payload both parties could otherwise fetch, which would
-  /// leave the tutee able to read their own and skip the handshake entirely.
-  Future<Map<String, dynamic>> revealPin(String sessionId) async {
-    final response = await _dio.get<Map<String, dynamic>>(
-      '/v1/sessions/$sessionId/pin',
-    );
-    return response.data!;
-  }
-
-  /// Submits the six-digit handshake code for a session.
-  ///
-  /// The dedicated route rather than a transition carrying the pin, because it is
-  /// the only move whose precondition is a secret and it deserves a path that says
-  /// so. The API answers a wrong pin with a 422 naming the `pin` field, and leaves
-  /// the session scheduled. A 429 means the attempts are spent and the API, not
-  /// this client, decides when trying again is allowed.
-  Future<Map<String, dynamic>> verifyPin(String sessionId, String pin) async {
-    final response = await _dio.post<Map<String, dynamic>>(
-      '/v1/sessions/$sessionId/verify-pin',
-      data: <String, dynamic>{'pin': pin},
-    );
-    return response.data!;
-  }
-
-  Future<Map<String, dynamic>> requestCompletion(String sessionId) async {
-    final response = await _dio.post<Map<String, dynamic>>(
-      '/v1/sessions/$sessionId/request-completion',
-    );
-    return response.data!;
-  }
-
-  Future<Map<String, dynamic>> revealCompletionCode(String sessionId) async {
-    final response = await _dio.post<Map<String, dynamic>>(
-      '/v1/sessions/$sessionId/reveal-completion',
-    );
-    return response.data!;
-  }
-
-  Future<Map<String, dynamic>> verifyCompletionCode(
-    String sessionId,
-    String code,
-  ) async {
-    final response = await _dio.post<Map<String, dynamic>>(
-      '/v1/sessions/$sessionId/verify-completion',
-      data: <String, dynamic>{'pin': code},
-    );
-    return response.data!;
-  }
-
   /// Creates or updates the rating the signed-in user gives for a session.
   ///
   /// The session comes from the path, never from the body, so a client cannot
@@ -163,6 +123,7 @@ class RemoteSessionsDatasource {
     required int score,
     required bool comprehensionHelped,
     String? feedbackText,
+    List<String> tags = const [],
     List<String> endorsedCourseUnitIds = const [],
   }) async {
     final data = <String, dynamic>{
@@ -173,6 +134,10 @@ class RemoteSessionsDatasource {
     // read as "clear whatever was stored", which is not what an untouched field
     // on a re-submit means.
     if (feedbackText != null) data['feedback_text'] = feedbackText;
+    // Sent only when tags were picked. A rating with no tags and a rating whose
+    // tags were never offered are the same submission, and an empty list would
+    // be a client asserting that the student chose none when nobody asked.
+    if (tags.isNotEmpty) data['tags'] = tags;
     // The endorsements are sent as the API wants them: a list, absent when there is
     // nothing to claim. Note that "absent" and "empty" are the *same request* here
     // -- `RatingCreate.endorsed_course_unit_ids` defaults to an empty list, so
@@ -191,5 +156,12 @@ class RemoteSessionsDatasource {
       data: data,
     );
     return response.data!;
+  }
+
+  Future<Map<String, dynamic>?> receivedRating(String sessionId) async {
+    final response = await _dio.get<Map<String, dynamic>?>(
+      '/v1/ratings/session/$sessionId',
+    );
+    return response.data;
   }
 }

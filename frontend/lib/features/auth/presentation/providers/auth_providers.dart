@@ -27,9 +27,10 @@ final authControllerProvider = Provider<AuthController>((ref) {
 });
 
 class AuthController {
-  const AuthController(this._ref);
+  AuthController(this._ref);
 
   final Ref _ref;
+  int _operation = 0;
 
   AuthRepository get _repository => _ref.read(authRepositoryProvider);
 
@@ -40,7 +41,9 @@ class AuthController {
 
   /// Signs in and adopts the account the API returns.
   Future<void> signIn({required String email, required String password}) async {
+    final operation = ++_operation;
     final profile = await _repository.signIn(email: email, password: password);
+    if (operation != _operation) return;
     _cache?.activateAccount(profile.publicId);
     _session.signedIn(profile);
   }
@@ -54,10 +57,12 @@ class AuthController {
     required String email,
     required String password,
   }) async {
+    final operation = ++_operation;
     final profile = await _repository.register(
       email: email,
       password: password,
     );
+    if (operation != _operation) return;
     _cache?.activateAccount(profile.publicId);
     _session.signedIn(profile);
   }
@@ -71,6 +76,7 @@ class AuthController {
     bool? academicDataConsented,
     List<String>? primaryCourseUnitIds,
   }) async {
+    final operation = ++_operation;
     final profile = await _repository.updateProfile(
       fullName: fullName,
       universityId: universityId,
@@ -79,12 +85,14 @@ class AuthController {
       academicDataConsented: academicDataConsented,
       primaryCourseUnitIds: primaryCourseUnitIds,
     );
+    if (operation != _operation) return;
     _cache?.activateAccount(profile.publicId);
     _session.signedIn(profile);
   }
 
   /// Ends the session and returns to the signed-out state.
   Future<void> signOut() async {
+    ++_operation;
     await _repository.signOut();
     await _cache?.clear();
     _cache?.deactivateAccount();
@@ -96,18 +104,19 @@ class AuthController {
   /// Offered by the splash screen. Without it a student whose connection dropped
   /// on launch has no way forward but force-quitting the app, which on a
   /// low-memory handset is not something they will think to do.
-  Future<void> retryRestore() => _restore();
+  Future<void> retryRestore() => _restore(++_operation);
 
   /// Starts the cold-start check of the stored session.
   ///
   /// Called once, by [authControllerProvider] when it is first read, rather than
   /// exposed for the shell to remember to invoke -- a check nobody calls is a
   /// check that never happens, and an app held on splash forever.
-  void startRestore() => unawaited(_restore());
+  void startRestore() => unawaited(_restore(++_operation));
 
-  Future<void> _restore() async {
+  Future<void> _restore(int operation) async {
     try {
       final profile = await _repository.restoreSession();
+      if (operation != _operation) return;
       if (profile == null) {
         _cache?.deactivateAccount();
         _session.signedOut();
@@ -116,8 +125,10 @@ class AuthController {
         _session.signedIn(profile);
       }
     } on NetworkFailure catch (failure) {
+      if (operation != _operation) return;
       _session.stillUnknown(restoreFailure: failure);
     } on Failure {
+      if (operation != _operation) return;
       // Anything else means the stored session is not usable, which is the
       // definition of signed out.
       _cache?.deactivateAccount();
@@ -151,6 +162,15 @@ final facultiesProvider = FutureProvider.family<List<Subject>, String>((
     final faculties = await ref
         .read(authRepositoryProvider)
         .faculties(universityId: universityId);
+    if (faculties.isNotEmpty) return faculties;
+
+    final universities = await ref.read(universitiesProvider.future);
+    for (final university in universities) {
+      if (university.publicId == universityId &&
+          university.name == mustFallbackUniversityName) {
+        return mustFallbackFaculties;
+      }
+    }
     return faculties;
   } on Failure {
     rethrow;

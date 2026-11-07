@@ -26,7 +26,7 @@ import 'package:peerpass/features/sessions/presentation/providers/session_provid
 ///
 /// The navigation target after a successful confirmation is the new session, not
 /// the list: the tutor just agreed to something specific and the useful next
-/// screen is the thing they agreed to. Its PIN is what lets them start it.
+/// screen is the thing they agreed to. Checking in is what lets them start it.
 class ConfirmRequestScreen extends ConsumerStatefulWidget {
   const ConfirmRequestScreen({
     required this.requestId,
@@ -98,8 +98,8 @@ class _ConfirmRequestScreenState extends ConsumerState<ConfirmRequestScreen> {
                     Text(widget.topic, style: theme.textTheme.titleLarge),
                     const SizedBox(height: AppDimens.xs),
                     Text(
-                      'Confirming books the session and sends the student your '
-                      'PIN. The student sees that you have answered.',
+                      'Confirming books the session and tells the student. You '
+                      'both check in when you meet to start it.',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -149,9 +149,7 @@ class _ConfirmRequestScreenState extends ConsumerState<ConfirmRequestScreen> {
                     ),
                     const SizedBox(height: AppDimens.sm),
                     TextButton(
-                      onPressed: form.submitting
-                          ? null
-                          : () => context.pop(),
+                      onPressed: form.submitting ? null : () => context.pop(),
                       child: const Text('Not now'),
                     ),
                   ],
@@ -174,7 +172,8 @@ class _ConfirmRequestScreenState extends ConsumerState<ConfirmRequestScreen> {
     // `go` rather than `push`: the request has been consumed, so going back to
     // this form would offer a confirmation the API will refuse, and a refusal is
     // a worse answer than never having let the tutor try. The session is where the
-    // PIN is, and the PIN is what starts the session they just agreed to.
+    // check-in is, and the check-in is what starts the session they just agreed
+    // to.
     context.go(AppRoutes.sessionDetailPath(created.id));
   }
 }

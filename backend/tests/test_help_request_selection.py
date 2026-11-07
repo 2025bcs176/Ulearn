@@ -41,11 +41,13 @@ from app.models.course_unit import CourseUnit, Subject, University
 from app.models.enums import (
     CompetencyStatus,
     HelpRequestStatus,
+    NotificationType,
     TutorStanding,
     UserRole,
     VerificationSource,
 )
 from app.models.grading_scale import Grade, GradingScale
+from app.models.notification import Notification
 from app.models.session import HelpRequest, Session
 from app.models.tutor_profile import TutorProfile
 from app.models.user import User, set_roles
@@ -195,6 +197,19 @@ async def test_selecting_a_tutor_waits_on_that_tutor(db_session):
 
     assert selected.status is HelpRequestStatus.PENDING_CONFIRMATION
     assert selected.matched_tutor_id == tutor.public_id
+
+    # The tutor has to learn about the choice without polling. The row is written
+    # in the same transaction as the state change, so a failure to save the
+    # request cannot leave a message about it.
+    notification = await db_session.scalar(
+        select(Notification).where(Notification.user_id == tutor.id)
+    )
+    assert notification is not None
+    assert notification.type is NotificationType.REQUEST_RECEIVED
+    assert notification.data == {
+        "kind": "help_request",
+        "request_id": str(request.id),
+    }
 
 
 async def test_a_student_cannot_choose_themselves(db_session):
@@ -462,6 +477,15 @@ async def test_the_chosen_tutor_may_decline(db_session):
         await matching_service.list_requests_awaiting_confirmation(db_session, tutor)
         == []
     )
+
+    # The student is told, in the same transaction. A decline nobody is told
+    # about is a student waiting on a request that is already dead.
+    notification = await db_session.scalar(
+        select(Notification).where(Notification.user_id == student.id)
+    )
+    assert notification is not None
+    assert notification.type is NotificationType.REQUEST_DECLINED
+    assert str(request.id) in (notification.data or {}).get("request_id", "")
 
 
 @pytest.mark.parametrize("actor", ["student", "other_tutor"])

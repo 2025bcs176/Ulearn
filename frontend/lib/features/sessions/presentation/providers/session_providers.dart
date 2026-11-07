@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:peerpass/core/error/failures.dart';
+import 'package:peerpass/core/models/rating_tag.dart';
+import 'package:peerpass/core/state/session.dart';
 import 'package:peerpass/features/sessions/data/models/rating_model.dart';
 import 'package:peerpass/features/sessions/data/models/session_model.dart';
 import 'package:peerpass/features/sessions/data/repositories/sessions_repository.dart';
@@ -59,6 +61,23 @@ final activeSessionProvider = FutureProvider<SessionModel?>((ref) async {
   return activeSessionFrom(sessions);
 }, retry: (retryCount, error) => null);
 
+// Riverpod's family return type is not surfaced clearly enough for the analyzer
+// to infer this declaration without an explicit annotation.
+// ignore: specify_nonobvious_property_types
+final receivedRatingProvider = FutureProvider.family<RatingModel?, String>((
+  ref,
+  sessionId,
+) {
+  final viewerId = ref.watch(sessionControllerProvider).profile?.publicId;
+  final session = ref.watch(sessionDetailProvider(sessionId)).session;
+  if (viewerId == null || session == null || !session.isTutor(viewerId)) {
+    return null;
+  }
+  return ref
+      .read(sessionsRepositoryProvider)
+      .receivedRating(sessionId: sessionId);
+});
+
 /// Picks the session the home card shows out of [sessions].
 ///
 /// A function rather than a line inside the provider so the choice is testable on
@@ -77,15 +96,14 @@ SessionModel? activeSessionFrom(List<SessionModel> sessions) {
 ///
 /// The state object rather than an `AsyncValue` of the session, because this
 /// screen has two independent things to say: whether the session loaded, and
-/// whether the *last action* on it worked. A wrong PIN has to appear under the
-/// input that caused it with the session still on screen, so the two cannot share
-/// one value -- an [AsyncError] would throw the session away to report a rejected
-/// six-digit guess.
+/// whether the *last action* on it worked. A refused check-in has to appear with
+/// the session still on screen, so the two cannot share one value -- an
+/// [AsyncError] would throw the session away to report a failed tap.
 ///
-/// The rating is held here rather than re-read because there is no endpoint that
-/// returns it: `GET /v1/ratings/me/recent` is ratings *received* by a tutor, and
-/// `SessionResponse` carries only `is_rated`. So the score is known to the client
-/// that submitted it, and only for as long as this state is alive.
+/// A submitted rating is held here so the tutee can see it immediately after
+/// submission. Tutors read their received feedback through the scoped provider
+/// below, rather than treating the session-level `is_rated` flag as their own
+/// submission.
 @immutable
 class SessionDetailState {
   const SessionDetailState({
@@ -95,7 +113,6 @@ class SessionDetailState {
     this.submitting = false,
     this.actionFailure,
     this.ratingGiven,
-    this.completionCode,
   });
 
   final SessionModel? session;
@@ -105,7 +122,7 @@ class SessionDetailState {
   /// Why the session could not be read.
   ///
   /// Kept apart from [actionFailure] because the two call for different remedies:
-  /// a load that failed is worth retrying, and a wrong PIN is not.
+  /// a load that failed is worth retrying, and a refused check-in is not.
   final Failure? loadFailure;
 
   /// Whether an action on this session is in flight.
@@ -116,17 +133,6 @@ class SessionDetailState {
 
   /// The rating this client submitted for this session, when it submitted one.
   final RatingModel? ratingGiven;
-  final SessionPinModel? completionCode;
-
-  /// Whether the last refusal was about the handshake pin.
-  ///
-  /// Read off the failure rather than remembered separately, so the two cannot
-  /// disagree. The API answers a wrong pin with a 400 naming `pin` and nothing
-  /// else, and that is the only rejection that belongs under the input rather
-  /// than in a banner.
-  bool get pinRejected =>
-      actionFailure is ValidationFailure &&
-      (actionFailure! as ValidationFailure).fieldErrors.containsKey('pin');
 
   SessionDetailState copyWith({
     SessionModel? session,
@@ -135,7 +141,6 @@ class SessionDetailState {
     bool? submitting,
     Failure? actionFailure,
     RatingModel? ratingGiven,
-    SessionPinModel? completionCode,
     bool clearLoadFailure = false,
     bool clearActionFailure = false,
   }) {
@@ -150,7 +155,6 @@ class SessionDetailState {
           ? null
           : (actionFailure ?? this.actionFailure),
       ratingGiven: ratingGiven ?? this.ratingGiven,
-      completionCode: completionCode ?? this.completionCode,
     );
   }
 
@@ -163,8 +167,7 @@ class SessionDetailState {
           other.loadFailure == loadFailure &&
           other.submitting == submitting &&
           other.actionFailure == actionFailure &&
-          other.ratingGiven == ratingGiven &&
-          other.completionCode == completionCode;
+          other.ratingGiven == ratingGiven;
 
   @override
   int get hashCode => Object.hash(
@@ -174,7 +177,6 @@ class SessionDetailState {
     submitting,
     actionFailure,
     ratingGiven,
-    completionCode,
   );
 }
 
@@ -218,23 +220,20 @@ class SessionDetailController extends Notifier<SessionDetailState> {
     await _load();
   }
 
-  /// Submits the handshake pin, returning whether the session started.
+  /// Records this user's arrival, returning whether the tap was accepted.
   ///
-  /// The value is checked by the API and by nothing else: no attempt counter, no
-  /// lock-out, no client-side guess at how close the pin was. A student on a bad
-  /// connection who mistypes twice must be able to try a third time, and a lock
-  /// the device enforces is a lock they clear by reinstalling the app.
-  Future<bool> submitPin(String pin) async {
+  /// A second tap is idempotent on the server, so the screen does not need to
+  /// remember whether it already asked. The session still only goes live when
+  /// the other account checks in, and this returns the row either way so the
+  /// screen can say who it is waiting for.
+  Future<bool> checkIn() async {
     if (state.submitting) return false;
     state = state.copyWith(submitting: true, clearActionFailure: true);
 
     try {
-      final started = await _repository.verifyPin(
-        sessionId: sessionId,
-        pin: pin,
-      );
+      final checkedIn = await _repository.checkIn(sessionId: sessionId);
       if (!ref.mounted) return false;
-      _adopt(started);
+      _adopt(checkedIn);
       return true;
     } on Object catch (error) {
       if (!ref.mounted) return false;
@@ -246,56 +245,18 @@ class SessionDetailController extends Notifier<SessionDetailState> {
     }
   }
 
-  /// Ends a live session, returning whether it ended.
-  Future<bool> endSession() async {
+  /// Records this user's departure, returning whether the tap was accepted.
+  ///
+  /// The first finish leaves the session in progress: the other party has not
+  /// said they are done, and the API will not complete it on one person's word.
+  Future<bool> finish() async {
     if (state.submitting) return false;
     state = state.copyWith(submitting: true, clearActionFailure: true);
 
     try {
-      final completed = await _repository.requestCompletion(
-        sessionId: sessionId,
-      );
+      final finished = await _repository.finish(sessionId: sessionId);
       if (!ref.mounted) return false;
-      _adopt(completed);
-      return true;
-    } on Object catch (error) {
-      if (!ref.mounted) return false;
-      state = state.copyWith(
-        submitting: false,
-        actionFailure: failureFor(error),
-      );
-      return false;
-    }
-  }
-
-  Future<bool> revealCompletionCode() async {
-    if (state.submitting) return false;
-    state = state.copyWith(submitting: true, clearActionFailure: true);
-    try {
-      final code = await _repository.revealCompletionCode(sessionId: sessionId);
-      if (!ref.mounted) return false;
-      state = state.copyWith(submitting: false, completionCode: code);
-      return true;
-    } on Object catch (error) {
-      if (!ref.mounted) return false;
-      state = state.copyWith(
-        submitting: false,
-        actionFailure: failureFor(error),
-      );
-      return false;
-    }
-  }
-
-  Future<bool> verifyCompletionCode(String code) async {
-    if (state.submitting) return false;
-    state = state.copyWith(submitting: true, clearActionFailure: true);
-    try {
-      final completed = await _repository.verifyCompletionCode(
-        sessionId: sessionId,
-        code: code,
-      );
-      if (!ref.mounted) return false;
-      _adopt(completed);
+      _adopt(finished);
       return true;
     } on Object catch (error) {
       if (!ref.mounted) return false;
@@ -360,6 +321,7 @@ class RatingFormState {
     this.comprehensionHelped,
     this.feedback = '',
     this.endorsing = false,
+    this.selectedTags = const [],
     this.submitting = false,
     this.failure,
   });
@@ -379,9 +341,22 @@ class RatingFormState {
   /// against.
   final bool endorsing;
 
+  /// The tags chosen so far, in the order they were picked.
+  ///
+  /// A list rather than a set because the order is sent to the API and shown on
+  /// the profile: "patient, explained clearly" is what the student chose to say
+  /// first, and a set would reorder it arbitrarily.
+  final List<RatingTag> selectedTags;
+
   final bool submitting;
 
   final Failure? failure;
+
+  /// Whether one more tag can be added.
+  ///
+  /// The API refuses a fifth. The form disables the remaining chips instead of
+  /// letting the tap be rejected, so nobody types their way into an error.
+  bool get canAddTag => selectedTags.length < maxRatingTags;
 
   /// Whether the submit button does anything.
   ///
@@ -396,6 +371,7 @@ class RatingFormState {
     bool? comprehensionHelped,
     String? feedback,
     bool? endorsing,
+    List<RatingTag>? selectedTags,
     bool? submitting,
     Failure? failure,
     bool clearFailure = false,
@@ -405,6 +381,7 @@ class RatingFormState {
       comprehensionHelped: comprehensionHelped ?? this.comprehensionHelped,
       feedback: feedback ?? this.feedback,
       endorsing: endorsing ?? this.endorsing,
+      selectedTags: selectedTags ?? this.selectedTags,
       submitting: submitting ?? this.submitting,
       failure: clearFailure ? null : (failure ?? this.failure),
     );
@@ -418,6 +395,7 @@ class RatingFormState {
           other.comprehensionHelped == comprehensionHelped &&
           other.feedback == feedback &&
           other.endorsing == endorsing &&
+          listEquals(other.selectedTags, selectedTags) &&
           other.submitting == submitting &&
           other.failure == failure;
 
@@ -427,6 +405,7 @@ class RatingFormState {
     comprehensionHelped,
     feedback,
     endorsing,
+    Object.hashAll(selectedTags),
     submitting,
     failure,
   );
@@ -469,6 +448,29 @@ class RatingFormController extends Notifier<RatingFormState> {
     state = state.copyWith(endorsing: value, clearFailure: true);
   }
 
+  /// Adds a tag, or removes one that is already chosen.
+  ///
+  /// A fifth tag is ignored rather than replaced: swapping the oldest for the
+  /// newest would make the chip the student did not tap disappear. The chips are
+  /// disabled at the cap, so this guard is for a tap that raced a rebuild.
+  void toggleTag(RatingTag tag) {
+    if (state.submitting) return;
+    final selected = List<RatingTag>.of(state.selectedTags);
+    if (selected.remove(tag)) {
+      state = state.copyWith(
+        selectedTags: List<RatingTag>.unmodifiable(selected),
+        clearFailure: true,
+      );
+      return;
+    }
+    if (selected.length >= maxRatingTags) return;
+    selected.add(tag);
+    state = state.copyWith(
+      selectedTags: List<RatingTag>.unmodifiable(selected),
+      clearFailure: true,
+    );
+  }
+
   /// Sends the rating, returning it when the API accepted one.
   ///
   /// Null means the API refused it, and [RatingFormState.failure] says why. The
@@ -503,6 +505,7 @@ class RatingFormController extends Notifier<RatingFormState> {
             // note, and sending `''` would be a client asserting that the field
             // is empty rather than that it has nothing to say.
             feedbackText: note.isEmpty ? null : note,
+            tags: [for (final tag in state.selectedTags) tag.wireValue],
             endorsedCourseUnitIds: endorsedCourseUnitIds,
           );
       if (!ref.mounted) return rating;

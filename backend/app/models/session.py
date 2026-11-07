@@ -7,8 +7,6 @@ tutor session exists for a request that never found one, and every query about
 tutor workload would have to filter those rows out.
 """
 
-import hashlib
-import secrets
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -17,7 +15,6 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
-    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -134,11 +131,15 @@ class Session(Base, TimestampMixin):
         UniqueConstraint("help_request_id", name="session_per_request"),
         CheckConstraint("duration_minutes >= 0", name="duration_non_negative"),
         CheckConstraint("tutee_id <> tutor_id", name="session_parties_differ"),
-        # The throttle increments on its error path, so a negative count would
-        # mean a lockout counter that runs backwards.
+        # A live session is one both parties have checked in to. Keeping this in
+        # the database as well as the service is what stops a future code path
+        # from marking a session live on one person's word: the check-in rows are
+        # the attendance evidence, and a status that disagrees with them is a
+        # record the certificate cannot defend.
         CheckConstraint(
-            "pin_failed_attempts >= 0",
-            name="pin_failed_attempts_not_negative",
+            "status <> 'in_progress' "
+            "OR (tutor_checked_in_at IS NOT NULL AND tutee_checked_in_at IS NOT NULL)",
+            name="live_session_has_both_check_ins",
         ),
         # A completed session needs a start and an end, or the hours it
         # contributes to a certificate cannot be established.
@@ -146,6 +147,14 @@ class Session(Base, TimestampMixin):
             "status <> 'completed' "
             "OR (started_at IS NOT NULL AND ended_at IS NOT NULL)",
             name="completed_session_has_times",
+        ),
+        # Completion is the same two-sided rule as starting: both parties tapped
+        # finish. A `completed` row with one timestamp is a session one person
+        # closed on the other's behalf.
+        CheckConstraint(
+            "status <> 'completed' "
+            "OR (tutor_finished_at IS NOT NULL AND tutee_finished_at IS NOT NULL)",
+            name="completed_session_has_both_finishes",
         ),
     )
 
@@ -201,38 +210,25 @@ class Session(Base, TimestampMixin):
     )
 
     duration_minutes: Mapped[int] = mapped_column(nullable=False, default=0)
-    session_pin_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    session_pin_expires_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    completion_pin_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    completion_pin_expires_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    completion_requested_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
 
-    #: Consecutive wrong PINs. Codes are six digits and rate-limited server-side.
-    #: and no attempt ceiling is the same as no handshake at all.
+    #: Attendance evidence, one timestamp per party per end of the session.
     #:
-    #: Stored on the row rather than in memory because an in-process counter is
-    #: cleared by a restart and is per-worker, so it is weakest exactly when the
-    #: service is busiest and most worth attacking.
-    pin_failed_attempts: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, server_default="0"
-    )
-
-    #: When the tutee stopped being able to try again. Null means not locked.
-    #: A cooldown rather than a permanent lock: the session still has to be
-    #: startable, and the tutor is standing there waiting.
-    pin_locked_until: Mapped[datetime | None] = mapped_column(
+    #: The old handshake proved attendance with a secret one party read to the
+    #: other. Two independently recorded check-ins prove it with two accounts:
+    #: neither party can start a session alone, and neither can finish one alone.
+    #: The four timestamps are kept individually because who checked in, and
+    #: when, is the evidence -- a single `started_at` would collapse the two
+    #: actors back into one fact.
+    tutor_checked_in_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    completion_pin_failed_attempts: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, server_default="0"
+    tutee_checked_in_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
-    completion_pin_locked_until: Mapped[datetime | None] = mapped_column(
+    tutor_finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    tutee_finished_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
@@ -257,16 +253,6 @@ class Session(Base, TimestampMixin):
     ratings: Mapped[list[Rating]] = relationship(
         back_populates="session", passive_deletes=True
     )
-
-    @staticmethod
-    def generate_session_pin() -> tuple[str, str]:
-        """Create a six-digit one-time code and its stored SHA-256 digest."""
-        code = f"{secrets.randbelow(1_000_000):06d}"
-        return code, hashlib.sha256(code.encode()).hexdigest()
-
-    @staticmethod
-    def hash_session_pin(code: str) -> str:
-        return hashlib.sha256(code.encode()).hexdigest()
 
     async def is_rated(self, db: AsyncSession) -> bool:
         """Whether anyone has rated this session yet.

@@ -34,7 +34,6 @@ SessionModel session({
   required String id,
   String topic = 'Second order ODEs',
   String status = 'scheduled',
-  String? sessionPin = '654321',
   bool isRated = false,
   int durationMinutes = 60,
   String? meetingLink,
@@ -54,7 +53,6 @@ SessionModel session({
     'is_rated': isRated,
     'created_at': '2026-03-01T08:00:00Z',
     'scheduled_start': '2026-03-04T09:00:00Z',
-    'session_pin': sessionPin,
     'meeting_link': meetingLink,
   });
 }

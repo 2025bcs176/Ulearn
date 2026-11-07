@@ -16,6 +16,7 @@ import uuid
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    JSON,
     CheckConstraint,
     ForeignKey,
     Integer,
@@ -36,6 +37,13 @@ if TYPE_CHECKING:
 #: and the tests cannot disagree about what a valid score is.
 MIN_RATING = 1
 MAX_RATING = 5
+
+#: How many tags one rating may carry.
+#:
+#: Four, and not "as many as apply": the tags are a summary a student reads at a
+#: glance, and a rating that ticks every box says nothing. The cap also bounds
+#: what a single submission can make the profile render.
+MAX_TAGS_PER_RATING = 4
 
 
 class Rating(Base, TimestampMixin):
@@ -80,6 +88,28 @@ class Rating(Base, TimestampMixin):
     #: entitled to know which session drove it, which is why this is kept rather
     #: than discarded with the rest of the rating.
     feedback_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    #: What the rater said about the session, from the fixed vocabulary in
+    #: `RatingTag`. Stored as a JSON array rather than a child table.
+    #:
+    #: A table of its own would buy nothing here: a tag has no attributes, is
+    #: never queried on its own, and is always read with the rating it belongs
+    #: to. What the array shape does cost is a database check on the values --
+    #: `jsonb` could express membership on PostgreSQL and `json` on SQLite
+    #: cannot -- so the vocabulary is enforced by `RatingCreate`, and an array is
+    #: all the column promises. `default=list` is a callable on purpose: a
+    #: mutable default shared between instances would let one rating's tags
+    #: appear on another.
+    #:
+    #: No server default, unlike the counters elsewhere in this package. A JSON
+    #: default is the one comparison `alembic check` cannot make on PostgreSQL
+    #: (`'[]'::json = '[]'` has no equality operator), so carrying one here would
+    #: report drift on every migration check for the rest of the project's life.
+    tags: Mapped[list[str]] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+    )
 
     session: Mapped[Session] = relationship(back_populates="ratings")
     rater: Mapped[User] = relationship(foreign_keys=[rater_id])

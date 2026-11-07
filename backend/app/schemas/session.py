@@ -175,11 +175,11 @@ class SessionTransitionRequest(RequestSchema):
     cancellation_reason: Trimmed | None = Field(
         default=None, max_length=MAX_CANCELLATION_REASON_LENGTH
     )
-    # No `pin` field. Starting a session is `POST /v1/sessions/{id}/verify-pin`
-    # and nothing else: the pin used to be accepted here as well, with no attempt
-    # counter, which made the throttle on the real endpoint optional. Accepting a
-    # field and ignoring it would be worse than removing it, so a client still
-    # sending one gets a 422 from `extra="forbid"` rather than a silent success.
+    # No proof-of-attendance field. Starting a session is
+    # `POST /v1/sessions/{id}/check-in` and finishing it is
+    # `POST /v1/sessions/{id}/finish`, each called by both parties. Accepting a
+    # field here and ignoring it would be worse than removing it, so a client
+    # still sending one gets a 422 from `extra="forbid"`.
 
     @model_validator(mode="after")
     def reason_required_when_cancelling(self) -> Self:
@@ -238,7 +238,22 @@ class SessionResponse(OrmSchema):
     scheduled_start: datetime | None = None
     started_at: datetime | None = None
     ended_at: datetime | None = None
-    completion_requested_at: datetime | None = None
+    tutor_checked_in_at: datetime | None = Field(
+        default=None,
+        description="When the tutor tapped check in. Null until they do.",
+    )
+    tutee_checked_in_at: datetime | None = Field(
+        default=None,
+        description="When the student tapped check in. Null until they do.",
+    )
+    tutor_finished_at: datetime | None = Field(
+        default=None,
+        description="When the tutor tapped finish. Null until they do.",
+    )
+    tutee_finished_at: datetime | None = Field(
+        default=None,
+        description="When the student tapped finish. Null until they do.",
+    )
     duration_minutes: int = Field(ge=0)
     meeting_link: str | None = Field(
         default=None, description="Shared meeting link for the session."
@@ -259,39 +274,3 @@ class SessionResponse(OrmSchema):
         )
     )
     created_at: datetime
-
-
-class SessionPinResponse(OrmSchema):
-    """The handshake pin, for the tutee to reveal to the tutor.
-
-    Split out from `SessionResponse` rather than added there as an optional field
-    because the code belongs to one party. The tutee reveals it and the tutor
-    submits it, proving both participants are present.
-    """
-
-    session_id: uuid.UUID
-    session_pin: str = Field(
-        description="The six-digit code the tutee reads out for the tutor to enter."
-    )
-    attempts_remaining: int = Field(
-        ge=0,
-        description=(
-            "Wrong entries left before the tutee is put on a cooldown. The tutor "
-            "can see the lock coming and say the right thing instead of letting a "
-            "student stand there guessing."
-        ),
-    )
-
-
-class VerifyPinRequest(RequestSchema):
-    """The digits the tutor is entering.
-
-    A schema rather than the `dict[str, str]` the route used to accept: an
-    untyped body means a missing `pin` arrives as `""` and fails later as an
-    incorrect PIN, so a client bug is reported to the user as a wrong PIN.
-    """
-
-    pin: str = Field(
-        pattern=r"^[0-9]{6}$",
-        description="The six-digit one-time handshake code.",
-    )

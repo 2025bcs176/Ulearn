@@ -43,8 +43,11 @@ SessionModel session({
   String? meetingLink,
   String? meetingVenue,
   String? meetingVenueDetail,
-  String? endedAt,
-  String? completionRequestedAt,
+  String? startedAt,
+  String? tutorCheckedInAt,
+  String? tuteeCheckedInAt,
+  String? tutorFinishedAt,
+  String? tuteeFinishedAt,
 }) {
   return SessionModel.fromJson({
     'id': _sessionId,
@@ -61,9 +64,11 @@ SessionModel session({
     'is_rated': isRated,
     'created_at': '2026-03-01T08:00:00Z',
     'scheduled_start': '2026-03-04T09:00:00Z',
-    'started_at': '2026-03-04T09:05:00Z',
-    'ended_at': endedAt,
-    'completion_requested_at': completionRequestedAt,
+    'started_at': startedAt,
+    'tutor_checked_in_at': tutorCheckedInAt,
+    'tutee_checked_in_at': tuteeCheckedInAt,
+    'tutor_finished_at': tutorFinishedAt,
+    'tutee_finished_at': tuteeFinishedAt,
     'meeting_link': meetingLink,
     'meeting_venue': meetingVenue,
     'meeting_venue_detail': meetingVenueDetail,
@@ -93,6 +98,9 @@ Future<void> _pumpDetail(
   FakeSessionsRepository repository,
   UserProfile profile,
 ) async {
+  // The API reads the acting party from the access token; the fake takes it
+  // from here so a tutor's tap records the tutor's timestamp.
+  repository.currentUser = profile.publicId;
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: _container(repository, profile),
@@ -116,6 +124,17 @@ class _MissingSessionRepository extends FakeSessionsRepository {
   @override
   Future<SessionModel> session(String sessionId) async {
     throw const NotFoundFailure('That session could not be found.');
+  }
+}
+
+/// A repository that refuses every check-in, as a cancelled or completed
+/// session does.
+class _RefusingCheckInRepository extends FakeSessionsRepository {
+  _RefusingCheckInRepository({super.sessions});
+
+  @override
+  Future<SessionModel> checkIn({required String sessionId}) async {
+    throw const ConflictFailure('This session is no longer open for check-in.');
   }
 }
 
@@ -218,207 +237,132 @@ void main() {
     });
   });
 
-  group('the handshake, from the tutor side', () {
-    testWidgets('the PIN is fetched on demand, not held on the session', (
-      tester,
-    ) async {
-      await _pumpDetail(
-        tester,
-        FakeSessionsRepository(sessions: [session()]),
-        _tutor,
-      );
-
-      // Nothing is on screen until asked for. A PIN is read aloud in a room with
-      // other people in it, and it is fetched rather than carried on the session
-      // because a tutee could otherwise read their own off the same payload.
-      expect(find.text('42'), findsNothing);
-      expect(find.text('Show PIN'), findsOneWidget);
-
-      await tester.tap(find.text('Show PIN'));
-      await _settle(tester);
-      expect(find.text('654321'), findsOneWidget);
-    });
-
-    testWidgets('hiding the PIN drops it from the screen', (tester) async {
-      await _pumpDetail(
-        tester,
-        FakeSessionsRepository(sessions: [session()]),
-        _tutor,
-      );
-
-      await tester.tap(find.text('Show PIN'));
-      await _settle(tester);
-      expect(find.text('654321'), findsOneWidget);
-
-      await tester.tap(find.text('Hide PIN'));
-      await _settle(tester);
-      expect(find.text('42'), findsNothing);
-    });
-
-    testWidgets('the tutor cannot type the PIN in themselves', (tester) async {
-      await _pumpDetail(
-        tester,
-        FakeSessionsRepository(sessions: [session()]),
-        _tutor,
-      );
-
-      // The API only lets the tutee enter it. Offering the field and having the
-      // server refuse it would teach a tutor that the app offers things it cannot
-      // do, and would invite them to prove nothing by typing digits they read.
-      expect(find.widgetWithText(TextField, 'PIN'), findsNothing);
-      expect(find.text('Start session'), findsNothing);
-    });
-
-    testWidgets('the tutor is warned when the tutee is nearly out of attempts', (
-      tester,
-    ) async {
-      // Four of the five attempts already spent. The advisory is there so a tutor
-      // can stop the student guessing in a room where they are trying to learn,
-      // rather than watch them burn the last one.
-      await _pumpDetail(
-        tester,
-        FakeSessionsRepository(
-          sessions: [session()],
-          pinFailures: {_sessionId: 4},
-        ),
-        _tutor,
-      );
-
-      await tester.tap(find.text('Show PIN'));
-      await _settle(tester);
-
-      expect(find.text('654321'), findsOneWidget);
-      expect(find.textContaining('1 attempt left'), findsOneWidget);
-    });
-
-    testWidgets('no warning is shown while attempts remain', (tester) async {
-      await _pumpDetail(
-        tester,
-        FakeSessionsRepository(sessions: [session()]),
-        _tutor,
-      );
-
-      await tester.tap(find.text('Show PIN'));
-      await _settle(tester);
-
-      // Nothing to warn about on a fresh session, so the panel does not cry wolf
-      // on every single one.
-      expect(find.text('654321'), findsOneWidget);
-      expect(find.textContaining('attempt'), findsNothing);
-    });
-  });
-
-  group('the handshake, from the tutee side', () {
-    testWidgets('the tutee cannot read their own PIN', (tester) async {
+  group('the pass', () {
+    testWidgets('each party checks themselves in', (tester) async {
       await _pumpDetail(
         tester,
         FakeSessionsRepository(sessions: [session()]),
         _tutee,
       );
 
-      // The digits are the tutor's to read out. A tutee who could see their own
-      // would have nothing to prove, and the tutor no way to tell an in-person
-      // student from someone guessing a code on a borrowed account.
-      expect(find.text('Show PIN'), findsNothing);
-      expect(find.text('42'), findsNothing);
-      expect(find.widgetWithText(TextField, 'PIN'), findsOneWidget);
+      expect(find.text("I'm here"), findsOneWidget);
+      expect(find.text('Finish session'), findsNothing);
+      expect(find.text('Are you both here?'), findsOneWidget);
     });
-  });
 
-  group('entering the PIN, from the tutee side', () {
-    testWidgets('the right PIN starts the session', (tester) async {
+    testWidgets('a check-in waits for the other party', (tester) async {
       final repository = FakeSessionsRepository(sessions: [session()]);
       await _pumpDetail(tester, repository, _tutee);
 
-      await tester.enterText(find.byType(TextField), '654321');
-      await _settle(tester);
-      await tester.tap(find.text('Start session'));
+      await tester.tap(find.text("I'm here"));
       await _settle(tester);
 
-      expect(repository.pinAttempts, ['654321']);
-      // The panel changes rather than disappearing: the tutee needs to know the
-      // handshake worked, not just that the screen stopped asking.
-      expect(find.text('Handshake complete'), findsOneWidget);
+      expect(repository.checkedInSessionIds, [_sessionId]);
+      expect(find.text("You're checked in"), findsOneWidget);
+      // The other party is named, because "waiting" without a name is the
+      // screen asking the student to guess who they are waiting for.
+      expect(find.textContaining('Waiting for Okello Daniel'), findsOneWidget);
+      expect(find.text("I'm here"), findsNothing);
     });
 
-    testWidgets('a wrong PIN says what to do, and the session is not started', (
-      tester,
-    ) async {
-      final repository = FakeSessionsRepository(sessions: [session()]);
-      await _pumpDetail(tester, repository, _tutee);
-
-      await tester.enterText(find.byType(TextField), '654320');
-      await _settle(tester);
-      await tester.tap(find.text('Start session'));
-      await _settle(tester);
-
-      // The pin really was sent rather than refused by the client: the client
-      // cannot know it is wrong, and pretending otherwise would hide a genuine
-      // mismatch behind a guess.
-      expect(repository.pinAttempts, ['654320']);
-      expect(
-        find.text('That is not the right PIN. Ask your tutor to check it.'),
-        findsOneWidget,
-      );
-      expect(find.text('Handshake complete'), findsNothing);
-      expect(find.text('Start session'), findsOneWidget);
-    });
-
-    testWidgets('a second attempt is still allowed after a refusal', (
-      tester,
-    ) async {
-      // No client-side attempt counter and no lock-out. A student on a bad
-      // connection who mistypes must be able to try again, and a lock the device
-      // enforces is one they clear by reinstalling the app.
-      final repository = FakeSessionsRepository(sessions: [session()]);
-      await _pumpDetail(tester, repository, _tutee);
-
-      await tester.enterText(find.byType(TextField), '654320');
-      await _settle(tester);
-      await tester.tap(find.text('Start session'));
-      await _settle(tester);
-      await tester.enterText(find.byType(TextField), '654321');
-      await _settle(tester);
-      await tester.tap(find.text('Start session'));
-      await _settle(tester);
-
-      expect(repository.pinAttempts, ['654320', '654321']);
-      expect(find.text('Handshake complete'), findsOneWidget);
-    });
-  });
-
-  group('ending a live session', () {
-    testWidgets('the tutor requests completion', (tester) async {
+    testWidgets('the second check-in starts the session', (tester) async {
       final repository = FakeSessionsRepository(
-        sessions: [session(status: 'in_progress')],
+        sessions: [session(tuteeCheckedInAt: '2026-03-04T09:05:00Z')],
       );
       await _pumpDetail(tester, repository, _tutor);
 
-      await tester.tap(find.text('Request completion'));
+      await tester.tap(find.text("I'm here"));
+      await _settle(tester);
+
+      expect(find.text('Session in progress'), findsOneWidget);
+      expect(find.text('Finish session'), findsOneWidget);
+      // The tutor's timestamp is the one the fake recorded, not the student's.
+      expect(repository.sessions.single.tutorCheckedInAt, isNotNull);
+    });
+
+    testWidgets('a refused check-in says so and keeps the button', (
+      tester,
+    ) async {
+      await _pumpDetail(
+        tester,
+        _RefusingCheckInRepository(sessions: [session()]),
+        _tutee,
+      );
+
+      await tester.tap(find.text("I'm here"));
       await _settle(tester);
 
       expect(
-        find.text('Enter the six-digit code shown by the student.'),
+        find.text(
+          const ConflictFailure('This session is no longer open for check-in.')
+              .message,
+        ),
         findsOneWidget,
       );
-      expect(repository.endedSessionIds, isEmpty);
+      expect(find.text("I'm here"), findsOneWidget);
+    });
+  });
+
+  group('finishing', () {
+    SessionModel live({String? tutorFinishedAt, String? tuteeFinishedAt}) {
+      return session(
+        status: 'in_progress',
+        startedAt: '2026-03-04T09:05:00Z',
+        tutorCheckedInAt: '2026-03-04T09:05:00Z',
+        tuteeCheckedInAt: '2026-03-04T09:07:00Z',
+        tutorFinishedAt: tutorFinishedAt,
+        tuteeFinishedAt: tuteeFinishedAt,
+      );
+    }
+
+    testWidgets('the first finish waits for the other party', (tester) async {
+      final repository = FakeSessionsRepository(sessions: [live()]);
+      await _pumpDetail(tester, repository, _tutor);
+
+      await tester.tap(find.text('Finish session'));
+      await _settle(tester);
+      // Finishing cannot be undone, so the tap asks first.
+      expect(find.text('Finish this session?'), findsOneWidget);
+
+      await tester.tap(find.text('Finish'));
+      await _settle(tester);
+
+      expect(repository.finishedSessionIds, [_sessionId]);
+      expect(find.text("You're finished"), findsOneWidget);
+      expect(find.textContaining('Waiting for Adongo Sarah'), findsOneWidget);
     });
 
-    testWidgets('the tutee reveals the completion code', (tester) async {
+    testWidgets('the second finish closes the session and offers a rating', (
+      tester,
+    ) async {
       final repository = FakeSessionsRepository(
-        sessions: [
-          session(
-            status: 'in_progress',
-            completionRequestedAt: '2026-03-04T10:00:00Z',
-          ),
-        ],
+        sessions: [live(tutorFinishedAt: '2026-03-04T10:00:00Z')],
       );
       await _pumpDetail(tester, repository, _tutee);
 
-      await tester.tap(find.text('Show completion code'));
+      await tester.tap(find.text('Finish session'));
+      await _settle(tester);
+      await tester.tap(find.text('Finish'));
       await _settle(tester);
 
-      expect(find.text('654321'), findsOneWidget);
+      expect(
+        repository.sessions.single.status,
+        TutoringSessionStatus.completed,
+      );
+      expect(find.text('Rate this session'), findsOneWidget);
+    });
+
+    testWidgets('the confirmation can be dismissed', (tester) async {
+      final repository = FakeSessionsRepository(sessions: [live()]);
+      await _pumpDetail(tester, repository, _tutor);
+
+      await tester.tap(find.text('Finish session'));
+      await _settle(tester);
+      await tester.tap(find.text('Keep going'));
+      await _settle(tester);
+
+      expect(repository.finishedSessionIds, isEmpty);
+      expect(find.text('Finish session'), findsOneWidget);
     });
   });
 
@@ -433,7 +377,7 @@ void main() {
       expect(find.text('Rate this session'), findsOneWidget);
     });
 
-    testWidgets('a session with no PIN and no action is not dressed up', (
+    testWidgets('a no-show is not dressed up as something to do', (
       tester,
     ) async {
       // A no-show is the case where a rating might be tempting and must not be.
@@ -447,21 +391,39 @@ void main() {
       expect(find.textContaining('did not take place'), findsOneWidget);
     });
 
-    testWidgets('a session already rated by someone else says only that', (
-      tester,
-    ) async {
-      // `is_rated` is true for both parties of a rated session, so telling a tutor
-      // they have rated their own session would be a lie.
-      await _pumpDetail(
-        tester,
-        FakeSessionsRepository(
-          sessions: [session(status: 'completed', isRated: true)],
-        ),
-        _tutor,
-      );
+    testWidgets(
+      'a completed session already rated by someone else says only that',
+      (tester) async {
+        // `is_rated` is true for both parties of a rated session, so telling a tutor
+        // they have rated their own session would be a lie.
+        await _pumpDetail(
+          tester,
+          FakeSessionsRepository(
+            sessions: [session(status: 'completed', isRated: true)],
+          ),
+          _tutor,
+        );
 
-      expect(find.text('This session has been rated.'), findsOneWidget);
-      expect(find.text('Rate this session'), findsNothing);
-    });
+        expect(find.text('This session has been rated.'), findsOneWidget);
+        expect(find.text('Rate this session'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'a tutor does not claim a rating before the student gives one',
+      (tester) async {
+        await _pumpDetail(
+          tester,
+          FakeSessionsRepository(sessions: [session(status: 'completed')]),
+          _tutor,
+        );
+
+        expect(
+          find.text('Waiting for the student to rate this session.'),
+          findsOneWidget,
+        );
+        expect(find.text('This session has been rated.'), findsNothing);
+      },
+    );
   });
 }

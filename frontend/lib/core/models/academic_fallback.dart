@@ -20,7 +20,7 @@ const mustFallbackFaculties = <Subject>[
   Subject(publicId: '${_facultyPrefix}science', name: 'Faculty of Science'),
   Subject(
     publicId: '${_facultyPrefix}computing',
-    name: 'Faculty of Computing and Informatics Sciences',
+    name: 'Faculty of Computing and Informatics',
   ),
   Subject(
     publicId: '${_facultyPrefix}applied',
